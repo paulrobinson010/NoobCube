@@ -1,0 +1,541 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+		035FE83897F1B5D000524BF5 = {
+			fileRef = 63CF2DD836F6350EEB95E633;
+			isa = PBXBuildFile;
+		};
+		06B6A15813AE62FDCFE74422 = {
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = NoobCube;
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "NoobCube connects to your smart cube over Bluetooth so it can follow along as you turn it.";
+				INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription = "NoobCube connects to your smart cube over Bluetooth so it can follow along as you turn it.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "NoobCube uses the camera to look at your Rubik’s cube and work out what colour each sticker is.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIRequiresFullScreen = YES;
+				INFOPLIST_KEY_UIStatusBarHidden = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.noobcube.app;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+			};
+			isa = XCBuildConfiguration;
+			name = Release;
+		};
+		0FDEFC4302813C22AF141CA7 = {
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.noobcube.app.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/NoobCube.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/NoobCube";
+			};
+			isa = XCBuildConfiguration;
+			name = Debug;
+		};
+		0FE0C58EFD59BEA9F814F50A = {
+			fileRef = D713469F5B32ED43EDD0BC4A;
+			isa = PBXBuildFile;
+		};
+		12D04D787E90C9B967248BFD = {
+			buildConfigurations = (
+				73BFC4993D558C2844970A56,
+				3C5BC6FE1E438E679FB7F74F,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+			isa = XCConfigurationList;
+		};
+		149AD7FB4216EBA091B703A9 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = CubeColour.swift;
+			sourceTree = "<group>";
+		};
+		1B6E4662A102A3A81FC63B71 = {
+			fileRef = DF9A6AC41D172AD267983AC1;
+			isa = PBXBuildFile;
+		};
+		29C7B681C8D62CBAC94D51C0 = {
+			buildConfigurationList = 32995943DE67267A65D32CA9;
+			buildPhases = (
+				8682261519D15BD64A9E5D31,
+				F001BC2AF9EB5498B3360756,
+				E28FAD8F60ECDED9B4AD087A,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			isa = PBXNativeTarget;
+			name = NoobCube;
+			productName = NoobCube;
+			productReference = B6CDB6E5D160E013280D3C68;
+			productType = "com.apple.product-type.application";
+		};
+		2B4E00C3AA28858792DE38F3 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = Face.swift;
+			sourceTree = "<group>";
+		};
+		2B728DF2F9039EFDCCA5089D = {
+			fileRef = 7D5A45F0E6DCBAF7B49C6C04;
+			isa = PBXBuildFile;
+		};
+		2BE804C6AF83604664BAEB9D = {
+			fileRef = 2B4E00C3AA28858792DE38F3;
+			isa = PBXBuildFile;
+		};
+		32995943DE67267A65D32CA9 = {
+			buildConfigurations = (
+				CC982C4F58FE5F6D2B2680C2,
+				06B6A15813AE62FDCFE74422,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+			isa = XCConfigurationList;
+		};
+		378DAF2D8D6091BC8133B2DD = {
+			children = (
+				F0212F177FA7DCB719AFA6AF,
+				925DB0C87891C6595AB34587,
+			);
+			isa = PBXGroup;
+			path = NoobCubeTests;
+			sourceTree = "<group>";
+		};
+		3C5BC6FE1E438E679FB7F74F = {
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_NO_COMMON_BLOCKS = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			isa = XCBuildConfiguration;
+			name = Release;
+		};
+		5151B46607EBC8890D8DFCC2 = {
+			children = (
+				B6CDB6E5D160E013280D3C68,
+				E02A90D9643568EA39115CFB,
+			);
+			isa = PBXGroup;
+			name = Products;
+			sourceTree = "<group>";
+		};
+		5520C985203BA8583BEED5EF = {
+			fileRef = 9A594E3A54D5E7A7DEEC8548;
+			isa = PBXBuildFile;
+		};
+		5FB73A3B48B8604118F3845B = {
+			fileRef = 6BB5B45E90AD13861C5F082F;
+			isa = PBXBuildFile;
+		};
+		6137A6F58D979B3DA500C290 = {
+			buildConfigurations = (
+				0FDEFC4302813C22AF141CA7,
+				779A6DE1C6EB04ECC0A3779E,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+			isa = XCConfigurationList;
+		};
+		63CF2DD836F6350EEB95E633 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = SolvePlan.swift;
+			sourceTree = "<group>";
+		};
+		6BB5B45E90AD13861C5F082F = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = CubeNetView.swift;
+			sourceTree = "<group>";
+		};
+		71119818B48348D2BB721841 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = Theme.swift;
+			sourceTree = "<group>";
+		};
+		73BFC4993D558C2844970A56 = {
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			isa = XCBuildConfiguration;
+			name = Debug;
+		};
+		74B08999ACDBAEF67F2DA85C = {
+			fileRef = 149AD7FB4216EBA091B703A9;
+			isa = PBXBuildFile;
+		};
+		779A6DE1C6EB04ECC0A3779E = {
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.noobcube.app.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/NoobCube.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/NoobCube";
+			};
+			isa = XCBuildConfiguration;
+			name = Release;
+		};
+		7D5A45F0E6DCBAF7B49C6C04 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = Narrator.swift;
+			sourceTree = "<group>";
+		};
+		7EC8F98B7A265120217712DE = {
+			buildConfigurationList = 6137A6F58D979B3DA500C290;
+			buildPhases = (
+				B6F43314D0693B2B792DAE17,
+				F115AF690239BFBFCB7B4DE6,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				F59E8266325E0BAF0758C1B1,
+			);
+			isa = PBXNativeTarget;
+			name = NoobCubeTests;
+			productName = NoobCubeTests;
+			productReference = E02A90D9643568EA39115CFB;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		839A155436D47587B58E5E0E = {
+			children = (
+				EE7AB7FF32DB44C2FEC3F1BE,
+				C98671680B27A11076D6796E,
+				D3C2C254791414A783F9D864,
+				D713469F5B32ED43EDD0BC4A,
+			);
+			isa = PBXGroup;
+			path = NoobCube;
+			sourceTree = "<group>";
+		};
+		8682261519D15BD64A9E5D31 = {
+			buildActionMask = 2147483647;
+			files = (
+				2B728DF2F9039EFDCCA5089D,
+				74B08999ACDBAEF67F2DA85C,
+				D6A5DDE109CFD9A5F6622B42,
+				1B6E4662A102A3A81FC63B71,
+				F72DA1E42A8341190A0CA93C,
+				2BE804C6AF83604664BAEB9D,
+				5520C985203BA8583BEED5EF,
+				92E89C7F66F8C8D49AB34512,
+				8C3C5F5596FB7BDC5AC74A91,
+				035FE83897F1B5D000524BF5,
+				5FB73A3B48B8604118F3845B,
+				DD978E0946731F10995AE836,
+			);
+			isa = PBXSourcesBuildPhase;
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8C3C5F5596FB7BDC5AC74A91 = {
+			fileRef = FEB931EE64270630A7A91C1F;
+			isa = PBXBuildFile;
+		};
+		925DB0C87891C6595AB34587 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = SolverTests.swift;
+			sourceTree = "<group>";
+		};
+		92E89C7F66F8C8D49AB34512 = {
+			fileRef = 9851519D3EB6A407A324DD9C;
+			isa = PBXBuildFile;
+		};
+		9851519D3EB6A407A324DD9C = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = Vec3.swift;
+			sourceTree = "<group>";
+		};
+		98F54143AB4E86B28C3AFEE0 = {
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					29C7B681C8D62CBAC94D51C0 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+					7EC8F98B7A265120217712DE = {
+						CreatedOnToolsVersion = 16.0;
+						TestTargetID = 29C7B681C8D62CBAC94D51C0;
+					};
+				};
+			};
+			buildConfigurationList = 12D04D787E90C9B967248BFD;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			isa = PBXProject;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = ADCF10F76EBF2A74473E9DC4;
+			productRefGroup = 5151B46607EBC8890D8DFCC2;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				29C7B681C8D62CBAC94D51C0,
+				7EC8F98B7A265120217712DE,
+			);
+		};
+		9A594E3A54D5E7A7DEEC8548 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = Move.swift;
+			sourceTree = "<group>";
+		};
+		9C2EE410B2373AE697E5D9C5 = {
+			children = (
+				FEB931EE64270630A7A91C1F,
+				63CF2DD836F6350EEB95E633,
+			);
+			isa = PBXGroup;
+			path = Solver;
+			sourceTree = "<group>";
+		};
+		9CD1C7B937CA888CF8E20949 = {
+			fileRef = 925DB0C87891C6595AB34587;
+			isa = PBXBuildFile;
+		};
+		ADCF10F76EBF2A74473E9DC4 = {
+			children = (
+				839A155436D47587B58E5E0E,
+				378DAF2D8D6091BC8133B2DD,
+				5151B46607EBC8890D8DFCC2,
+			);
+			isa = PBXGroup;
+			sourceTree = "<group>";
+		};
+		B6CDB6E5D160E013280D3C68 = {
+			explicitFileType = wrapper.application;
+			includeInIndex = 0;
+			isa = PBXFileReference;
+			path = NoobCube.app;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		B6F43314D0693B2B792DAE17 = {
+			buildActionMask = 2147483647;
+			files = (
+				F611560A4F0168608B4E8F2E,
+				9CD1C7B937CA888CF8E20949,
+			);
+			isa = PBXSourcesBuildPhase;
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C38FAB8D10784EABD39536D4 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = CubeGeometry.swift;
+			sourceTree = "<group>";
+		};
+		C98671680B27A11076D6796E = {
+			children = (
+				149AD7FB4216EBA091B703A9,
+				C38FAB8D10784EABD39536D4,
+				DF9A6AC41D172AD267983AC1,
+				CEB83F5C22B7F2D17748AFB9,
+				2B4E00C3AA28858792DE38F3,
+				9A594E3A54D5E7A7DEEC8548,
+				9851519D3EB6A407A324DD9C,
+				9C2EE410B2373AE697E5D9C5,
+			);
+			isa = PBXGroup;
+			path = CubeKit;
+			sourceTree = "<group>";
+		};
+		CC982C4F58FE5F6D2B2680C2 = {
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = NoobCube;
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "NoobCube connects to your smart cube over Bluetooth so it can follow along as you turn it.";
+				INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription = "NoobCube connects to your smart cube over Bluetooth so it can follow along as you turn it.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "NoobCube uses the camera to look at your Rubik’s cube and work out what colour each sticker is.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIRequiresFullScreen = YES;
+				INFOPLIST_KEY_UIStatusBarHidden = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.noobcube.app;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+			};
+			isa = XCBuildConfiguration;
+			name = Debug;
+		};
+		CEB83F5C22B7F2D17748AFB9 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = CubeState.swift;
+			sourceTree = "<group>";
+		};
+		D36D33020B6BB89396BD1B34 = {
+			containerPortal = 98F54143AB4E86B28C3AFEE0;
+			isa = PBXContainerItemProxy;
+			proxyType = 1;
+			remoteGlobalIDString = 29C7B681C8D62CBAC94D51C0;
+			remoteInfo = NoobCube;
+		};
+		D3C2C254791414A783F9D864 = {
+			children = (
+				6BB5B45E90AD13861C5F082F,
+				71119818B48348D2BB721841,
+			);
+			isa = PBXGroup;
+			path = UI;
+			sourceTree = "<group>";
+		};
+		D6A5DDE109CFD9A5F6622B42 = {
+			fileRef = C38FAB8D10784EABD39536D4;
+			isa = PBXBuildFile;
+		};
+		D713469F5B32ED43EDD0BC4A = {
+			isa = PBXFileReference;
+			lastKnownFileType = folder.assetcatalog;
+			path = Assets.xcassets;
+			sourceTree = "<group>";
+		};
+		DD978E0946731F10995AE836 = {
+			fileRef = 71119818B48348D2BB721841;
+			isa = PBXBuildFile;
+		};
+		DF9A6AC41D172AD267983AC1 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = CubeSlots.swift;
+			sourceTree = "<group>";
+		};
+		E02A90D9643568EA39115CFB = {
+			explicitFileType = wrapper.cfbundle;
+			includeInIndex = 0;
+			isa = PBXFileReference;
+			path = NoobCubeTests.xctest;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		E28FAD8F60ECDED9B4AD087A = {
+			buildActionMask = 2147483647;
+			files = (
+				0FE0C58EFD59BEA9F814F50A,
+			);
+			isa = PBXResourcesBuildPhase;
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		EE7AB7FF32DB44C2FEC3F1BE = {
+			children = (
+				7D5A45F0E6DCBAF7B49C6C04,
+			);
+			isa = PBXGroup;
+			path = App;
+			sourceTree = "<group>";
+		};
+		F001BC2AF9EB5498B3360756 = {
+			buildActionMask = 2147483647;
+			files = (
+			);
+			isa = PBXFrameworksBuildPhase;
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F0212F177FA7DCB719AFA6AF = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = CubeEngineTests.swift;
+			sourceTree = "<group>";
+		};
+		F115AF690239BFBFCB7B4DE6 = {
+			buildActionMask = 2147483647;
+			files = (
+			);
+			isa = PBXFrameworksBuildPhase;
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F59E8266325E0BAF0758C1B1 = {
+			isa = PBXTargetDependency;
+			target = 29C7B681C8D62CBAC94D51C0;
+			targetProxy = D36D33020B6BB89396BD1B34;
+		};
+		F611560A4F0168608B4E8F2E = {
+			fileRef = F0212F177FA7DCB719AFA6AF;
+			isa = PBXBuildFile;
+		};
+		F72DA1E42A8341190A0CA93C = {
+			fileRef = CEB83F5C22B7F2D17748AFB9;
+			isa = PBXBuildFile;
+		};
+		FEB931EE64270630A7A91C1F = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = BeginnerSolver.swift;
+			sourceTree = "<group>";
+		};
+	};
+	rootObject = 98F54143AB4E86B28C3AFEE0;
+}
