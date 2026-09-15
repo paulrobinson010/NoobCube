@@ -3,8 +3,15 @@ import SwiftUI
 /// Big, bright and few words: the app is used by a five year old.
 enum Theme {
     static let accent = Color(red: 1.0, green: 0.48, blue: 0.29)
-    static let background = Color(red: 0.07, green: 0.09, blue: 0.16)
-    static let card = Color(red: 0.13, green: 0.16, blue: 0.25)
+
+    /// The colour at the very edge of the app icon, so the launch screen and
+    /// the app are the same shade and the icon dissolves into the screen.
+    ///
+    /// Defined once in the asset catalog, generated from the artwork by
+    /// `Tools/generate_branding.py`, and used by `UILaunchScreen` too.
+    static let background = Color("LaunchBackground")
+
+    static let card = Color(red: 0.10, green: 0.13, blue: 0.22)
     static let muted = Color(red: 0.45, green: 0.48, blue: 0.56)
     static let success = Color(red: 0.20, green: 0.78, blue: 0.45)
 

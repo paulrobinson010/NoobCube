@@ -101,9 +101,33 @@ def build_launch_logo(source):
     print(f'  LaunchLogo         {base}pt tile')
 
 
-def build_launch_background():
+def edge_colour(source):
+    """The colour right at the edge of the artwork.
+
+    The app and the launch screen both paint themselves this, so the icon
+    dissolves into the screen behind it instead of sitting on a lighter panel.
+    Measured from the outermost pixels rather than typed in, so it follows the
+    artwork if that is ever redrawn.
+    """
+    image = source.convert('RGB')
+    width, height = image.size
+    pixels = image.load()
+    ring = []
+    for depth in range(8):
+        for x in range(width):
+            ring.append(pixels[x, depth])
+            ring.append(pixels[x, height - 1 - depth])
+        for y in range(height):
+            ring.append(pixels[depth, y])
+            ring.append(pixels[width - 1 - depth, y])
+    # Median, not mean: a bright corner glow should not drag the whole screen up.
+    return tuple(sorted(channel[index] for channel in ring)[len(ring) // 2]
+                 for index in range(3))
+
+
+def build_launch_background(source):
     folder = os.path.join(ASSETS, 'LaunchBackground.colorset')
-    red, green, blue = LAUNCH_BACKGROUND
+    red, green, blue = edge_colour(source)
     colour = {
         'color-space': 'srgb',
         'components': {
@@ -117,7 +141,7 @@ def build_launch_background():
         'colors': [{'color': colour, 'idiom': 'universal'}],
         'info': INFO,
     })
-    print('  LaunchBackground   matches Theme.background')
+    print(f'  LaunchBackground   #{red:02x}{green:02x}{blue:02x}, from the icon edge')
 
 
 # -------------------------------------------------------------- header mark
@@ -295,7 +319,7 @@ def main():
     print(f'source artwork {source.size[0]}x{source.size[1]}')
     build_app_icon(source)
     build_launch_logo(source)
-    build_launch_background()
+    build_launch_background(source)
     build_brand_mark(source)
     build_wordmark(source)
     build_web_assets(source)
