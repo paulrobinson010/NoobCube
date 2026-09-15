@@ -16,7 +16,15 @@
   const still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   // Same space as the app: x right, y down, z towards you.
-  const COLOUR = ["#f5f5f0", "#ffd61a", "#e02a2e", "#fa7d17", "#1cb359", "#0d6bd9"];
+  const COLOUR = [
+    [245, 245, 240],   // white
+    [255, 214, 26],    // yellow
+    [224, 42, 46],     // red
+    [250, 125, 23],    // orange
+    [28, 179, 89],     // green
+    [13, 107, 217],    // blue
+  ];
+  const PLASTIC = [10, 14, 26];   // the black body the stickers sit on
   const FACES = [
     { n: [0, -1, 0], c: 0 },   // up     white
     { n: [0, 1, 0], c: 1 },    // down   yellow
@@ -147,8 +155,17 @@
             return apply(world, [c.home[0] + p[0], c.home[1] + p[1], c.home[2] + p[2]]);
           });
 
+          // The same face at full width: these tile into the cube's black body.
+          const plate = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([su, sv]) => {
+            const p = [0, 0, 0];
+            p[axis] = f.n[axis] * 0.5;
+            p[u] = su * 0.5;
+            p[v] = sv * 0.5;
+            return apply(world, [c.home[0] + p[0], c.home[1] + p[1], c.home[2] + p[2]]);
+          });
+
           const depth = corners.reduce((a, p) => a + p[2], 0) / 4;
-          out.push({ corners, depth, colour: COLOUR[f.c], shade: 0.55 + 0.45 * facing[2] });
+          out.push({ corners, plate, depth, colour: COLOUR[f.c], shade: 0.6 + 0.4 * facing[2] });
         }
       }
       out.sort((a, b) => a.depth - b.depth);            // painter's algorithm
@@ -158,13 +175,16 @@
 
   // Where the cubes sit, as fractions of the viewport, with their size.
   const SPOTS = [
-    { x: 0.10, y: 0.16, r: 54, a: 0.30 },
-    { x: 0.88, y: 0.28, r: 42, a: 0.24 },
-    { x: 0.20, y: 0.62, r: 36, a: 0.20 },
-    { x: 0.78, y: 0.74, r: 58, a: 0.26 },
-    { x: 0.50, y: 0.92, r: 32, a: 0.18 },
-    { x: 0.94, y: 0.52, r: 30, a: 0.16 },
+    { x: 0.12, y: 0.20, r: 42, a: 0.62 },
+    { x: 0.87, y: 0.31, r: 36, a: 0.55 },
+    { x: 0.19, y: 0.68, r: 28, a: 0.42 },
+    { x: 0.81, y: 0.78, r: 46, a: 0.52 },
+    { x: 0.46, y: 0.95, r: 26, a: 0.28 },
+    { x: 0.93, y: 0.56, r: 20, a: 0.32 },
   ];
+
+  const rgb = (c, shade) =>
+    `rgb(${Math.round(c[0] * shade)},${Math.round(c[1] * shade)},${Math.round(c[2] * shade)})`;
 
   let cubes = [], spots = [], width = 0, height = 0, ratio = 1;
 
@@ -190,19 +210,29 @@
       const scale = spot.r * (width < 620 ? 0.8 : 1);
       const cx = spot.x * width;
       const cy = spot.y * height;
-      ctx.globalAlpha = spot.a;
-      for (const q of cubes[i].quads()) {
+      // A gentle perspective, so the near face reads as nearer.
+      const trace = (points) => {
         ctx.beginPath();
-        q.corners.forEach((p, n) => {
-          // A gentle perspective so the near face reads as nearer.
+        points.forEach((p, n) => {
           const k = 6 / (6 - p[2]);
           const x = cx + p[0] * scale * k;
           const y = cy + p[1] * scale * k;
           if (n === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
         });
         ctx.closePath();
-        ctx.fillStyle = q.colour;
-        ctx.globalAlpha = spot.a * q.shade;
+      };
+
+      ctx.globalAlpha = spot.a;
+      for (const q of cubes[i].quads()) {
+        // The black body first, then the sticker sitting on it. Shading is done
+        // by darkening the colour, not by fading it, so the cube keeps its
+        // colour whichever way the face is turned.
+        const s = q.shade;
+        trace(q.plate);
+        ctx.fillStyle = rgb(PLASTIC, s);
+        ctx.fill();
+        trace(q.corners);
+        ctx.fillStyle = rgb(q.colour, s);
         ctx.fill();
       }
     }

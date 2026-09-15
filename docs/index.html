@@ -54,7 +54,8 @@
     margin-top: 16px;
   }
 
-  .band { background: var(--band); }
+  /* Not quite opaque, so the cubes keep drifting behind the page. */
+  .band { background: rgba(11, 18, 34, 0.9); }
   .band .wrap { padding-top: 8px; padding-bottom: 40px; }
   h2 { font-size: 1.6rem; margin: 28px 0 22px; color: var(--cyan); text-align: center; }
 
@@ -158,7 +159,7 @@
 </header>
 
 <svg class="wave" viewBox="0 0 1440 60" preserveAspectRatio="none" aria-hidden="true">
-  <path d="M0,30 C240,60 480,0 720,20 C960,45 1200,10 1440,32 L1440,60 L0,60 Z" fill="#0b1222"/>
+  <path d="M0,30 C240,60 480,0 720,20 C960,45 1200,10 1440,32 L1440,60 L0,60 Z" fill="rgba(11, 18, 34, 0.9)"/>
 </svg>
 
 <div class="band">
@@ -234,7 +235,7 @@
 </div>
 
 <svg class="wave" viewBox="0 0 1440 60" preserveAspectRatio="none" style="transform:scaleY(-1)" aria-hidden="true">
-  <path d="M0,30 C240,60 480,0 720,20 C960,45 1200,10 1440,32 L1440,60 L0,60 Z" fill="#0b1222"/>
+  <path d="M0,30 C240,60 480,0 720,20 C960,45 1200,10 1440,32 L1440,60 L0,60 Z" fill="rgba(11, 18, 34, 0.9)"/>
 </svg>
 
 <section class="shots">
