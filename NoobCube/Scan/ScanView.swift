@@ -28,6 +28,7 @@ struct ScanView: View {
             if coordinator.isComplete {
                 finishedControls
             } else {
+                sideChips
                 viewfinder
                 liveControls
             }
@@ -55,13 +56,47 @@ struct ScanView: View {
         .padding(.top, 10)
     }
 
+    /// A dot per side, filling in as each one is seen. Order does not matter —
+    /// a side is recognised by the colour of its middle sticker — so this is a
+    /// checklist rather than a queue.
+    private var sideChips: some View {
+        HStack(spacing: 10) {
+            ForEach(ScanCoordinator.steps, id: \.face) { step in
+                let colour = ScanCoordinator.colour(for: step.face)
+                let done = coordinator.scan.isFaceScanned(step.face)
+                Circle()
+                    .fill(colour.swiftUIColor)
+                    .frame(width: 26, height: 26)
+                    .overlay(
+                        Circle().strokeBorder(done ? Theme.success : .white.opacity(0.25),
+                                              lineWidth: done ? 3 : 1)
+                    )
+                    .overlay(
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 12, weight: .black))
+                            .foregroundStyle(.black.opacity(0.65))
+                            .opacity(done ? 1 : 0)
+                    )
+                    .opacity(done ? 1 : 0.35)
+                    .accessibilityLabel("\(colour.displayName) side \(done ? "done" : "still to do")")
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
     private var viewfinder: some View {
         ZStack {
             if coordinator.camera.permissionDenied {
                 permissionMessage
             } else {
-                CameraPreviewView(session: coordinator.camera.session)
-                    .clipShape(RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous))
+                GeometryReader { preview in
+                    CameraPreviewView(session: coordinator.camera.session)
+                        .onAppear { coordinator.camera.setPreviewSize(preview.size) }
+                        .onChange(of: preview.size) { _, size in
+                            coordinator.camera.setPreviewSize(size)
+                        }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous))
                 guideOverlay
             }
         }
@@ -128,9 +163,12 @@ struct ScanView: View {
 
     private var liveControls: some View {
         VStack(spacing: 12) {
-            Text("Hold it still and I'll take it myself.")
+            Text(coordinator.camera.settling < 1
+                 ? "Keep it still while I look…"
+                 : "Hold it still and I'll take it myself.")
                 .font(.system(size: 16, weight: .medium, design: .rounded))
                 .foregroundStyle(Theme.muted)
+                .animation(.easeInOut, value: coordinator.camera.settling < 1)
 
             Button("Take this side now") { coordinator.captureCurrentFace() }
                 .buttonStyle(BigButtonStyle())

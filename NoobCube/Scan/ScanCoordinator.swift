@@ -23,24 +23,30 @@ final class ScanCoordinator: ObservableObject {
 
     static let steps: [Step] = [
         Step(face: .F,
-             title: "Show me the front",
-             spoken: "Hold your cube with the white side on the bottom and yellow on top. Now show me the front."),
+             title: "Show me the green side",
+             spoken: "Hold your cube with yellow on top and white underneath. "
+                   + "Keep it that way. Now show me the green side."),
         Step(face: .R,
-             title: "Spin it left",
-             spoken: "Great. Now spin the whole cube to the left, and show me the new front."),
+             title: "Now the orange side",
+             spoken: "Nice. Keep yellow on top, and turn it round to show me the orange side."),
         Step(face: .B,
-             title: "Spin it left again",
-             spoken: "Spin it to the left again."),
+             title: "Now the blue side",
+             spoken: "Keep going. Show me the blue side."),
         Step(face: .L,
-             title: "And again",
-             spoken: "One more spin to the left."),
+             title: "Now the red side",
+             spoken: "Nearly there. Show me the red side."),
         Step(face: .U,
-             title: "Show me the top",
-             spoken: "Now spin it left once more to get back to the start, then tip it forwards so I can see the yellow top."),
+             title: "Now the yellow top",
+             spoken: "Now tip the cube forwards so I can see the yellow top."),
         Step(face: .D,
-             title: "Show me the bottom",
-             spoken: "Last one. Tip it back twice so I can see the white bottom."),
+             title: "Last one, the white bottom",
+             spoken: "Last one. Turn it over and show me the white bottom."),
     ]
+
+    /// The colour of the middle sticker each step is asking for.
+    static func colour(for face: Face) -> CubeColour {
+        CubeColourScheme.scanningLayout[face] ?? .white
+    }
 
     @Published private(set) var scan = ScannedCube()
     @Published private(set) var stepIndex = 0
@@ -73,6 +79,16 @@ final class ScanCoordinator: ObservableObject {
 
     var scannedFaceCount: Int { scan.scannedFaces.count }
 
+    /// Sides still to be shown, as their middle colours.
+    var remainingColours: [CubeColour] {
+        Self.steps.filter { !scan.isFaceScanned($0.face) }.map { Self.colour(for: $0.face) }
+    }
+
+    /// Sides already seen, as their middle colours.
+    var capturedColours: [CubeColour] {
+        Self.steps.filter { scan.isFaceScanned($0.face) }.map { Self.colour(for: $0.face) }
+    }
+
     /// The colours under the guide right now, for the nine live squares.
     var livePreview: [CubeColour] {
         guard camera.liveSamples.count == 9 else { return [] }
@@ -83,6 +99,13 @@ final class ScanCoordinator: ObservableObject {
 
     func begin() {
         scan = ScannedCube()
+        // Draw the six middles straight away. White is opposite yellow, red
+        // opposite orange, blue opposite green, so the moment the child is
+        // asked to hold it yellow-up and white-down, every middle is known
+        // before the camera has seen a thing.
+        for (face, colour) in CubeColourScheme.scanningLayout {
+            scan[face.centreIndex] = colour
+        }
         rawSamples = [RGBSample?](repeating: nil, count: 54)
         stepIndex = 0
         isComplete = false
@@ -103,12 +126,13 @@ final class ScanCoordinator: ObservableObject {
         camera.stop()
     }
 
-    /// Called every frame: take the face automatically once the cube is held still.
+    /// Called every frame: take the face automatically once the cube has been
+    /// held still long enough for the reading to settle.
     func considerAutoCapture() {
         guard currentStep != nil, !isComplete else { return }
-        if camera.steadiness > 0.88 {
+        if camera.steadiness > 0.88 && camera.settling >= 1 {
             holdFrames += 1
-            if holdFrames >= 6 {
+            if holdFrames >= 8 {
                 captureCurrentFace()
             }
         } else {
@@ -116,15 +140,32 @@ final class ScanCoordinator: ObservableObject {
         }
     }
 
-    /// Record the face the camera is looking at now.
+    /// Record the side the camera is looking at.
+    ///
+    /// The side is filed by the colour of its middle sticker, not by which step
+    /// we happen to be on. A middle sticker never moves, so this is the one
+    /// thing on a face that is certain — and it means showing the sides in the
+    /// wrong order simply works.
     func captureCurrentFace() {
-        guard let step = currentStep, camera.liveSamples.count == 9 else { return }
-        store(samples: camera.liveSamples, on: step.face)
+        let reading = camera.steadyReading.count == 9 ? camera.steadyReading : camera.liveSamples
+        guard currentStep != nil, reading.count == 9 else { return }
+
+        let guesses = ColourClassifier.bestGuesses(reading)
+        let centre = guesses[4]
+        let face = CubeColourScheme.face(forCentre: centre) ?? currentStep?.face ?? .F
+
+        store(samples: reading, on: face)
         holdFrames = 0
         camera.resetSteadiness()
 
-        if stepIndex + 1 < Self.steps.count {
-            stepIndex += 1
+        advanceToNextUnseenFace()
+    }
+
+    /// Move on to whichever side still has not been seen.
+    private func advanceToNextUnseenFace() {
+        let unseen = Self.steps.firstIndex { !scan.isFaceScanned($0.face) }
+        if let unseen {
+            stepIndex = unseen
             announceStep()
         } else {
             finish()

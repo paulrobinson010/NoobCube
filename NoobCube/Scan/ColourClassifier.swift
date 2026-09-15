@@ -107,29 +107,63 @@ enum ColourClassifier {
         }
     }
 
-    /// Settle a whole scan, given that every colour appears exactly nine times.
+    // MARK: - Settling a whole scan
+
+    /// Even out the six faces before comparing them.
     ///
-    /// Centres are decided first and pinned, because the six centres are always
-    /// six different colours and they anchor everything else.
+    /// Each side is photographed at a different moment, so one can come back
+    /// noticeably darker than the next. Scaling every face to the same overall
+    /// brightness stops that difference being mistaken for a difference in
+    /// colour.
+    static func levelled(_ samples: [RGBSample]) -> [RGBSample] {
+        let values = samples.map { $0.hsv.value }.sorted()
+        guard let target = values.isEmpty ? nil : values[values.count / 2], target > 0.001 else {
+            return samples
+        }
+        var result = samples
+        for face in Face.allCases {
+            let range = face.faceletIndices
+            let faceValues = range.map { samples[$0].hsv.value }.sorted()
+            let middle = faceValues[faceValues.count / 2]
+            guard middle > 0.001 else { continue }
+            let scale = target / middle
+            for index in range {
+                result[index] = RGBSample(red: min(1, samples[index].red * scale),
+                                          green: min(1, samples[index].green * scale),
+                                          blue: min(1, samples[index].blue * scale))
+            }
+        }
+        return result
+    }
+
+    /// Work out all 54 stickers at once.
+    ///
+    /// Three facts about cubes do most of the work, and each is worth more than
+    /// any amount of tuning the colour maths:
+    ///
+    ///   * The centres must make a cube that could exist — white opposite
+    ///     yellow, red opposite orange, blue opposite green, and in the right
+    ///     handedness. That is 24 possibilities, not 720.
+    ///   * There are exactly nine stickers of each colour.
+    ///   * Nine white stickers means the light can be measured off the cube
+    ///     itself, without knowing which nine they are.
     static func resolve(rawSamples: [RGBSample]) -> [CubeColour] {
         precondition(rawSamples.count == 54)
-        let samples = whiteBalanced(rawSamples)
+        let samples = levelled(whiteBalanced(rawSamples))
+
+        // Name the centres first: they anchor everything and there are only 24
+        // ways they can be arranged.
+        let naming = nameCentres(samples: samples)
 
         var assignment = [CubeColour?](repeating: nil, count: 54)
         var remaining: [CubeColour: Int] = [:]
         for colour in CubeColour.allCases { remaining[colour] = 9 }
-
-        // Step one: give each centre a different colour, choosing the pairing
-        // with the lowest total cost.
-        let centreIndices = Face.allCases.map(\.centreIndex)
-        let centreColours = assignDistinct(samples: centreIndices.map { samples[$0] })
-        for (position, index) in centreIndices.enumerated() {
-            let colour = centreColours[position]
-            assignment[index] = colour
+        for face in Face.allCases {
+            let colour = naming[face] ?? .white
+            assignment[face.centreIndex] = colour
             remaining[colour, default: 0] -= 1
         }
 
-        // Step two: fill the rest cheapest-first, never exceeding nine of a colour.
         var candidates: [(cost: Double, index: Int, colour: CubeColour)] = []
         for index in 0..<54 where assignment[index] == nil {
             for colour in CubeColour.allCases {
@@ -144,8 +178,6 @@ enum ColourClassifier {
             assignment[candidate.index] = candidate.colour
             remaining[candidate.colour, default: 0] -= 1
         }
-
-        // Anything still unset can only be a colour with quota left.
         for index in 0..<54 where assignment[index] == nil {
             let colour = remaining.first { $0.value > 0 }?.key ?? .white
             assignment[index] = colour
@@ -154,38 +186,23 @@ enum ColourClassifier {
         return assignment.map { $0 ?? .white }
     }
 
-    /// Pick six different colours for six samples, minimising total cost.
-    ///
-    /// Six factorial is 720, so the best pairing is simply looked up rather than
-    /// approximated.
-    private static func assignDistinct(samples: [RGBSample]) -> [CubeColour] {
-        let colours = CubeColour.allCases
-        var best: [CubeColour] = colours
+    /// Name the six centres, choosing among the 24 ways a cube can be held.
+    static func nameCentres(samples: [RGBSample]) -> [Face: CubeColour] {
+        var best = CubeColourScheme.scanningLayout
         var bestCost = Double.greatestFiniteMagnitude
 
-        permutations(of: colours) { candidate in
+        for candidate in CubeColourScheme.orientations {
             var total = 0.0
-            for (index, colour) in candidate.enumerated() {
-                total += cost(samples[index], as: colour)
-                if total >= bestCost { return }
+            for face in Face.allCases {
+                guard let colour = candidate[face] else { continue }
+                total += cost(samples[face.centreIndex], as: colour)
+                if total >= bestCost { break }
             }
-            bestCost = total
-            best = candidate
+            if total < bestCost {
+                bestCost = total
+                best = candidate
+            }
         }
         return best
-    }
-
-    private static func permutations(of colours: [CubeColour],
-                                     _ body: ([CubeColour]) -> Void) {
-        var working = colours
-        func step(_ start: Int) {
-            if start == working.count { return body(working) }
-            for index in start..<working.count {
-                working.swapAt(start, index)
-                step(start + 1)
-                working.swapAt(start, index)
-            }
-        }
-        step(0)
     }
 }
