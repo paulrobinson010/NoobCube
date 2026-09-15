@@ -56,7 +56,28 @@ source files:
 python3 Tools/generate_xcodeproj.py
 ```
 
-The app icon slot is empty and waiting in `Assets.xcassets/AppIcon.appiconset`.
+### Branding
+
+The artwork lives once, in `Branding/appIcon-source.png`. Everything the app
+shows is cut from it:
+
+```
+python3 Tools/generate_branding.py     # needs: pip3 install Pillow
+```
+
+That produces the 1024 app icon (flattened, no alpha, as the App Store
+requires), the launch screen tile, the little cube mark that sits in every
+screen header, and the `NoobCube` wordmark on the welcome screen. Redraw the
+icon, re-run it, and the whole app follows.
+
+The cube mark has its edges faded to transparent rather than cropped square, so
+it sits straight on the background with no visible box. The wordmark is lifted
+off its dark background by treating brightness as coverage and dividing it back
+out of the colour, which keeps the cyan-to-magenta gradient true.
+
+The launch screen is a real `Info.plist` with a `UILaunchScreen` dictionary —
+a generated plist cannot express it — and its background colour is the same one
+the first screen uses, so the splash flows into the app.
 
 ## Layout
 
@@ -68,8 +89,11 @@ NoobCube/
   Solve/        the coaching session and its screens
   SmartCube/    GAN Bluetooth support
   App/, UI/     app shell, theme, spoken instructions
+Branding/
+  appIcon-source.png  the master artwork every asset is cut from
 Tools/
   CubeReference/      Python mirror of CubeKit, used as a test oracle
+  generate_branding.py
   generate_xcodeproj.py
 ```
 

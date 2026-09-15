@@ -45,21 +45,12 @@ struct ScanView: View {
     // MARK: - Pieces
 
     private var header: some View {
-        HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(coordinator.isComplete ? "Does this look right?"
-                                            : (coordinator.currentStep?.title ?? ""))
-                    .font(.system(size: 26, weight: .heavy, design: .rounded))
-                    .foregroundStyle(.white)
-                Text(coordinator.isComplete
-                     ? "Tap any square that's the wrong colour."
-                     : "Side \(coordinator.scannedFaceCount + 1) of 6")
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
-                    .foregroundStyle(Theme.muted)
-            }
-            Spacer()
-            NarratorControls(narrator: narrator)
-        }
+        ScreenHeader(title: coordinator.isComplete ? "Does this look right?"
+                                                   : (coordinator.currentStep?.title ?? ""),
+                     subtitle: coordinator.isComplete
+                         ? "All six sides"
+                         : "Side \(coordinator.scannedFaceCount + 1) of 6",
+                     narrator: narrator)
         .padding(.horizontal, 20)
         .padding(.top, 10)
     }
@@ -152,6 +143,11 @@ struct ScanView: View {
 
     private var finishedControls: some View {
         VStack(spacing: 12) {
+            Text("Tap any square that's the wrong colour.")
+                .font(.system(size: 16, weight: .medium, design: .rounded))
+                .foregroundStyle(Theme.muted)
+                .multilineTextAlignment(.center)
+
             if let problem = coordinator.problem {
                 Text(problem)
                     .font(.system(size: 16, weight: .semibold, design: .rounded))

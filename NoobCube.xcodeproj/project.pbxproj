@@ -16,17 +16,8 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = NoobCube;
-				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "NoobCube connects to your smart cube over Bluetooth so it can follow along as you turn it.";
-				INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription = "NoobCube connects to your smart cube over Bluetooth so it can follow along as you turn it.";
-				INFOPLIST_KEY_NSCameraUsageDescription = "NoobCube uses the camera to look at your Rubik’s cube and work out what colour each sticker is.";
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UIRequiresFullScreen = YES;
-				INFOPLIST_KEY_UIStatusBarHidden = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = NoobCube/Info.plist;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.noobcube.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -379,6 +370,12 @@
 			fileRef = 413DFAFD930F1981D4E42D42;
 			isa = PBXBuildFile;
 		};
+		820301DA70B90E58F884DEB9 = {
+			isa = PBXFileReference;
+			lastKnownFileType = text.plist.xml;
+			path = Info.plist;
+			sourceTree = "<group>";
+		};
 		839A155436D47587B58E5E0E = {
 			children = (
 				EE7AB7FF32DB44C2FEC3F1BE,
@@ -389,6 +386,7 @@
 				26C37DE175383478B8ECAF6F,
 				D3C2C254791414A783F9D864,
 				D713469F5B32ED43EDD0BC4A,
+				820301DA70B90E58F884DEB9,
 			);
 			isa = PBXGroup;
 			path = NoobCube;
@@ -433,6 +431,7 @@
 				BEC300E94649796F2D254C22,
 				D9B161FAC0B13799E07BBB32,
 				306DD493E69E23D4D3793260,
+				EAD1339D85CC420C44848D88,
 				5FB73A3B48B8604118F3845B,
 				67F39AC91D3B1D10C20F4BAA,
 				DD978E0946731F10995AE836,
@@ -653,17 +652,8 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = NoobCube;
-				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "NoobCube connects to your smart cube over Bluetooth so it can follow along as you turn it.";
-				INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription = "NoobCube connects to your smart cube over Bluetooth so it can follow along as you turn it.";
-				INFOPLIST_KEY_NSCameraUsageDescription = "NoobCube uses the camera to look at your Rubik’s cube and work out what colour each sticker is.";
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UIRequiresFullScreen = YES;
-				INFOPLIST_KEY_UIStatusBarHidden = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = NoobCube/Info.plist;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.noobcube.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -693,6 +683,7 @@
 		};
 		D3C2C254791414A783F9D864 = {
 			children = (
+				F59093F1824788EB7311DCFB,
 				6BB5B45E90AD13861C5F082F,
 				676163BE5B36C8F86A0A9D11,
 				71119818B48348D2BB721841,
@@ -766,6 +757,10 @@
 			isa = PBXResourcesBuildPhase;
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		EAD1339D85CC420C44848D88 = {
+			fileRef = F59093F1824788EB7311DCFB;
+			isa = PBXBuildFile;
+		};
 		EE00F438A059B494C2BD33DE = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
@@ -807,6 +802,12 @@
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = CameraController.swift;
+			sourceTree = "<group>";
+		};
+		F59093F1824788EB7311DCFB = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = Brand.swift;
 			sourceTree = "<group>";
 		};
 		F59E8266325E0BAF0758C1B1 = {

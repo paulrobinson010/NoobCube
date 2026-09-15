@@ -15,15 +15,10 @@ struct ReadyView: View {
 
     var body: some View {
         VStack(spacing: 16) {
-            HStack {
-                Text(hasFolded ? "Hold it like this" : "Here's your cube")
-                    .font(.system(size: 28, weight: .heavy, design: .rounded))
-                    .foregroundStyle(.white)
-                Spacer()
-                NarratorControls(narrator: narrator)
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 12)
+            ScreenHeader(title: hasFolded ? "Hold it like this" : "Here's your cube",
+                         narrator: narrator)
+                .padding(.horizontal, 20)
+                .padding(.top, 12)
 
             CubeSceneView(controller: scene)
                 .frame(height: 340)

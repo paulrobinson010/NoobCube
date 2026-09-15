@@ -21,10 +21,7 @@ BUNDLE_ID = 'com.noobcube.app'
 DEPLOYMENT_TARGET = '17.0'
 SWIFT_VERSION = '5.0'
 
-CAMERA_REASON = ('NoobCube uses the camera to look at your Rubik\u2019s cube and '
-                 'work out what colour each sticker is.')
-BLUETOOTH_REASON = ('NoobCube connects to your smart cube over Bluetooth so it can '
-                    'follow along as you turn it.')
+# Camera and Bluetooth usage strings live in NoobCube/Info.plist.
 
 
 def oid(role):
@@ -133,15 +130,23 @@ def build_project():
     if not app_sources:
         sys.exit(f'no Swift files found under {APP}/')
 
-    # Asset catalog lives inside the app folder.
+    # Asset catalog and Info.plist live inside the app folder. The plist is
+    # referenced through INFOPLIST_FILE, not a build phase, so it is listed
+    # here only so it shows up in the navigator.
     assets_ref = b.add('fileref:assets', {
         'isa': 'PBXFileReference',
         'lastKnownFileType': 'folder.assetcatalog',
         'path': 'Assets.xcassets',
         'sourceTree': '<group>',
     })
+    plist_ref = b.add('fileref:infoplist', {
+        'isa': 'PBXFileReference',
+        'lastKnownFileType': 'text.plist.xml',
+        'path': 'Info.plist',
+        'sourceTree': '<group>',
+    })
 
-    app_group = b.group_tree(APP, app_sources, extra_children=[assets_ref])
+    app_group = b.group_tree(APP, app_sources, extra_children=[assets_ref, plist_ref])
     test_group = b.group_tree(TESTS, test_sources)
 
     app_product = b.add('product:app', {
@@ -254,19 +259,10 @@ def build_project():
         'CODE_SIGN_STYLE': 'Automatic',
         'CURRENT_PROJECT_VERSION': '1',
         'ENABLE_PREVIEWS': 'YES',
-        'GENERATE_INFOPLIST_FILE': 'YES',
-        'INFOPLIST_KEY_CFBundleDisplayName': 'NoobCube',
-        'INFOPLIST_KEY_NSCameraUsageDescription': CAMERA_REASON,
-        'INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription': BLUETOOTH_REASON,
-        'INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription': BLUETOOTH_REASON,
-        'INFOPLIST_KEY_UIApplicationSceneManifest_Generation': 'YES',
-        'INFOPLIST_KEY_UILaunchScreen_Generation': 'YES',
-        'INFOPLIST_KEY_UIRequiresFullScreen': 'YES',
-        'INFOPLIST_KEY_UIStatusBarHidden': 'YES',
-        'INFOPLIST_KEY_UISupportedInterfaceOrientations': 'UIInterfaceOrientationPortrait',
-        'INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad':
-            'UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown '
-            'UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight',
+        # A real Info.plist rather than a generated one: the launch screen is a
+        # UILaunchScreen dictionary, which INFOPLIST_KEY_ settings cannot express.
+        'GENERATE_INFOPLIST_FILE': 'NO',
+        'INFOPLIST_FILE': f'{APP}/Info.plist',
         'MARKETING_VERSION': '1.0',
         'PRODUCT_BUNDLE_IDENTIFIER': BUNDLE_ID,
         'PRODUCT_NAME': '$(TARGET_NAME)',

@@ -62,9 +62,8 @@ struct WelcomeView: View {
         VStack(spacing: 18) {
             Spacer(minLength: 8)
 
-            Text("NoobCube")
-                .font(.system(size: 44, weight: .black, design: .rounded))
-                .foregroundStyle(.white)
+            BrandWordmark(height: 54)
+                .padding(.top, 4)
 
             Text("Let's solve your cube together")
                 .font(.system(size: 19, weight: .semibold, design: .rounded))

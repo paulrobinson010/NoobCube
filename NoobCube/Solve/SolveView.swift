@@ -39,20 +39,9 @@ struct SolveView: View {
 
     private var header: some View {
         VStack(spacing: 10) {
-            HStack(alignment: .center) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Step \(session.stageNumber) of \(session.totalStages)")
-                        .font(.system(size: 14, weight: .bold, design: .rounded))
-                        .foregroundStyle(Theme.muted)
-                    Text(session.stage?.kind.title ?? "All done!")
-                        .font(.system(size: 26, weight: .heavy, design: .rounded))
-                        .foregroundStyle(.white)
-                        .minimumScaleFactor(0.7)
-                        .lineLimit(2)
-                }
-                Spacer()
-                NarratorControls(narrator: narrator)
-            }
+            ScreenHeader(title: session.stage?.kind.title ?? "All done!",
+                         subtitle: "Step \(session.stageNumber) of \(session.totalStages)",
+                         narrator: narrator)
 
             ProgressView(value: session.progress)
                 .tint(Theme.success)
