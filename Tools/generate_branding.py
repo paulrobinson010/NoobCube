@@ -15,7 +15,7 @@ import os
 import sys
 
 try:
-    from PIL import Image, ImageDraw, ImageFilter
+    from PIL import Image, ImageDraw, ImageFilter, ImageFont
 except ImportError:
     sys.exit("This needs Pillow: pip3 install Pillow")
 
@@ -162,16 +162,13 @@ def build_brand_mark(source):
 
 # ----------------------------------------------------------------- wordmark
 
-def build_wordmark(source):
+def _cut_wordmark(source):
     """The NoobCube lettering, lifted off its background.
 
     The artwork sits on near-black, so brightness doubles as coverage: it gives
     the alpha, and dividing it back out of the colour recovers the real one.
     That keeps the cyan-to-magenta gradient true instead of muddy.
     """
-    folder = os.path.join(ASSETS, 'BrandWordmark.imageset')
-    clear_pngs(folder)
-
     word = crop_fraction(source.convert('RGB'), WORDMARK_BOX)
     width, height = word.size
     cut = Image.new('RGBA', (width, height))
@@ -190,6 +187,14 @@ def build_wordmark(source):
                                     min(255, int(green / coverage)),
                                     min(255, int(blue / coverage)),
                                     int(coverage * 255))
+    return cut
+
+
+def build_wordmark(source):
+    folder = os.path.join(ASSETS, 'BrandWordmark.imageset')
+    clear_pngs(folder)
+    cut = _cut_wordmark(source)
+    width, height = cut.size
 
     images = []
     base = 180
@@ -205,6 +210,84 @@ def build_wordmark(source):
     print(f'  BrandWordmark      {base}pt wide')
 
 
+# ---------------------------------------------------------------- the website
+
+DOCS = os.path.join(ROOT, 'docs', 'assets')
+
+
+def build_web_assets(source):
+    """Images for the landing page in docs/, cut from the same artwork."""
+    os.makedirs(DOCS, exist_ok=True)
+
+    # Favicon: the whole icon, small and square.
+    source.convert('RGB').resize((256, 256), Image.LANCZOS).save(
+        os.path.join(DOCS, 'favicon.png'))
+
+    # The cube on its own, edges faded, for the hero and the social card.
+    width, height = source.size
+    centre_x, centre_y = int(CUBE_CENTRE[0] * width), int(CUBE_CENTRE[1] * height)
+    half = int(CUBE_HALF * width)
+    cube = source.convert('RGBA').crop((centre_x - half, centre_y - half,
+                                        centre_x + half, centre_y + half))
+    working = 720
+    cube = cube.resize((working, working), Image.LANCZOS)
+    mask = Image.new('L', (working, working), 0)
+    inset = int(working * 0.025)
+    ImageDraw.Draw(mask).ellipse((inset, inset, working - inset, working - inset), fill=255)
+    cube.putalpha(mask.filter(ImageFilter.GaussianBlur(working * 0.10)))
+    cube.save(os.path.join(DOCS, 'logo.png'))
+
+    # The lettering on its own, for the page heading.
+    word = _cut_wordmark(source)
+    word_width = 900
+    word_height = round(word_width * word.size[1] / word.size[0])
+    word.resize((word_width, word_height), Image.LANCZOS).save(
+        os.path.join(DOCS, 'brand.png'))
+
+    _build_social_card(cube, word)
+    print('  docs/assets       favicon, logo, brand, og')
+
+
+def _build_social_card(cube, word):
+    """The 1200x630 picture that shows up when the link is shared."""
+    card_width, card_height = 1200, 630
+    card = Image.new('RGB', (card_width, card_height), (4, 7, 15))
+
+    # A soft glow behind the middle, the same shape as the icon's.
+    glow = Image.new('RGB', (card_width, card_height), (4, 7, 15))
+    draw = ImageDraw.Draw(glow)
+    draw.ellipse((-140, -260, 700, 520), fill=(10, 42, 70))
+    draw.ellipse((640, -200, 1420, 560), fill=(46, 10, 74))
+    card = Image.blend(card, glow.filter(ImageFilter.GaussianBlur(150)), 0.85)
+
+    art = cube.resize((400, 400), Image.LANCZOS)
+    card.paste(art, (70, 115), art)
+
+    lettering_width = 600
+    lettering_height = round(lettering_width * word.size[1] / word.size[0])
+    lettering = word.resize((lettering_width, lettering_height), Image.LANCZOS)
+    card.paste(lettering, (520, 220), lettering)
+
+    font_path = os.path.join(ROOT, 'docs', 'assets', 'fonts', 'Baloo2.ttf')
+    if os.path.exists(font_path):
+        tagline = 'Learn to solve your cube, one step at a time'
+        draw = ImageDraw.Draw(card)
+        available = card_width - 520 - 40
+        # Shrink until it fits rather than trusting a hard-coded size.
+        for size in range(38, 17, -1):
+            try:
+                font = ImageFont.truetype(font_path, size)
+            except OSError:
+                break
+            left, _, right, _ = draw.textbbox((0, 0), tagline, font=font)
+            if right - left <= available:
+                draw.text((524, 224 + lettering_height + 16), tagline,
+                          font=font, fill=(200, 214, 230))
+                break
+
+    card.save(os.path.join(DOCS, 'og.png'))
+
+
 def main():
     if not os.path.exists(SOURCE):
         sys.exit(f'missing artwork: {SOURCE}')
@@ -215,6 +298,7 @@ def main():
     build_launch_background()
     build_brand_mark(source)
     build_wordmark(source)
+    build_web_assets(source)
     print('done')
 
 

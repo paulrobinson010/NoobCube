@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NoobCube — learn to solve your Rubik's cube</title>
+<meta name="description" content="A first Rubik's cube app for children who can't read yet. Show it your cube with the camera, then follow one move at a time with an arrow and a voice telling you what to do.">
+<meta property="og:title" content="NoobCube — learn to solve your cube, one step at a time">
+<meta property="og:description" content="Show it your cube with the camera, then follow one move at a time. Every instruction is spoken out loud, so it works before you can read.">
+<meta property="og:image" content="https://noobcube.robbo-online.uk/assets/og.png">
+<meta property="og:url" content="https://noobcube.robbo-online.uk/">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="/assets/favicon.png?v=1">
+<link rel="stylesheet" href="/assets/site.css?v=1">
+<style>
+  header { text-align: center; padding: 52px 0 44px; }
+  .brand { width: min(460px, 88vw); height: auto; }
+  .visually-hidden {
+    position: absolute; width: 1px; height: 1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+  }
+  .tagline { margin-top: 16px; }
+  .coming {
+    display: inline-block;
+    background: linear-gradient(90deg, var(--cyan), var(--magenta));
+    color: var(--ink);
+    font-weight: 800;
+    padding: 6px 22px;
+    border-radius: 999px;
+    transform: rotate(1.5deg);
+    font-size: 1.05rem;
+    margin-top: 16px;
+  }
+
+  .band { background: var(--band); }
+  .band .wrap { padding-top: 8px; padding-bottom: 40px; }
+  h2 { font-size: 1.6rem; margin: 28px 0 22px; color: var(--cyan); text-align: center; }
+
+  .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 18px; }
+  .steps .card:nth-child(1) { transform: rotate(-1.5deg); border-top-color: var(--green); }
+  .steps .card:nth-child(2) { transform: rotate(1.2deg);  border-top-color: var(--blue); }
+  .steps .card:nth-child(3) { transform: rotate(-1deg);   border-top-color: var(--orange); }
+  .card h3 { margin: 6px 0; font-size: 1.15rem; }
+  .card p { color: var(--muted); font-size: .95rem; }
+
+  /* The eight stages, as a row of little sticker chips */
+  .stages {
+    display: flex; flex-wrap: wrap; justify-content: center;
+    gap: 10px; margin: 6px auto 4px; max-width: 700px; padding: 0 24px;
+  }
+  .stages span {
+    background: var(--card);
+    border-radius: 999px;
+    padding: 5px 16px;
+    font-size: .92rem;
+    font-weight: 700;
+    border-left: 4px solid var(--cyan);
+  }
+  .stages span:nth-child(1), .stages span:nth-child(2) { border-left-color: var(--chalk); }
+  .stages span:nth-child(3), .stages span:nth-child(4) { border-left-color: var(--blue); }
+  .stages span:nth-child(5), .stages span:nth-child(6) { border-left-color: var(--yellow); }
+  .stages span:nth-child(7), .stages span:nth-child(8) { border-left-color: var(--orange); }
+
+  .magic {
+    text-align: center;
+    font-size: 1.5rem;
+    font-weight: 800;
+    margin: 40px auto 6px;
+    max-width: 580px;
+    line-height: 1.35;
+  }
+  .magic .look { color: var(--green); }
+  .magic .turn { color: var(--cyan); }
+  .magic .done { color: var(--yellow); }
+
+  .shots { padding: 44px 0 8px; text-align: center; }
+  .shots-row {
+    display: flex;
+    gap: 18px;
+    overflow-x: auto;
+    padding: 10px 24px 22px;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+  }
+  .shots-row img, .shot-soon {
+    width: 220px;
+    flex-shrink: 0;
+    border-radius: 26px;
+    border: 4px solid var(--card);
+    box-shadow: 0 10px 28px rgba(0,0,0,.45);
+    scroll-snap-align: center;
+  }
+  .shots-row img { height: auto; }
+  /* Stand-ins until the real screenshots go in */
+  .shot-soon {
+    height: 460px;
+    display: grid;
+    place-items: center;
+    text-align: center;
+    padding: 20px;
+    color: var(--muted);
+    font-weight: 700;
+    background:
+      repeating-linear-gradient(-45deg, #131b30 0 14px, #161f38 14px 28px);
+  }
+  .shots-row > :first-child { margin-left: auto; }
+  .shots-row > :last-child { margin-right: auto; }
+  @media (prefers-reduced-motion: no-preference) {
+    .shots-row img { transition: transform .2s ease; }
+    .shots-row img:hover { transform: translateY(-6px) rotate(-1deg); }
+  }
+
+  .get { text-align: center; padding: 44px 24px 8px; }
+  .get p { color: var(--muted); max-width: 580px; margin: 0 auto 12px; }
+
+  footer { text-align: center; color: var(--muted); font-size: .85rem; padding: 44px 0 56px; }
+</style>
+</head>
+<body>
+
+<header class="stickers">
+  <i style="top:12%; left:8%;   width:44px; height:44px; background:var(--red);    transform:rotate(14deg)"></i>
+  <i style="top:58%; left:13%;  width:30px; height:30px; background:var(--green);  transform:rotate(-18deg)"></i>
+  <i style="top:20%; right:10%; width:38px; height:38px; background:var(--blue);   transform:rotate(-10deg)"></i>
+  <i style="top:64%; right:7%;  width:52px; height:52px; background:var(--yellow); transform:rotate(22deg)"></i>
+  <i style="top:86%; left:45%;  width:26px; height:26px; background:var(--orange); transform:rotate(8deg)"></i>
+  <div class="wrap">
+    <h1 class="visually-hidden">NoobCube — learn to solve your Rubik's cube, one step at a time</h1>
+    <img class="brand bob" src="/assets/brand.png?v=1" alt="NoobCube">
+    <p class="tagline"><span class="sticker">Made for brand-new cubers!</span></p>
+    <p><span class="coming">🚧 Coming soon to the App&nbsp;Store</span></p>
+  </div>
+</header>
+
+<svg class="wave" viewBox="0 0 1440 60" preserveAspectRatio="none" aria-hidden="true">
+  <path d="M0,30 C240,60 480,0 720,20 C960,45 1200,10 1440,32 L1440,60 L0,60 Z" fill="#0b1222"/>
+</svg>
+
+<div class="band">
+  <div class="wrap">
+    <h2>How it works</h2>
+    <div class="steps">
+      <div class="card">
+        <span class="badge" style="background:var(--green)">1</span>
+        <h3>📷 Show it your cube</h3>
+        <p>Point the camera and give the cube a spin. A flat map of all six sides
+        fills in as you go, then folds up into your cube on screen.</p>
+      </div>
+      <div class="card">
+        <span class="badge" style="background:var(--blue)">2</span>
+        <h3>🔄 One move at a time</h3>
+        <p>An arrow curls around the cube showing which way the side turns, and a
+        voice says what to do. Tap <strong>I did it!</strong> and it moves on.</p>
+      </div>
+      <div class="card">
+        <span class="badge" style="background:var(--orange)">3</span>
+        <h3>🙌 Or have a go yourself</h3>
+        <p>Rather do a whole step on your own? Say so, and when you're done it
+        takes another look at your cube to see how you got on.</p>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:18px; border-top-color: var(--yellow)">
+      <h3>🔊 It reads everything out loud</h3>
+      <p>NoobCube was built for a five year old who can't read yet, so nothing
+      important is ever text on its own. Every instruction is spoken, and the
+      <strong>mute</strong> and <strong>say&nbsp;it&nbsp;again</strong> buttons
+      sit on every screen — because the first thing a small child does is ask
+      you to repeat it.</p>
+    </div>
+
+    <div class="card" style="margin-top:18px; border-top-color: var(--chalk)">
+      <h3>🌼 It starts with the daisy</h3>
+      <p>The daisy method, the gentlest way in: make a flower of white petals on
+      the top, drop them into a white cross, and build up a layer at a time.
+      There are only seven short sequences to learn in the whole thing, and the
+      app never shows a move it hasn't taught you.</p>
+      <div class="stages" style="margin-top:14px">
+        <span>1 Make a daisy</span>
+        <span>2 White cross</span>
+        <span>3 White corners</span>
+        <span>4 Middle row</span>
+        <span>5 Yellow cross</span>
+        <span>6 Yellow face</span>
+        <span>7 Corners home</span>
+        <span>8 Last pieces</span>
+      </div>
+      <p style="text-align:center; margin-top:14px">Stuck halfway? Show it the cube
+      again at any point. Steps you've already finished stay finished.</p>
+    </div>
+
+    <div class="card" style="margin-top:18px; border-top-color: var(--magenta)">
+      <h3>🧊 Smart cube support <span style="color:var(--magenta)">— in the works</span></h3>
+      <p>If you have a GAN smart cube, the plan is to let NoobCube connect over
+      Bluetooth and follow along by itself: no camera, no tapping, steps ticking
+      off as your hands move. It's built but not yet tested on a real cube, so
+      treat this one as a promise rather than a feature.</p>
+    </div>
+
+    <p class="magic">
+      Show it your cube <span class="look">📷</span> …
+      follow the <span class="turn">ARROWS 🔄</span> …
+      and the last piece <span class="done">CLICKS INTO PLACE! 🎉</span>
+    </p>
+  </div>
+</div>
+
+<svg class="wave" viewBox="0 0 1440 60" preserveAspectRatio="none" style="transform:scaleY(-1)" aria-hidden="true">
+  <path d="M0,30 C240,60 480,0 720,20 C960,45 1200,10 1440,32 L1440,60 L0,60 Z" fill="#0b1222"/>
+</svg>
+
+<section class="shots">
+  <h2>See it in action</h2>
+  <!--
+    Screenshots go here. Drop the images into docs/screenshots/ and swap each
+    .shot-soon block below for:
+        <img src="/screenshots/1-web.jpg" alt="..." loading="lazy">
+  -->
+  <div class="shots-row">
+    <div class="shot-soon">Scanning your cube<br>📷</div>
+    <div class="shot-soon">The cube folding together<br>🧩</div>
+    <div class="shot-soon">One move at a time<br>🔄</div>
+    <div class="shot-soon">Making the daisy<br>🌼</div>
+    <div class="shot-soon">Solved!<br>🎉</div>
+  </div>
+  <p class="note" style="margin-top:0">Screenshots coming as soon as it's running on a phone.</p>
+</section>
+
+<section class="get">
+  <h2 class="wordmark" style="font-size:1.6rem">Get Noob<span class="cube">Cube</span></h2>
+  <p><strong style="color:var(--cyan)">Not out yet.</strong> NoobCube is being
+  built for iPhone, iOS&nbsp;17 or newer. It needs the camera to look at your
+  cube, and that's the only thing it asks for.</p>
+  <p>It'll land on the App&nbsp;Store when it's ready — and when a five year old
+  has given it a proper going over.</p>
+  <p><span class="coming" style="transform:rotate(-1deg)">🚧 Coming soon to the App&nbsp;Store</span></p>
+</section>
+
+<footer>
+  No accounts. No servers. No tracking. NoobCube never touches the internet —
+  your cube, your camera and your solve never leave the phone.<br>
+  Made for one small boy who wanted to learn. 🧩<br>
+  <a href="https://github.com/paulrobinson010/NoobCube">Source on GitHub</a>
+</footer>
+
+</body>
+</html>
