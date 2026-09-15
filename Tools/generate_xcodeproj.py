@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Generate NoobCube.xcodeproj from whatever is on disk.
+"""Generate NoobCube.xcodeproj from scratch.
 
-Hand-editing a pbxproj is a good way to produce a project Xcode will not open,
-so it is generated instead. Re-run this after adding or removing source files:
-
-    python3 Tools/generate_xcodeproj.py
+This bootstrapped the project. Xcode owns it now — it carries the development
+team and signing settings — so the script refuses to overwrite an existing
+project unless passed --force. Add source files through Xcode instead.
 
 Object identifiers are derived from a hash of each object's role, so re-running
 produces the same file and the diff stays readable.
@@ -438,8 +437,20 @@ def write_scheme(out_dir):
 
 
 def main():
-    project = build_project()
     out_dir = os.path.join(ROOT, f'{APP}.xcodeproj')
+    if os.path.exists(os.path.join(out_dir, 'project.pbxproj')) and '--force' not in sys.argv:
+        sys.exit(
+            f'{APP}.xcodeproj already exists, and Xcode owns it now.\n'
+            '\n'
+            'It holds the development team, code signing, and anything else\n'
+            'changed in the Xcode UI. None of that is in this script, so\n'
+            'regenerating would silently throw it away.\n'
+            '\n'
+            'To add a source file, drag it into Xcode instead.\n'
+            'Pass --force only if you really do want to start the project over.'
+        )
+
+    project = build_project()
     os.makedirs(out_dir, exist_ok=True)
     body = '// !$*UTF8*$!\n' + fmt(project) + '\n'
     with open(os.path.join(out_dir, 'project.pbxproj'), 'w') as handle:

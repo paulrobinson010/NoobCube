@@ -1,4 +1,4 @@
-import SceneKit
+@preconcurrency import SceneKit
 import UIKit
 import SwiftUI
 

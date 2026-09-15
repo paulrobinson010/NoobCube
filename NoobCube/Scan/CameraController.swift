@@ -1,7 +1,13 @@
-import AVFoundation
+@preconcurrency import AVFoundation
 import CoreVideo
 import UIKit
 import SwiftUI
+
+/// Fraction of the frame's short side that the on-screen guide square covers.
+///
+/// At file scope rather than on the class: the frame reader runs off the main
+/// actor, and a static property of a `@MainActor` type is isolated too.
+private let guideFraction: Double = 0.62
 
 /// Runs the camera and reads nine sticker colours out of each frame.
 ///
@@ -25,9 +31,6 @@ final class CameraController: NSObject, ObservableObject {
     private let queue = DispatchQueue(label: "noobcube.camera")
     private var recentReadings: [[RGBSample]] = []
 
-    /// Fraction of the frame's short side the guide square covers. Static
-    /// because the frame reader runs off the main actor.
-    private static let guideFraction: Double = 0.62
 
     func start() {
         switch AVCaptureDevice.authorizationStatus(for: .video) {
@@ -142,7 +145,7 @@ final class CameraController: NSObject, ObservableObject {
         let height = CVPixelBufferGetHeight(buffer)
         let bytesPerRow = CVPixelBufferGetBytesPerRow(buffer)
 
-        let guideSide = Double(min(width, height)) * Self.guideFraction
+        let guideSide = Double(min(width, height)) * guideFraction
         let cell = guideSide / 3
         let originX = Double(width) / 2 - guideSide / 2
         let originY = Double(height) / 2 - guideSide / 2

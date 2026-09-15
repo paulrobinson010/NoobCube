@@ -143,16 +143,21 @@ enum GANProtocol {
     private static func aesECBCrypt(block: [UInt8], key: [UInt8], encrypt: Bool) -> [UInt8]? {
         var output = [UInt8](repeating: 0, count: 16)
         var moved = 0
+        // Read the lengths up front: asking `output` for its count inside
+        // withUnsafeMutableBytes overlaps with the exclusive access it holds.
+        let keyLength = key.count
+        let blockLength = block.count
+        let outputLength = output.count
         let status = key.withUnsafeBytes { keyBytes in
             block.withUnsafeBytes { inputBytes in
                 output.withUnsafeMutableBytes { outputBytes in
                     CCCrypt(CCOperation(encrypt ? kCCEncrypt : kCCDecrypt),
                             CCAlgorithm(kCCAlgorithmAES),
                             CCOptions(kCCOptionECBMode),
-                            keyBytes.baseAddress, key.count,
+                            keyBytes.baseAddress, keyLength,
                             nil,
-                            inputBytes.baseAddress, block.count,
-                            outputBytes.baseAddress, output.count,
+                            inputBytes.baseAddress, blockLength,
+                            outputBytes.baseAddress, outputLength,
                             &moved)
                 }
             }

@@ -1,5 +1,5 @@
 import Combine
-import CoreBluetooth
+@preconcurrency import CoreBluetooth
 import Foundation
 
 /// Finds and follows a GAN smart cube over Bluetooth.
