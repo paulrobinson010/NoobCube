@@ -19,18 +19,11 @@ final class Narrator: ObservableObject {
     /// The last thing said, so the repeat button has something to say again.
     @Published private(set) var lastPhrase: String?
 
-    @Published private(set) var isSpeaking = false
-
     private static let muteKey = "NoobCube.narrator.muted"
     private let synthesiser = AVSpeechSynthesizer()
-    private let delegate = SpeechDelegate()
 
     init() {
         isMuted = UserDefaults.standard.bool(forKey: Self.muteKey)
-        delegate.onChange = { [weak self] speaking in
-            Task { @MainActor in self?.isSpeaking = speaking }
-        }
-        synthesiser.delegate = delegate
         configureAudioSession()
     }
 
@@ -52,7 +45,6 @@ final class Narrator: ObservableObject {
 
     func stop() {
         synthesiser.stopSpeaking(at: .immediate)
-        isSpeaking = false
     }
 
     private func speak(_ phrase: String) {
@@ -82,25 +74,6 @@ final class Narrator: ObservableObject {
         try? session.setCategory(.playback, mode: .spokenAudio,
                                  options: [.duckOthers, .mixWithOthers])
         try? session.setActive(true)
-    }
-
-    private final class SpeechDelegate: NSObject, AVSpeechSynthesizerDelegate {
-        var onChange: ((Bool) -> Void)?
-
-        func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer,
-                               didStart utterance: AVSpeechUtterance) {
-            onChange?(true)
-        }
-
-        func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer,
-                               didFinish utterance: AVSpeechUtterance) {
-            onChange?(false)
-        }
-
-        func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer,
-                               didCancel utterance: AVSpeechUtterance) {
-            onChange?(false)
-        }
     }
 }
 

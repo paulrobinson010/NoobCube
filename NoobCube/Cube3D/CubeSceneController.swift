@@ -29,8 +29,6 @@ final class CubeSceneController {
     private static let cubeletSize: CGFloat = 1.0
     private static let gap: CGFloat = 0.06
     private static let stickerInset: CGFloat = 0.14
-    /// Half the cube's width, so a face sits at +-1.5.
-    private static let half: Float = 1.5
 
     init() {
         scene.rootNode.addChildNode(cubeNode)
@@ -314,7 +312,7 @@ final class CubeSceneController {
     /// Slowly turn the whole cube, for the idle screens.
     func startIdleSpin() {
         cubeNode.removeAction(forKey: "idle")
-        cubeNode.runAction(.repeatForever(.rotateBy(x: 0, y: .pi * 2, z: 0, duration: 18)),
+        cubeNode.runAction(.repeatForever(.rotateBy(x: 0, y: CGFloat.pi * 2, z: 0, duration: 18)),
                            forKey: "idle")
     }
 

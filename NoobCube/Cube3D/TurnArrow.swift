@@ -77,11 +77,11 @@ extension CubeSceneController {
     static func orientation(facing face: Face) -> SCNVector3 {
         switch face {
         case .F: return SCNVector3(0, 0, 0)
-        case .B: return SCNVector3(0, .pi, 0)
-        case .R: return SCNVector3(0, .pi / 2, 0)
-        case .L: return SCNVector3(0, -.pi / 2, 0)
-        case .U: return SCNVector3(-.pi / 2, 0, 0)
-        case .D: return SCNVector3(.pi / 2, 0, 0)
+        case .B: return SCNVector3(0, Float.pi, 0)
+        case .R: return SCNVector3(0, Float.pi / 2, 0)
+        case .L: return SCNVector3(0, -Float.pi / 2, 0)
+        case .U: return SCNVector3(-Float.pi / 2, 0, 0)
+        case .D: return SCNVector3(Float.pi / 2, 0, 0)
         }
     }
 
