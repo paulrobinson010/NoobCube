@@ -158,6 +158,7 @@
 		378DAF2D8D6091BC8133B2DD = {
 			children = (
 				F0212F177FA7DCB719AFA6AF,
+				A6BF8EA82D22B0FDD53C446C,
 				925DB0C87891C6595AB34587,
 			);
 			isa = PBXGroup;
@@ -547,6 +548,12 @@
 			fileRef = 46830E78D947520DF14AA497;
 			isa = PBXBuildFile;
 		};
+		A6BF8EA82D22B0FDD53C446C = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = ScanTests.swift;
+			sourceTree = "<group>";
+		};
 		ADCF10F76EBF2A74473E9DC4 = {
 			children = (
 				839A155436D47587B58E5E0E,
@@ -592,6 +599,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F611560A4F0168608B4E8F2E,
+				FC51A77DFFF24D651AB4DB32,
 				9CD1C7B937CA888CF8E20949,
 			);
 			isa = PBXSourcesBuildPhase;
@@ -812,6 +820,10 @@
 		};
 		F72DA1E42A8341190A0CA93C = {
 			fileRef = CEB83F5C22B7F2D17748AFB9;
+			isa = PBXBuildFile;
+		};
+		FC51A77DFFF24D651AB4DB32 = {
+			fileRef = A6BF8EA82D22B0FDD53C446C;
 			isa = PBXBuildFile;
 		};
 		FEB931EE64270630A7A91C1F = {

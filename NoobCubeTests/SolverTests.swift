@@ -92,18 +92,37 @@ final class SolverTests: XCTestCase {
         }
     }
 
-    func testStageStatesMatchReplay() throws {
+    /// Each stage really does reach the goal it claims.
+    func testEachStageReachesItsGoal() throws {
         var generator = SeededGenerator(seed: 17)
-        let start = CubeState.solved.applying(randomScramble(using: &generator))
-        let plan = try BeginnerSolver.solve(start)
+        for _ in 0..<20 {
+            let start = CubeState.solved.applying(randomScramble(using: &generator))
+            let plan = try BeginnerSolver.solve(start)
 
-        XCTAssertTrue(plan.state(after: .whiteCross).facelets.indices
-            .filter { CubeSlots.bottomEdges.flatMap(\.indices).contains($0) }
-            .allSatisfy { index in
-                CubeSlots.bottomEdges.first { $0.indices.contains(index) }?
-                    .isSolved(in: plan.state(after: .whiteCross)) ?? false
-            })
-        XCTAssertTrue(plan.state(after: .lastEdges).isSolved)
+            let afterCross = plan.state(after: .whiteCross)
+            XCTAssertTrue(CubeSlots.bottomEdges.allSatisfy { $0.isSolved(in: afterCross) },
+                          "the white cross is not finished after its stage")
+
+            let afterCorners = plan.state(after: .whiteCorners)
+            XCTAssertTrue(CubeSlots.bottomCorners.allSatisfy { $0.isSolved(in: afterCorners) },
+                          "the first layer is not finished after its stage")
+
+            let afterMiddle = plan.state(after: .middleRow)
+            XCTAssertTrue(CubeSlots.middleEdges.allSatisfy { $0.isSolved(in: afterMiddle) },
+                          "the middle row is not finished after its stage")
+
+            let afterYellowCross = plan.state(after: .yellowCross)
+            XCTAssertTrue(CubeSlots.topEdges.allSatisfy {
+                $0.sticker(on: .U, in: afterYellowCross) == .U
+            }, "the yellow cross is not finished after its stage")
+
+            let afterYellowFace = plan.state(after: .yellowFace)
+            XCTAssertTrue(CubeSlots.topCorners.allSatisfy {
+                $0.sticker(on: .U, in: afterYellowFace) == .U
+            }, "the yellow face is not finished after its stage")
+
+            XCTAssertTrue(plan.state(after: .lastEdges).isSolved)
+        }
     }
 
     func testUnsolvableCubeIsRejected() {

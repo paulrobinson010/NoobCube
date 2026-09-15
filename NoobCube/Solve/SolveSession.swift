@@ -190,7 +190,7 @@ final class SolveSession: ObservableObject {
         }
     }
 
-    private func playSequence(_ moves: [Move], completion: @escaping () -> Void) {
+    private func playSequence(_ moves: [Move], completion: @MainActor @escaping () -> Void) {
         guard let first = moves.first else { return completion() }
         scene.showTurnArrow(for: first)
         scene.animate(first, duration: 0.38) { [weak self] in

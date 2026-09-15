@@ -219,7 +219,8 @@ final class CubeSceneController {
 
     /// Animate one move, then put the cubelets back under the cube node with
     /// their new positions recorded.
-    func animate(_ move: Move, duration: TimeInterval, completion: @escaping () -> Void) {
+    func animate(_ move: Move, duration: TimeInterval,
+                 completion: @MainActor @escaping () -> Void) {
         let axis = move.turnAxis
         let turning = cubelets.indices.filter { move.moves(cubeletAt: cubelets[$0].position) }
         guard !turning.isEmpty else { return completion() }
@@ -304,7 +305,7 @@ final class CubeSceneController {
         cameraNode.eulerAngles = SCNVector3Zero
     }
 
-    func runOnCamera(_ action: SCNAction, completion: @escaping () -> Void) {
+    func runOnCamera(_ action: SCNAction, completion: @MainActor @escaping () -> Void) {
         cameraNode.runAction(action) {
             Task { @MainActor in completion() }
         }

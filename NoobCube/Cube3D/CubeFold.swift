@@ -134,7 +134,7 @@ extension CubeSceneController {
     /// and pulls round to the usual three-quarter view as the cube closes up.
     func foldNetIntoCube(colours: [CubeColour?],
                          duration: TimeInterval = 1.6,
-                         completion: @escaping () -> Void) {
+                         completion: @MainActor @escaping () -> Void) {
         let folds = buildNet(colours: colours)
         setColours(colours)
 
