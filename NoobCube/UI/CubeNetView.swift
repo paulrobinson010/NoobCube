@@ -16,10 +16,10 @@ import SwiftUI
 struct CubeNetView: View {
 
     var colours: [CubeColour?]
-    var highlightedFace: Face?
-    var pulsingFace: Face?
+    var highlightedFace: Face? = nil
+    var pulsingFace: Face? = nil
     /// Set to allow tapping a square to correct a misread colour.
-    var onTapSticker: ((Int) -> Void)?
+    var onTapSticker: ((Int) -> Void)? = nil
 
     /// Where each face sits in the 4 x 3 grid of face-sized cells.
     private static let layout: [(face: Face, column: Int, row: Int)] = [

@@ -99,6 +99,28 @@ struct ScannedCube: Equatable, Codable, Sendable {
         Face.allCases.first { colours[$0.centreIndex] == colour }
     }
 
+    /// Turn one face's nine stickers a quarter turn at a time, in place.
+    ///
+    /// Used when the top or bottom was shown to the camera at an angle.
+    mutating func rotateFaceStickers(_ face: Face, quarterTurns: Int) {
+        let turns = ((quarterTurns % 4) + 4) % 4
+        guard turns > 0 else { return }
+        var grid = (0..<9).map { colours[face.rawValue * 9 + $0] }
+        for _ in 0..<turns {
+            // Clockwise: the new (row, column) comes from (2 - column, row).
+            var turned = [CubeColour?](repeating: nil, count: 9)
+            for row in 0..<3 {
+                for column in 0..<3 {
+                    turned[row * 3 + column] = grid[(2 - column) * 3 + row]
+                }
+            }
+            grid = turned
+        }
+        for offset in 0..<9 {
+            colours[face.rawValue * 9 + offset] = grid[offset]
+        }
+    }
+
     /// Move the stickers without renaming any colours.
     ///
     /// ``CubeState`` re-labels colours after a whole-cube rotation so that a

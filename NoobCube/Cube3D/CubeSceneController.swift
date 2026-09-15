@@ -1,4 +1,5 @@
 import SceneKit
+import UIKit
 import SwiftUI
 
 /// Builds and drives the 3D cube.
@@ -21,6 +22,9 @@ final class CubeSceneController {
 
     /// Sticker plates by facelet index, so a step can light up the pieces it moves.
     private var stickerNodes: [Int: SCNNode] = [:]
+
+    /// The curved arrow showing which way the next move goes, if one is showing.
+    var arrowNode: SCNNode?
 
     private static let cubeletSize: CGFloat = 1.0
     private static let gap: CGFloat = 0.06
@@ -203,6 +207,14 @@ final class CubeSceneController {
         highlight(faceletIndices: [])
     }
 
+    /// Light up the three centres that fix how the cube should be held.
+    ///
+    /// Centres never move relative to each other, so naming three of them is
+    /// all it takes to describe a grip.
+    func highlightGrip() {
+        highlight(faceletIndices: [Face.U.centreIndex, Face.D.centreIndex, Face.F.centreIndex])
+    }
+
     // MARK: - Turning
 
     /// Animate one move, then put the cubelets back under the cube node with
@@ -211,6 +223,9 @@ final class CubeSceneController {
         let axis = move.turnAxis
         let turning = cubelets.indices.filter { move.moves(cubeletAt: cubelets[$0].position) }
         guard !turning.isEmpty else { return completion() }
+
+        // The arrow has done its job once the layer is actually moving.
+        dismissTurnArrow()
 
         // A pivot sitting at the origin with no transform of its own, so
         // re-parenting does not move anything.
@@ -257,6 +272,7 @@ final class CubeSceneController {
 
     /// Put the cube back to a known state instantly, with no animation.
     func reset(to colours: [CubeColour?]) {
+        hideTurnArrow()
         cubeNode.removeAllActions()
         for node in cubeNode.childNodes {
             node.removeAllActions()
