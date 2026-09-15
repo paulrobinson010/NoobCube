@@ -200,6 +200,23 @@ final class SolveSession: ObservableObject {
         }
     }
 
+    /// Play an algorithm through and then wind it straight back, so the child
+    /// can watch the shape of it without the cube moving on.
+    func previewAlgorithm(_ notation: String) {
+        guard !isBusy else { return }
+        let moves = Move.parse(notation)
+        guard !moves.isEmpty else { return }
+        isBusy = true
+        narrator.say("Watch this one.")
+        playSequence(moves) { [weak self] in
+            guard let self else { return }
+            self.playSequence(Move.invert(moves)) {
+                self.isBusy = false
+                self.scene.hideTurnArrow()
+            }
+        }
+    }
+
     // MARK: - Stage changes
 
     private func finishStage() {

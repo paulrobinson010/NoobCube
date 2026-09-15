@@ -64,6 +64,45 @@ extension SolveStage.Kind {
         }
     }
 
+    /// A two or three word name for the checklist.
+    var shortName: String {
+        switch self {
+        case .hold:         return "Hold it"
+        case .daisy:        return "Daisy"
+        case .whiteCross:   return "White cross"
+        case .whiteCorners: return "White bottom"
+        case .middleRow:    return "Middle row"
+        case .yellowCross:  return "Yellow cross"
+        case .yellowFace:   return "Yellow face"
+        case .lastCorners:  return "Corners home"
+        case .lastEdges:    return "Finished!"
+        }
+    }
+
+    /// Why this step exists, in words a child can hold on to.
+    var why: String {
+        switch self {
+        case .hold:
+            return "So that left and right mean the same thing to both of us."
+        case .daisy:
+            return "The daisy is the white cross upside down. It's easier to build up there where you can see it."
+        case .whiteCross:
+            return "Flipping each petal down gives you a white cross with the sides matching too."
+        case .whiteCorners:
+            return "Once the corners drop in, the whole white side is done and the bottom layer never moves again."
+        case .middleRow:
+            return "Two layers finished. From here on you only touch the top."
+        case .yellowCross:
+            return "Getting the yellow edges facing up is the first half of the last layer."
+        case .yellowFace:
+            return "Now the whole top is yellow, even though the sides are still muddled."
+        case .lastCorners:
+            return "The corners go to their proper homes, ready for the very last move."
+        case .lastEdges:
+            return "The last four pieces slide into place and the cube is done."
+        }
+    }
+
     /// The one algorithm this stage leans on, if it has one.
     var algorithm: (name: String, moves: String)? {
         switch self {

@@ -45,6 +45,9 @@
 		F611560A4F0168608B4E8F2E /* CubeEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0212F177FA7DCB719AFA6AF /* CubeEngineTests.swift */; };
 		F72DA1E42A8341190A0CA93C /* CubeState.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEB83F5C22B7F2D17748AFB9 /* CubeState.swift */; };
 		FC51A77DFFF24D651AB4DB32 /* ScanTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6BF8EA82D22B0FDD53C446C /* ScanTests.swift */; };
+		70BDA317803AFA34F5D07137 = {isa = PBXBuildFile; fileRef = 9599B9215F8DC0FC51A7A95C; };
+		6C2A6A7A38B199E52FFF35B4 = {isa = PBXBuildFile; fileRef = E1C3AD996FD4FF070A61E079; };
+		E34560B5AC9B96ACB4259B9E = {isa = PBXBuildFile; fileRef = B927E8B62A8D208A84979FB6; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -99,6 +102,9 @@
 		F399168BC23552D0FC060EFF /* CameraController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraController.swift; sourceTree = "<group>"; };
 		F59093F1824788EB7311DCFB /* Brand.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Brand.swift; sourceTree = "<group>"; };
 		FEB931EE64270630A7A91C1F /* BeginnerSolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BeginnerSolver.swift; sourceTree = "<group>"; };
+		9599B9215F8DC0FC51A7A95C = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CubeColourScheme.swift; sourceTree = "<group>"; };
+		E1C3AD996FD4FF070A61E079 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlgorithmCardView.swift; sourceTree = "<group>"; };
+		B927E8B62A8D208A84979FB6 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StageChecklistView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -122,6 +128,8 @@
 		26C37DE175383478B8ECAF6F /* Solve */ = {
 			isa = PBXGroup;
 			children = (
+				B927E8B62A8D208A84979FB6,
+				E1C3AD996FD4FF070A61E079,
 				D975030C1F0F281F3C3EA195 /* MoveStripView.swift */,
 				5791589441A33837AC678DFA /* SolveSession.swift */,
 				38A7038D38EDDE3F7DA51786 /* SolveView.swift */,
@@ -219,6 +227,7 @@
 		C98671680B27A11076D6796E /* CubeKit */ = {
 			isa = PBXGroup;
 			children = (
+				9599B9215F8DC0FC51A7A95C,
 				149AD7FB4216EBA091B703A9 /* CubeColour.swift */,
 				C38FAB8D10784EABD39536D4 /* CubeGeometry.swift */,
 				DF9A6AC41D172AD267983AC1 /* CubeSlots.swift */,
@@ -345,6 +354,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E34560B5AC9B96ACB4259B9E,
+				6C2A6A7A38B199E52FFF35B4,
+				70BDA317803AFA34F5D07137,
 				AF8EEDE82EB1D9118586AF86 /* AppModel.swift in Sources */,
 				2B728DF2F9039EFDCCA5089D /* Narrator.swift in Sources */,
 				A3F07FF98B085FE302539BA6 /* NoobCubeApp.swift in Sources */,

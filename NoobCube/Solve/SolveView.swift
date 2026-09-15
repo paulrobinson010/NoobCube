@@ -8,6 +8,9 @@ struct SolveView: View {
     var onRescan: () -> Void
     var onFinish: () -> Void
 
+    @State private var showingSteps = false
+    @State private var algorithmCovered = false
+
     var body: some View {
         VStack(spacing: 0) {
             header
@@ -33,6 +36,10 @@ struct SolveView: View {
         }
         .background(Theme.background.ignoresSafeArea())
         .onAppear { session.announceCurrentStep() }
+        .sheet(isPresented: $showingSteps) {
+            StageChecklistSheet(stages: session.plan.stages,
+                                currentKind: session.stage?.kind)
+        }
     }
 
     // MARK: - Pieces
@@ -43,9 +50,9 @@ struct SolveView: View {
                          subtitle: "Step \(session.stageNumber) of \(session.totalStages)",
                          narrator: narrator)
 
-            ProgressView(value: session.progress)
-                .tint(Theme.success)
-                .scaleEffect(x: 1, y: 2.2, anchor: .center)
+            StageChecklistStrip(stages: session.plan.stages,
+                                currentKind: session.stage?.kind,
+                                onOpen: { showingSteps = true })
         }
         .padding(.horizontal, 20)
         .padding(.top, 12)
@@ -68,11 +75,9 @@ struct SolveView: View {
                 Text(stage.kind.explanation)
                     .font(.system(size: 18, weight: .medium, design: .rounded))
                     .foregroundStyle(.white.opacity(0.9))
-                if let algorithm = stage.kind.algorithm {
-                    Text("\(algorithm.name):  \(algorithm.moves)")
-                        .font(.system(size: 16, weight: .bold, design: .monospaced))
-                        .foregroundStyle(Theme.accent)
-                }
+                Text(stage.kind.why)
+                    .font(.system(size: 15, weight: .medium, design: .rounded))
+                    .foregroundStyle(Theme.muted)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -143,7 +148,12 @@ struct SolveView: View {
 
             case .wholeStage:
                 VStack(spacing: 12) {
-                    if let stage = session.stage {
+                    if let algorithm = session.stage?.kind.algorithm {
+                        AlgorithmCardView(name: algorithm.name,
+                                          moves: Move.parse(algorithm.moves),
+                                          covered: $algorithmCovered,
+                                          onPlay: { session.previewAlgorithm(algorithm.moves) })
+                    } else if let stage = session.stage {
                         MoveStripView(moves: stage.moves, currentIndex: -1)
                             .frame(height: 76)
                     }
