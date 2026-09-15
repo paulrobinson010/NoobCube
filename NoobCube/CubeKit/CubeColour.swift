@@ -99,6 +99,25 @@ struct ScannedCube: Equatable, Codable, Sendable {
         Face.allCases.first { colours[$0.centreIndex] == colour }
     }
 
+    /// Move the stickers without renaming any colours.
+    ///
+    /// ``CubeState`` re-labels colours after a whole-cube rotation so that a
+    /// solved cube still reads as solved. That is right for solving and wrong
+    /// for drawing, where what matters is which colour is physically where. So
+    /// the picture of the cube is turned with the raw permutation instead.
+    func applying(_ move: Move) -> ScannedCube {
+        guard let permutation = CubeGeometry.allPermutations[move] else { return self }
+        var moved = [CubeColour?](repeating: nil, count: 54)
+        for index in 0..<54 {
+            moved[index] = colours[permutation[index]]
+        }
+        return ScannedCube(colours: moved)
+    }
+
+    func applying(_ moves: [Move]) -> ScannedCube {
+        moves.reduce(self) { $0.applying($1) }
+    }
+
     enum ConversionError: Error, LocalizedError {
         case incomplete
         case repeatedCentre

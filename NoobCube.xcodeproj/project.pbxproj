@@ -35,6 +35,18 @@
 			isa = XCBuildConfiguration;
 			name = Release;
 		};
+		0CF021E04B0FBA97ED3CF769 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = MoveGeometry.swift;
+			sourceTree = "<group>";
+		};
+		0E58FFEF9982AE19064EB498 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = CubeSceneView.swift;
+			sourceTree = "<group>";
+		};
 		0FDEFC4302813C22AF141CA7 = {
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
@@ -100,6 +112,10 @@
 			fileRef = 7D5A45F0E6DCBAF7B49C6C04;
 			isa = PBXBuildFile;
 		};
+		2BA8066DF460168BB4097223 = {
+			fileRef = DC2657C05C5AD613137128D9;
+			isa = PBXBuildFile;
+		};
 		2BE804C6AF83604664BAEB9D = {
 			fileRef = 2B4E00C3AA28858792DE38F3;
 			isa = PBXBuildFile;
@@ -144,6 +160,12 @@
 			isa = XCBuildConfiguration;
 			name = Release;
 		};
+		413DFAFD930F1981D4E42D42 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = CubeFold.swift;
+			sourceTree = "<group>";
+		};
 		5151B46607EBC8890D8DFCC2 = {
 			children = (
 				B6CDB6E5D160E013280D3C68,
@@ -175,6 +197,16 @@
 			lastKnownFileType = sourcecode.swift;
 			path = SolvePlan.swift;
 			sourceTree = "<group>";
+		};
+		676163BE5B36C8F86A0A9D11 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = MoveNarration.swift;
+			sourceTree = "<group>";
+		};
+		67F39AC91D3B1D10C20F4BAA = {
+			fileRef = 676163BE5B36C8F86A0A9D11;
+			isa = PBXBuildFile;
 		};
 		6BB5B45E90AD13861C5F082F = {
 			isa = PBXFileReference;
@@ -258,9 +290,14 @@
 			productReference = E02A90D9643568EA39115CFB;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		809ED5C34FBAF34B67A397E1 = {
+			fileRef = 413DFAFD930F1981D4E42D42;
+			isa = PBXBuildFile;
+		};
 		839A155436D47587B58E5E0E = {
 			children = (
 				EE7AB7FF32DB44C2FEC3F1BE,
+				B8D54DD56E1B215ADA9798FF,
 				C98671680B27A11076D6796E,
 				D3C2C254791414A783F9D864,
 				D713469F5B32ED43EDD0BC4A,
@@ -273,20 +310,29 @@
 			buildActionMask = 2147483647;
 			files = (
 				2B728DF2F9039EFDCCA5089D,
+				809ED5C34FBAF34B67A397E1,
+				2BA8066DF460168BB4097223,
+				89BB3B5CFB731D39C56C9261,
 				74B08999ACDBAEF67F2DA85C,
 				D6A5DDE109CFD9A5F6622B42,
 				1B6E4662A102A3A81FC63B71,
 				F72DA1E42A8341190A0CA93C,
 				2BE804C6AF83604664BAEB9D,
 				5520C985203BA8583BEED5EF,
+				B8E9A505B6BBC962D0C857FB,
 				92E89C7F66F8C8D49AB34512,
 				8C3C5F5596FB7BDC5AC74A91,
 				035FE83897F1B5D000524BF5,
 				5FB73A3B48B8604118F3845B,
+				67F39AC91D3B1D10C20F4BAA,
 				DD978E0946731F10995AE836,
 			);
 			isa = PBXSourcesBuildPhase;
 			runOnlyForDeploymentPostprocessing = 0;
+		};
+		89BB3B5CFB731D39C56C9261 = {
+			fileRef = 0E58FFEF9982AE19064EB498;
+			isa = PBXBuildFile;
 		};
 		8C3C5F5596FB7BDC5AC74A91 = {
 			fileRef = FEB931EE64270630A7A91C1F;
@@ -385,6 +431,20 @@
 			isa = PBXSourcesBuildPhase;
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B8D54DD56E1B215ADA9798FF = {
+			children = (
+				413DFAFD930F1981D4E42D42,
+				DC2657C05C5AD613137128D9,
+				0E58FFEF9982AE19064EB498,
+			);
+			isa = PBXGroup;
+			path = Cube3D;
+			sourceTree = "<group>";
+		};
+		B8E9A505B6BBC962D0C857FB = {
+			fileRef = 0CF021E04B0FBA97ED3CF769;
+			isa = PBXBuildFile;
+		};
 		C38FAB8D10784EABD39536D4 = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
@@ -399,6 +459,7 @@
 				CEB83F5C22B7F2D17748AFB9,
 				2B4E00C3AA28858792DE38F3,
 				9A594E3A54D5E7A7DEEC8548,
+				0CF021E04B0FBA97ED3CF769,
 				9851519D3EB6A407A324DD9C,
 				9C2EE410B2373AE697E5D9C5,
 			);
@@ -448,6 +509,7 @@
 		D3C2C254791414A783F9D864 = {
 			children = (
 				6BB5B45E90AD13861C5F082F,
+				676163BE5B36C8F86A0A9D11,
 				71119818B48348D2BB721841,
 			);
 			isa = PBXGroup;
@@ -462,6 +524,12 @@
 			isa = PBXFileReference;
 			lastKnownFileType = folder.assetcatalog;
 			path = Assets.xcassets;
+			sourceTree = "<group>";
+		};
+		DC2657C05C5AD613137128D9 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = CubeSceneController.swift;
 			sourceTree = "<group>";
 		};
 		DD978E0946731F10995AE836 = {
