@@ -51,6 +51,10 @@ final class SmartCubeManager: NSObject, ObservableObject {
     /// Whether the tracked state can be trusted yet.
     @Published private(set) var isCalibrated = false
 
+    /// Newer cubes number their moves relative to a position they send first,
+    /// so moves arriving before that has been seen are not yet meaningful.
+    private var hasSeenPosition = false
+
     /// What the app saw while connecting. Shown in the app so an unsupported
     /// cube can be reported with the detail needed to add support for it.
     @Published private(set) var diagnostics: [String] = []
@@ -84,8 +88,8 @@ final class SmartCubeManager: NSObject, ObservableObject {
     private var cipher: GANProtocol.Cipher?
     private var commandCharacteristic: CBCharacteristic?
     private var lastMoveSerial: Int?
-    /// MAC addresses picked out of advertisements, needed to build the key.
-    private var macAddresses: [UUID: [UInt8]] = [:]
+    /// Key salts picked out of advertisements, needed to build the cipher.
+    private var salts: [UUID: [UInt8]] = [:]
     /// CoreBluetooth drops peripherals it is not holding on to, so they are kept here.
     private var discoveredPeripherals: [UUID: CBPeripheral] = [:]
 
@@ -127,6 +131,7 @@ final class SmartCubeManager: NSObject, ObservableObject {
         generation = nil
         trackedState = nil
         isCalibrated = false
+        hasSeenPosition = false
         lastMoveSerial = nil
         status = .idle
     }
@@ -147,11 +152,15 @@ final class SmartCubeManager: NSObject, ObservableObject {
         return upper.hasPrefix("GAN") || upper.hasPrefix("MG") || upper.hasPrefix("AICUBE")
     }
 
-    /// The MAC address sits in the last six bytes of the manufacturer data,
-    /// most significant byte last.
-    private static func macAddress(from manufacturerData: Data?) -> [UInt8]? {
+    /// The key salt: the last six bytes of the advertised maker data, in the
+    /// order they arrive.
+    ///
+    /// That data holds the cube's MAC address backwards, and the salt is the
+    /// MAC reversed again — so the two reversals cancel and the bytes are used
+    /// as they come.
+    private static func salt(from manufacturerData: Data?) -> [UInt8]? {
         guard let manufacturerData, manufacturerData.count >= 6 else { return nil }
-        return Array(manufacturerData.suffix(6).reversed())
+        return Array(manufacturerData.suffix(6))
     }
 
     // MARK: - Handling messages
@@ -160,21 +169,15 @@ final class SmartCubeManager: NSObject, ObservableObject {
         guard let cipher, let generation else { return }
         guard let decrypted = GANProtocol.decrypt(Array(raw), using: cipher) else { return }
 
-        guard generation == .gen2 else {
-            // Only the second generation layout is decoded. Rather than guess
-            // at the others' field positions and feed the solver nonsense, say
-            // so plainly.
-            status = .unsupported("This is a \(generation.rawValue) cube, and NoobCube "
-                                + "can only read generation 2 so far.")
-            return
-        }
-
-        guard let event = GANMessageDecoder.decodeGen2(decrypted, lastSerial: lastMoveSerial) else {
+        guard let event = GANMessageDecoder.decode(decrypted,
+                                                   generation: generation,
+                                                   lastSerial: lastMoveSerial) else {
             return
         }
 
         switch event {
         case .moves(let turns):
+            guard hasSeenPosition || generation == .gen2 else { return }
             for turn in turns {
                 lastMoveSerial = turn.serial
                 lastTurn = turn
@@ -183,6 +186,7 @@ final class SmartCubeManager: NSObject, ObservableObject {
                 }
             }
         case .facelets(_, let state):
+            hasSeenPosition = true
             // The cube counts from its own last reset, not from the colours on
             // it, so this is only believable once we have told it where it is.
             if !isCalibrated {
@@ -190,7 +194,9 @@ final class SmartCubeManager: NSObject, ObservableObject {
             }
         case .battery(let percent):
             batteryPercent = percent
-        case .hardware, .unsupported:
+        case .disconnected:
+            note("Cube went to sleep")
+        case .hardware, .ignored:
             break
         }
     }
@@ -198,9 +204,8 @@ final class SmartCubeManager: NSObject, ObservableObject {
     /// Ask the cube to send its current state.
     private func requestState() {
         guard let peripheral, let characteristic = commandCharacteristic, let cipher else { return }
-        // A "give me your facelets" request, padded to the block size.
-        var command = [UInt8](repeating: 0, count: 20)
-        command[0] = 0x04
+        guard let generation else { return }
+        let command = generation.requestFaceletsCommand
         guard let encrypted = GANProtocol.encrypt(command, using: cipher) else { return }
         peripheral.writeValue(Data(encrypted), for: characteristic, type: .withResponse)
     }
@@ -239,8 +244,8 @@ extension SmartCubeManager: CBCentralManagerDelegate {
                 advertisedServices.contains(CBUUID(string: candidate.serviceUUID))
             }
 
-            if let mac = Self.macAddress(from: manufacturerData) {
-                self.macAddresses[peripheral.identifier] = mac
+            if let salt = Self.salt(from: manufacturerData) {
+                self.salts[peripheral.identifier] = salt
             }
             self.discoveredPeripherals[peripheral.identifier] = peripheral
             self.note("Found \(name ?? "a cube")")
@@ -329,9 +334,11 @@ extension SmartCubeManager: CBPeripheralDelegate {
         Task { @MainActor in
             guard let generation = self.generation else { return }
 
-            guard let mac = self.macAddresses[peripheral.identifier],
-                  let cipher = GANProtocol.cipher(generation: generation, macAddress: mac) else {
-                self.status = .unsupported("NoobCube couldn't work out this cube's code.")
+            guard let salt = self.salts[peripheral.identifier],
+                  let cipher = GANProtocol.cipher(generation: generation, salt: salt) else {
+                self.status = .unsupported("NoobCube couldn't work out this cube's code. "
+                                         + "Its advert didn't include the number needed.")
+                self.note("  no salt: the advert carried no maker data")
                 return
             }
             self.cipher = cipher

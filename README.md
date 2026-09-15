@@ -150,13 +150,27 @@ rule, change it there first and run it.
 
 ## Known gaps
 
-- **The GAN smart cube protocol is unverified.** GAN do not publish it; the
-  constants here come from public reverse-engineering and have not been checked
-  against a real cube in this build. Everything fails soft — an unsupported
-  generation, a failed decrypt, or a state that could not exist all leave the
-  app using the camera. Only the second-generation protocol is decoded; third
-  and fourth generation cubes report themselves as unsupported rather than
-  guess at bit offsets and feed the solver nonsense.
+- **The GAN smart cube protocol is not verified against hardware.** GAN do not
+  publish it. The identifiers, keys and message layouts are ported from
+  [`gan-web-bluetooth`](https://github.com/afedotov/gan-web-bluetooth) by Andy
+  Fedotov (MIT), which is the reference reverse-engineering of these cubes. All
+  three generations are decoded:
+
+  | | |
+  |---|---|
+  | Gen2 | GAN Mini ui FreePlay, GAN12 ui, GAN12 ui FreePlay, GAN356 i Carry, i Carry S, i 3, Monster Go 3Ai |
+  | Gen3 | GAN356 i Carry 2 |
+  | Gen4 | GAN12 ui Maglev, GAN14 ui FreePlay |
+
+  The bit layouts are tested: a position is packed into each generation's
+  message format, decoded back, and checked against that project's own worked
+  example. What is *not* tested is whether iOS hands over the advertisement
+  data holding the key salt — Web Bluetooth and CoreBluetooth differ here. If
+  it does not, the app says so and falls back to the camera.
+
+  A smart cube reports turns, not colours, and counts from its own last reset,
+  so it does not replace scanning. A scan calibrates it; after that it follows
+  along.
 - **The Swift has not been compiled.** It was written without access to Xcode,
   so expect to fix build errors on first open. The cube logic itself is the
   part that was verified, via the Python reference.

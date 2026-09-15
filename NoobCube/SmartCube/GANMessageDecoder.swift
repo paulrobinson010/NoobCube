@@ -2,10 +2,11 @@ import Foundation
 
 /// Turns a decrypted GAN message into something the app understands.
 ///
-/// Only the second generation protocol is decoded here. The layouts for the
-/// third and fourth generation cubes are not reliably known to this build, so
-/// rather than guess at bit offsets and feed the solver nonsense, those cubes
-/// report themselves as unsupported and the app falls back to the camera.
+/// Layouts for all three generations, ported from `gan-web-bluetooth` by Andy
+/// Fedotov (MIT):  https://github.com/afedotov/gan-web-bluetooth
+///
+/// Generations 3 and 4 only report moves once they have sent a position, so the
+/// caller tracks whether that has happened and ignores moves until it has.
 enum GANMessageDecoder {
 
     enum Event: Equatable, Sendable {
@@ -13,50 +14,55 @@ enum GANMessageDecoder {
         case facelets(serial: Int, state: CubeState)
         case battery(percent: Int)
         case hardware(name: String)
-        case unsupported
+        case disconnected
+        case ignored
     }
 
-    /// Decode a message from a generation 2 cube.
-    ///
-    /// Field positions come from public reverse-engineering and are the part of
-    /// this file most likely to need correcting against real hardware.
+    static func decode(_ bytes: [UInt8],
+                       generation: GANProtocol.Generation,
+                       lastSerial: Int?) -> Event? {
+        switch generation {
+        case .gen2: return decodeGen2(bytes, lastSerial: lastSerial)
+        case .gen3: return decodeGen3(bytes)
+        case .gen4: return decodeGen4(bytes)
+        }
+    }
+
+    // MARK: - Generation 2
+
     static func decodeGen2(_ bytes: [UInt8], lastSerial: Int?) -> Event? {
         let reader = GANProtocol.BitReader(bytes: bytes)
-        let eventType = reader.word(at: 0, bits: 4)
-
-        switch eventType {
+        switch reader.word(at: 0, bits: 4) {
         case 0x02:
             return decodeGen2Moves(reader, lastSerial: lastSerial)
         case 0x04:
-            return decodeGen2Facelets(reader)
+            return facelets(serial: reader.word(at: 4, bits: 8),
+                            reader: reader,
+                            cornerPermutation: 12, cornerOrientation: 33,
+                            edgePermutation: 47, edgeOrientation: 91)
         case 0x09:
             return .battery(percent: reader.word(at: 8, bits: 8))
-        case 0x05:
-            return .hardware(name: "GAN")
+        case 0x0D:
+            return .disconnected
         default:
-            return nil
+            return .ignored
         }
     }
 
     private static func decodeGen2Moves(_ reader: GANProtocol.BitReader,
                                         lastSerial: Int?) -> Event {
         let serial = reader.word(at: 4, bits: 8)
-        // The cube keeps a rolling count and sends the last few turns every
+        // The cube keeps a rolling count and re-sends the last few turns every
         // time, so only the ones not seen yet are taken.
-        let unseen: Int
-        if let lastSerial {
-            unseen = min((serial &- lastSerial) & 0xFF, 7)
-        } else {
-            unseen = 1
-        }
+        let unseen = lastSerial.map { min((serial &- $0) & 0xFF, 7) } ?? 1
         guard unseen > 0 else { return .moves([]) }
 
         var turns: [GANProtocol.Turn] = []
         // They arrive newest first, so they are read back to front.
         for offset in stride(from: unseen - 1, through: 0, by: -1) {
-            let faceIndex = reader.word(at: 12 + 5 * offset, bits: 4)
+            let face = reader.word(at: 12 + 5 * offset, bits: 4)
             let direction = reader.word(at: 16 + 5 * offset, bits: 1)
-            guard let move = GANProtocol.move(faceIndex: faceIndex, clockwise: direction == 0) else {
+            guard let move = GANProtocol.move(faceIndex: face, clockwise: direction == 0) else {
                 continue
             }
             turns.append(GANProtocol.Turn(move: move, serial: (serial - offset) & 0xFF))
@@ -64,34 +70,92 @@ enum GANMessageDecoder {
         return .moves(turns)
     }
 
-    private static func decodeGen2Facelets(_ reader: GANProtocol.BitReader) -> Event? {
-        let serial = reader.word(at: 4, bits: 8)
+    // MARK: - Generation 3
 
-        var cornerPermutation: [Int] = []
-        var cornerOrientation: [Int] = []
+    static func decodeGen3(_ bytes: [UInt8]) -> Event? {
+        let reader = GANProtocol.BitReader(bytes: bytes)
+        guard reader.word(at: 0, bits: 8) == 0x55 else { return nil }   // magic
+        guard reader.word(at: 16, bits: 8) > 0 else { return .ignored } // length
+
+        switch reader.word(at: 8, bits: 8) {
+        case 0x01:
+            return singleMove(reader,
+                              serialAt: 56, directionAt: 72, faceAt: 74)
+        case 0x02:
+            return facelets(serial: reader.word(at: 24, bits: 16, littleEndian: true),
+                            reader: reader,
+                            cornerPermutation: 40, cornerOrientation: 61,
+                            edgePermutation: 77, edgeOrientation: 121)
+        case 0x10:
+            return .battery(percent: reader.word(at: 24, bits: 8))
+        case 0x11:
+            return .disconnected
+        default:
+            return .ignored
+        }
+    }
+
+    // MARK: - Generation 4
+
+    static func decodeGen4(_ bytes: [UInt8]) -> Event? {
+        let reader = GANProtocol.BitReader(bytes: bytes)
+        switch reader.word(at: 0, bits: 8) {
+        case 0x01:
+            return singleMove(reader,
+                              serialAt: 48, directionAt: 64, faceAt: 66)
+        case 0xED:
+            return facelets(serial: reader.word(at: 16, bits: 16, littleEndian: true),
+                            reader: reader,
+                            cornerPermutation: 32, cornerOrientation: 53,
+                            edgePermutation: 69, edgeOrientation: 113)
+        case 0xEF:
+            return .battery(percent: reader.word(at: 24, bits: 8))
+        case 0xEA:
+            return .disconnected
+        default:
+            return .ignored
+        }
+    }
+
+    // MARK: - Shared shapes
+
+    /// Generations 3 and 4 send one move at a time, with the face as a set bit.
+    private static func singleMove(_ reader: GANProtocol.BitReader,
+                                   serialAt: Int, directionAt: Int, faceAt: Int) -> Event {
+        let serial = reader.word(at: serialAt, bits: 16, littleEndian: true)
+        let direction = reader.word(at: directionAt, bits: 2)
+        guard let face = GANProtocol.faceIndex(fromBits: reader.word(at: faceAt, bits: 6)),
+              let move = GANProtocol.move(faceIndex: face, clockwise: direction == 0) else {
+            return .ignored
+        }
+        return .moves([GANProtocol.Turn(move: move, serial: serial & 0xFF)])
+    }
+
+    /// Every generation packs the position the same way — seven corners, eleven
+    /// edges, the last of each implied — only at different offsets.
+    private static func facelets(serial: Int,
+                                 reader: GANProtocol.BitReader,
+                                 cornerPermutation: Int, cornerOrientation: Int,
+                                 edgePermutation: Int, edgeOrientation: Int) -> Event? {
+        var cp: [Int] = [], co: [Int] = [], ep: [Int] = [], eo: [Int] = []
         for index in 0..<7 {
-            cornerPermutation.append(reader.word(at: 12 + index * 3, bits: 3))
-            cornerOrientation.append(reader.word(at: 33 + index * 2, bits: 2))
+            cp.append(reader.word(at: cornerPermutation + index * 3, bits: 3))
+            co.append(reader.word(at: cornerOrientation + index * 2, bits: 2))
         }
-
-        var edgePermutation: [Int] = []
-        var edgeOrientation: [Int] = []
         for index in 0..<11 {
-            edgePermutation.append(reader.word(at: 47 + index * 4, bits: 4))
-            edgeOrientation.append(reader.word(at: 91 + index, bits: 1))
+            ep.append(reader.word(at: edgePermutation + index * 4, bits: 4))
+            eo.append(reader.word(at: edgeOrientation + index, bits: 1))
         }
 
-        let completed = GANProtocol.completing(cornerPermutation: cornerPermutation,
-                                               cornerOrientation: cornerOrientation,
-                                               edgePermutation: edgePermutation,
-                                               edgeOrientation: edgeOrientation)
-        guard let state = GANProtocol.cubeState(cornerPermutation: completed.cp,
-                                                cornerOrientation: completed.co,
-                                                edgePermutation: completed.ep,
-                                                edgeOrientation: completed.eo),
+        let whole = GANProtocol.completing(cornerPermutation: cp, cornerOrientation: co,
+                                           edgePermutation: ep, edgeOrientation: eo)
+        guard let state = GANProtocol.cubeState(cornerPermutation: whole.cp,
+                                                cornerOrientation: whole.co,
+                                                edgePermutation: whole.ep,
+                                                edgeOrientation: whole.eo),
               state.isValid else {
-            // A state that cannot exist means the layout is wrong, not that the
-            // cube is broken. Better to report nothing than to mislead.
+            // A position that cannot exist means the offsets are wrong, not
+            // that the cube is broken. Better to report nothing than to mislead.
             return nil
         }
         return .facelets(serial: serial, state: state)

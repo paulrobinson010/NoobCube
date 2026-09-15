@@ -3,24 +3,59 @@ import Foundation
 
 /// Reading GAN smart cube messages.
 ///
-/// GAN do not publish their protocol; everything here comes from the public
-/// reverse-engineering work behind `gan-web-bluetooth` and similar projects.
-/// That means two things:
+/// GAN do not publish their protocol. The service identifiers, keys, message
+/// layouts and bit offsets here are ported from `gan-web-bluetooth` by Andy
+/// Fedotov (MIT licensed), which is the reference reverse-engineering of these
+/// cubes:  https://github.com/afedotov/gan-web-bluetooth
 ///
-///   * All the magic numbers live in this one file, clearly marked, so they can
-///     be corrected in one place.
-///   * Nothing else in the app depends on this working. If a message cannot be
-///     decoded the cube is simply ignored and the camera is used instead.
+/// The piece-to-sticker reconstruction was checked against that project's own
+/// worked example, and against this app's move engine, which agree.
 ///
-/// **These constants have not been checked against real hardware in this
-/// build.** They need verifying with an actual cube before the smart cube
-/// feature can be trusted.
+/// Still unverified against real hardware: whether the MAC address can be read
+/// from the advertisement on iOS. Everything fails soft if not — the app says
+/// what it saw and falls back to the camera.
 enum GANProtocol {
 
     // MARK: - Bluetooth identifiers
 
     enum Generation: String, CaseIterable, Sendable {
         case gen2, gen3, gen4
+
+        /// Which cubes speak this version, so the app can say something useful
+        /// when it meets one it cannot read.
+        var models: String {
+            switch self {
+            case .gen2:
+                return "GAN Mini ui FreePlay, GAN12 ui, GAN12 ui FreePlay, "
+                     + "GAN356 i Carry, GAN356 i Carry S, GAN356 i 3, Monster Go 3Ai"
+            case .gen3:
+                return "GAN356 i Carry 2"
+            case .gen4:
+                return "GAN12 ui Maglev, GAN14 ui FreePlay"
+            }
+        }
+
+        /// How long a command message is for this generation.
+        var commandLength: Int {
+            self == .gen3 ? 16 : 20
+        }
+
+        /// The command asking the cube to report its current position.
+        var requestFaceletsCommand: [UInt8] {
+            var message = [UInt8](repeating: 0, count: commandLength)
+            switch self {
+            case .gen2:
+                message[0] = 0x04
+            case .gen3:
+                message[0] = 0x68
+                message[1] = 0x01
+            case .gen4:
+                for (index, byte) in [0xDD, 0x04, 0x00, 0xED, 0x00, 0x00].enumerated() {
+                    message[index] = UInt8(byte)
+                }
+            }
+            return message
+        }
 
         var serviceUUID: String {
             switch self {
@@ -51,17 +86,16 @@ enum GANProtocol {
 
     // MARK: - Encryption
 
-    /// Base keys published by the reverse-engineering community. The real key
-    /// is these with the cube's MAC address mixed into the first six bytes.
-    private static let baseKeys: [(key: [UInt8], iv: [UInt8])] = [
-        (key: [0x01, 0x02, 0x42, 0x28, 0x31, 0x91, 0x16, 0x07,
-               0x20, 0x05, 0x18, 0x54, 0x42, 0x11, 0x12, 0x53],
-         iv: [0x11, 0x03, 0x32, 0x28, 0x21, 0x01, 0x76, 0x27,
-              0x20, 0x95, 0x78, 0x14, 0x32, 0x12, 0x03, 0x92]),
-        (key: [0x05, 0x12, 0x02, 0x45, 0x02, 0x01, 0x29, 0x56,
-               0x12, 0x78, 0x12, 0x76, 0x81, 0x01, 0x08, 0x03],
-         iv: [0x01, 0x44, 0x28, 0x06, 0x86, 0x21, 0x22, 0x28,
-              0x51, 0x05, 0x08, 0x31, 0x82, 0x02, 0x21, 0x06]),
+    /// The base key and IV. One pair covers GAN generations 2, 3 and 4 alike;
+    /// the real key is this with the cube's MAC address mixed into the first
+    /// six bytes.
+    private static let baseKey: [UInt8] = [
+        0x01, 0x02, 0x42, 0x28, 0x31, 0x91, 0x16, 0x07,
+        0x20, 0x05, 0x18, 0x54, 0x42, 0x11, 0x12, 0x53,
+    ]
+    private static let baseIV: [UInt8] = [
+        0x11, 0x03, 0x32, 0x28, 0x21, 0x01, 0x76, 0x27,
+        0x20, 0x95, 0x78, 0x14, 0x32, 0x12, 0x02, 0x43,
     ]
 
     struct Cipher {
@@ -72,14 +106,13 @@ enum GANProtocol {
     /// Mix the cube's MAC address into the base key.
     ///
     /// The `% 255` is not a typo for `% 256`: it is what the cubes actually do.
-    static func cipher(generation: Generation, macAddress: [UInt8]) -> Cipher? {
-        guard macAddress.count == 6 else { return nil }
-        let base = generation == .gen2 ? baseKeys[0] : baseKeys[1]
-        var key = base.key
-        var iv = base.iv
+    static func cipher(generation: Generation, salt: [UInt8]) -> Cipher? {
+        guard salt.count == 6 else { return nil }
+        var key = baseKey
+        var iv = baseIV
         for index in 0..<6 {
-            key[index] = UInt8((Int(key[index]) + Int(macAddress[5 - index])) % 255)
-            iv[index] = UInt8((Int(iv[index]) + Int(macAddress[5 - index])) % 255)
+            key[index] = UInt8((Int(key[index]) + Int(salt[index])) % 255)
+            iv[index] = UInt8((Int(iv[index]) + Int(salt[index])) % 255)
         }
         return Cipher(key: key, iv: iv)
     }
@@ -172,14 +205,27 @@ enum GANProtocol {
     struct BitReader {
         let bytes: [UInt8]
 
-        func word(at offset: Int, bits: Int) -> Int {
+        /// Read `bits` bits starting at `offset`, most significant first.
+        ///
+        /// Sixteen and thirty-two bit fields may also be little-endian, which
+        /// is how the newer cubes send timestamps and move counters.
+        func word(at offset: Int, bits: Int, littleEndian: Bool = false) -> Int {
+            if bits <= 8 || !littleEndian {
+                var result = 0
+                for index in 0..<bits {
+                    let bit = offset + index
+                    let byte = bit / 8
+                    guard byte < bytes.count else { return result << (bits - index) }
+                    let shift = 7 - (bit % 8)
+                    result = (result << 1) | Int((bytes[byte] >> UInt8(shift)) & 1)
+                }
+                return result
+            }
+            // Little-endian: the same bytes, least significant one first.
             var result = 0
-            for index in 0..<bits {
-                let bit = offset + index
-                let byte = bit / 8
-                guard byte < bytes.count else { return result << (bits - index) }
-                let shift = 7 - (bit % 8)
-                result = (result << 1) | Int((bytes[byte] >> UInt8(shift)) & 1)
+            let count = bits / 8
+            for index in stride(from: count - 1, through: 0, by: -1) {
+                result = (result << 8) | word(at: offset + index * 8, bits: 8)
             }
             return result
         }
@@ -251,13 +297,12 @@ enum GANProtocol {
         var ep = edgePermutation
         var eo = edgeOrientation
 
-        let missingCorner = (0..<8).first { !cp.contains($0) } ?? 7
-        cp.append(missingCorner)
+        // The eighth corner and twelfth edge are whatever make the sums work:
+        // 0+...+7 is 28, 0+...+11 is 66, twists cancel mod 3 and flips mod 2.
+        cp.append(28 - cp.reduce(0, +))
         co.append((3 - (co.reduce(0, +) % 3)) % 3)
-
-        let missingEdge = (0..<12).first { !ep.contains($0) } ?? 11
-        ep.append(missingEdge)
-        eo.append(eo.reduce(0, +) % 2)
+        ep.append(66 - ep.reduce(0, +))
+        eo.append((2 - (eo.reduce(0, +) % 2)) % 2)
 
         return (cp, co, ep, eo)
     }
@@ -273,5 +318,13 @@ enum GANProtocol {
         let bases: [MoveBase] = [.U, .R, .F, .D, .L, .B]
         guard bases.indices.contains(faceIndex) else { return nil }
         return Move(bases[faceIndex], clockwise ? .clockwise : .counterClockwise)
+    }
+
+    /// Generations 3 and 4 send the face as a single set bit rather than an
+    /// index, in this order.
+    static let faceBitOrder = [2, 32, 8, 1, 16, 4]
+
+    static func faceIndex(fromBits bits: Int) -> Int? {
+        faceBitOrder.firstIndex(of: bits)
     }
 }
