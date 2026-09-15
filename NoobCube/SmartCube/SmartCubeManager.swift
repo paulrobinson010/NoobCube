@@ -18,7 +18,8 @@ final class SmartCubeManager: NSObject, ObservableObject {
     struct Discovered: Identifiable, Equatable {
         let id: UUID
         let name: String
-        let generation: GANProtocol.Generation
+        /// Only known once connected; the advertisement rarely says.
+        let generation: GANProtocol.Generation?
     }
 
     enum Status: Equatable {
@@ -42,8 +43,31 @@ final class SmartCubeManager: NSObject, ObservableObject {
     @Published private(set) var batteryPercent: Int?
     /// The most recent turn, which the app watches to advance a step.
     @Published private(set) var lastTurn: GANProtocol.Turn?
-    /// The cube's own idea of what it looks like.
+    /// The cube's own idea of what it looks like, once it has been told where
+    /// it is starting from. A smart cube reports turns, not colours, so this is
+    /// only meaningful after ``calibrate(to:)``.
     @Published private(set) var trackedState: CubeState?
+
+    /// Whether the tracked state can be trusted yet.
+    @Published private(set) var isCalibrated = false
+
+    /// What the app saw while connecting. Shown in the app so an unsupported
+    /// cube can be reported with the detail needed to add support for it.
+    @Published private(set) var diagnostics: [String] = []
+
+    func note(_ line: String) {
+        diagnostics.append(line)
+        if diagnostics.count > 40 { diagnostics.removeFirst() }
+    }
+
+    /// Tell the cube where it is starting from — normally the result of a
+    /// camera scan, or the child confirming it is solved.
+    func calibrate(to state: CubeState) {
+        trackedState = state
+        isCalibrated = true
+        lastMoveSerial = nil
+        note("Calibrated from a known position")
+    }
 
     var isConnected: Bool { status.isConnected }
 
@@ -88,7 +112,6 @@ final class SmartCubeManager: NSObject, ObservableObject {
             return
         }
         central.stopScan()
-        generation = item.generation
         peripheral = found
         found.delegate = self
         status = .connecting(item.name)
@@ -103,6 +126,7 @@ final class SmartCubeManager: NSObject, ObservableObject {
         cipher = nil
         generation = nil
         trackedState = nil
+        isCalibrated = false
         lastMoveSerial = nil
         status = .idle
     }
@@ -137,8 +161,11 @@ final class SmartCubeManager: NSObject, ObservableObject {
         guard let decrypted = GANProtocol.decrypt(Array(raw), using: cipher) else { return }
 
         guard generation == .gen2 else {
-            // Third and fourth generation layouts are not decoded in this build.
-            status = .unsupported("This cube talks a version NoobCube can't read yet.")
+            // Only the second generation layout is decoded. Rather than guess
+            // at the others' field positions and feed the solver nonsense, say
+            // so plainly.
+            status = .unsupported("This is a \(generation.rawValue) cube, and NoobCube "
+                                + "can only read generation 2 so far.")
             return
         }
 
@@ -151,12 +178,16 @@ final class SmartCubeManager: NSObject, ObservableObject {
             for turn in turns {
                 lastMoveSerial = turn.serial
                 lastTurn = turn
-                if let state = trackedState {
+                if isCalibrated, let state = trackedState {
                     trackedState = state.applying(turn.move)
                 }
             }
         case .facelets(_, let state):
-            trackedState = state
+            // The cube counts from its own last reset, not from the colours on
+            // it, so this is only believable once we have told it where it is.
+            if !isCalibrated {
+                trackedState = state
+            }
         case .battery(let percent):
             batteryPercent = percent
         case .hardware, .unsupported:
@@ -199,21 +230,29 @@ extension SmartCubeManager: CBCentralManagerDelegate {
         let advertisedServices = (advertisementData[CBAdvertisementDataServiceUUIDsKey] as? [CBUUID]) ?? []
 
         Task { @MainActor in
-            guard Self.looksLikeGANCube(name: name) || !advertisedServices.isEmpty else { return }
-
-            let generation = GANProtocol.Generation.allCases.first { candidate in
-                advertisedServices.contains(CBUUID(string: candidate.serviceUUID))
-            } ?? .gen2
-
             guard Self.looksLikeGANCube(name: name) else { return }
+
+            // Which generation this is cannot be told from the advertisement:
+            // most cubes do not list their service there. It is settled after
+            // connecting, by looking at what the cube actually has.
+            let advertised = GANProtocol.Generation.allCases.first { candidate in
+                advertisedServices.contains(CBUUID(string: candidate.serviceUUID))
+            }
 
             if let mac = Self.macAddress(from: manufacturerData) {
                 self.macAddresses[peripheral.identifier] = mac
             }
             self.discoveredPeripherals[peripheral.identifier] = peripheral
+            self.note("Found \(name ?? "a cube")")
+            if let manufacturerData {
+                self.note("  maker data: \(manufacturerData.map { String(format: "%02x", $0) }.joined(separator: " "))")
+            } else {
+                self.note("  no maker data in the advert")
+            }
+
             let item = Discovered(id: peripheral.identifier,
                                   name: name ?? "Smart cube",
-                                  generation: generation)
+                                  generation: advertised)
             if !self.discovered.contains(item) {
                 self.discovered.append(item)
             }
@@ -223,8 +262,9 @@ extension SmartCubeManager: CBCentralManagerDelegate {
     nonisolated func centralManager(_ central: CBCentralManager,
                                     didConnect peripheral: CBPeripheral) {
         Task { @MainActor in
-            guard let generation = self.generation else { return }
-            peripheral.discoverServices([CBUUID(string: generation.serviceUUID)])
+            // Ask for everything. Narrowing the search to a guessed generation
+            // is what made a perfectly good cube report itself unsupported.
+            peripheral.discoverServices(nil)
         }
     }
 
@@ -250,13 +290,32 @@ extension SmartCubeManager: CBPeripheralDelegate {
 
     nonisolated func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
         Task { @MainActor in
-            guard let generation = self.generation,
-                  let service = peripheral.services?.first(where: {
-                      $0.uuid == CBUUID(string: generation.serviceUUID)
-                  }) else {
-                self.status = .unsupported("That cube doesn't look like one NoobCube knows.")
+            let services = peripheral.services ?? []
+            for service in services {
+                self.note("  service \(service.uuid.uuidString)")
+            }
+
+            let match = GANProtocol.Generation.allCases.compactMap {
+                generation -> (GANProtocol.Generation, CBService)? in
+                guard let service = services.first(where: {
+                    $0.uuid == CBUUID(string: generation.serviceUUID)
+                }) else { return nil }
+                return (generation, service)
+            }.first
+
+            guard let (generation, service) = match else {
+                // Report what the cube actually has rather than a shrug: these
+                // identifiers are what a new generation needs adding from.
+                let found = services.map(\.uuid.uuidString).joined(separator: ", ")
+                self.status = .unsupported(found.isEmpty
+                    ? "That cube didn't tell me what it can do."
+                    : "NoobCube doesn't know this cube's language yet.")
+                self.note(found.isEmpty ? "  no services found" : "  no known service among those")
                 return
             }
+
+            self.generation = generation
+            self.note("  matched \(generation.rawValue)")
             peripheral.discoverCharacteristics([
                 CBUUID(string: generation.stateCharacteristicUUID),
                 CBUUID(string: generation.commandCharacteristicUUID),

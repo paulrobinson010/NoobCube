@@ -5,6 +5,7 @@ struct SmartCubeView: View {
     @ObservedObject var manager: SmartCubeManager
     @ObservedObject var narrator: Narrator
     var onUseCube: () -> Void
+    var onCalibrateSolved: () -> Void
 
     @Environment(\.dismiss) private var dismiss
 
@@ -18,6 +19,8 @@ struct SmartCubeView: View {
                 } else {
                     cubeList
                 }
+
+                details
 
                 Spacer(minLength: 0)
             }
@@ -72,7 +75,7 @@ struct SmartCubeView: View {
                         Image(systemName: "cube.fill")
                         Text(cube.name)
                         Spacer()
-                        Text(cube.generation.rawValue)
+                        Text(cube.generation?.rawValue ?? "tap to connect")
                             .font(.system(size: 13, weight: .semibold, design: .rounded))
                             .foregroundStyle(Theme.muted)
                     }
@@ -84,21 +87,54 @@ struct SmartCubeView: View {
 
     private var connectedControls: some View {
         VStack(spacing: 12) {
-            Button("Solve with my smart cube") {
-                onUseCube()
-            }
-            .buttonStyle(BigButtonStyle(tint: Theme.success))
-            .disabled(manager.trackedState == nil)
+            Text("A smart cube knows which way you turned it, but not what "
+                 + "colour anything is. So it needs telling where it's starting from.")
+                .font(.system(size: 15, weight: .medium, design: .rounded))
+                .foregroundStyle(Theme.muted)
+                .multilineTextAlignment(.center)
 
-            if manager.trackedState == nil {
-                Text("Give the cube a turn so it can tell me what it looks like.")
-                    .font(.system(size: 15, weight: .medium, design: .rounded))
+            if manager.isCalibrated {
+                Label("Following your cube", systemImage: "checkmark.circle.fill")
+                    .font(.system(size: 17, weight: .bold, design: .rounded))
+                    .foregroundStyle(Theme.success)
+
+                Button("Solve from here") { onUseCube() }
+                    .buttonStyle(BigButtonStyle(tint: Theme.success))
+            } else {
+                Button("My cube is solved right now") { onCalibrateSolved() }
+                    .buttonStyle(BigButtonStyle())
+
+                Text("Or show it to the camera — after a scan it'll follow along by itself.")
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
                     .foregroundStyle(Theme.muted)
                     .multilineTextAlignment(.center)
             }
 
             Button("Disconnect") { manager.disconnect() }
                 .buttonStyle(BigButtonStyle(tint: Theme.muted, isProminent: false))
+        }
+    }
+
+    /// What the app saw while connecting, so a cube it cannot read can be
+    /// reported with enough detail to add support for it.
+    @ViewBuilder
+    private var details: some View {
+        if !manager.diagnostics.isEmpty {
+            DisclosureGroup("What I saw") {
+                VStack(alignment: .leading, spacing: 3) {
+                    ForEach(Array(manager.diagnostics.enumerated()), id: \.offset) { _, line in
+                        Text(line)
+                            .font(.system(size: 12, design: .monospaced))
+                            .foregroundStyle(Theme.muted)
+                            .textSelection(.enabled)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, 6)
+            }
+            .font(.system(size: 15, weight: .semibold, design: .rounded))
+            .tint(Theme.accent)
+            .cardBackground()
         }
     }
 

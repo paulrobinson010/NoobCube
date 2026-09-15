@@ -61,6 +61,13 @@ final class AppModel: ObservableObject {
             let plan = try BeginnerSolver.solve(state, whiteFace: whiteFace)
             session = SolveSession(plan: plan, scan: finishedScan,
                                    scene: scene, narrator: narrator)
+
+            // A smart cube knows which way it has been turned but not what
+            // colour anything is, so the scan is what tells it where it is
+            // starting from. After this it can follow along by itself.
+            if smartCube.isConnected {
+                smartCube.calibrate(to: state)
+            }
             screen = .ready
         } catch {
             errorMessage = error.localizedDescription
@@ -122,9 +129,19 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// Start a solve straight from a connected smart cube, with no camera at all.
+    /// The child says the cube is solved right now, so the app can start
+    /// following it without the camera.
+    ///
+    /// This is the one position a smart cube can be told about without looking
+    /// at it: from here every turn it reports keeps the app in step, so the
+    /// child can scramble it and be walked back.
+    func smartCubeIsSolved() {
+        smartCube.calibrate(to: .solved)
+    }
+
+    /// Begin a solve from wherever the connected cube has been turned to.
     func startFromSmartCube() {
-        guard let state = smartCube.trackedState else { return }
+        guard smartCube.isCalibrated, let state = smartCube.trackedState else { return }
         let colours = smartCube.trackedColours ?? ScannedCube.solvedColours
         let scanned = ScannedCube(colours: colours)
         let whiteFace = scanned.face(withCentre: .white) ?? .D

@@ -108,7 +108,8 @@ struct WelcomeView: View {
                           onUseCube: {
                               showingSmartCubeSheet = false
                               model.startFromSmartCube()
-                          })
+                          },
+                          onCalibrateSolved: { model.smartCubeIsSolved() })
         }
     }
 }
