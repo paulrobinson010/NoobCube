@@ -70,9 +70,11 @@ struct CubeNetView: View {
                 let index = face.rawValue * 9 + offset
                 let row = offset / 3
                 let column = offset % 3
+                // The ZStack centres its children, so the grid is placed
+                // relative to the middle square rather than a corner.
                 stickerView(at: index, size: sticker)
-                    .offset(x: padding + (CGFloat(column) - 1) * sticker,
-                            y: padding + (CGFloat(row) - 1) * sticker)
+                    .offset(x: (CGFloat(column) - 1) * sticker,
+                            y: (CGFloat(row) - 1) * sticker)
             }
         }
         .frame(width: size, height: size)
