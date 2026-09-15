@@ -13,8 +13,30 @@
 <link rel="icon" type="image/png" href="/assets/favicon.png?v=1">
 <link rel="stylesheet" href="/assets/site.css?v=1">
 <style>
-  header { text-align: center; padding: 52px 0 44px; }
-  .brand { width: min(460px, 88vw); height: auto; }
+  /* The cubes drift behind everything; the page sits on top of them. */
+  #cube-field {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    pointer-events: none;
+  }
+  body > header, body > section, body > footer, body > div, body > svg {
+    position: relative;
+    z-index: 1;
+  }
+
+  header { text-align: center; padding: 44px 0 40px; }
+
+  .hero-cube {
+    width: min(232px, 50vw);
+    height: auto;
+    display: block;
+    margin: 0 auto 10px;
+    filter: drop-shadow(0 22px 50px rgba(60, 230, 240, 0.22));
+  }
+  .brand { width: min(430px, 84vw); height: auto; display: block; margin: 0 auto; }
   .visually-hidden {
     position: absolute; width: 1px; height: 1px;
     overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
@@ -118,6 +140,8 @@
 </head>
 <body>
 
+<canvas id="cube-field" aria-hidden="true"></canvas>
+
 <header class="stickers">
   <i style="top:12%; left:8%;   width:44px; height:44px; background:var(--red);    transform:rotate(14deg)"></i>
   <i style="top:58%; left:13%;  width:30px; height:30px; background:var(--green);  transform:rotate(-18deg)"></i>
@@ -126,7 +150,8 @@
   <i style="top:86%; left:45%;  width:26px; height:26px; background:var(--orange); transform:rotate(8deg)"></i>
   <div class="wrap">
     <h1 class="visually-hidden">NoobCube — learn to solve your Rubik's cube, one step at a time</h1>
-    <img class="brand bob" src="/assets/brand.png?v=1" alt="NoobCube">
+    <img class="hero-cube bob" src="/assets/logo.png?v=1" alt="" width="512" height="512" fetchpriority="high">
+    <img class="brand" src="/assets/brand.png?v=1" alt="NoobCube">
     <p class="tagline"><span class="sticker">Made for brand-new cubers!</span></p>
     <p><span class="coming">🚧 Coming soon to the App&nbsp;Store</span></p>
   </div>
@@ -245,6 +270,8 @@
   Made for one small boy who wanted to learn. 🧩<br>
   <a href="https://github.com/paulrobinson010/NoobCube">Source on GitHub</a>
 </footer>
+
+<script src="/assets/cubes.js?v=1" defer></script>
 
 </body>
 </html>
