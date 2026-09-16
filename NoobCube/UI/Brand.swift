@@ -56,8 +56,11 @@ struct ScreenHeader: View {
                 Text(title)
                     .font(.brand(size: 25, weight: .heavy))
                     .foregroundStyle(.white)
-                    .minimumScaleFactor(0.7)
-                    .lineLimit(2)
+                    // One line, shrinking if it has to. Wrapping to two made
+                    // the header grow, which pushed everything below it down
+                    // the screen and left a gap where the cube should be.
+                    .minimumScaleFactor(0.55)
+                    .lineLimit(1)
             }
 
             Spacer(minLength: 4)
