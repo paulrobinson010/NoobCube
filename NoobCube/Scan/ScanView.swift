@@ -42,9 +42,6 @@ struct ScanView: View {
         .background(Theme.background.ignoresSafeArea())
         .onAppear { coordinator.begin() }
         .onDisappear { coordinator.stop() }
-        .onChange(of: coordinator.camera.steadiness) { _, _ in
-            coordinator.considerAutoCapture()
-        }
     }
 
     // MARK: - Pieces

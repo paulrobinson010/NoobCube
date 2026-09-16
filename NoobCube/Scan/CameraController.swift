@@ -126,6 +126,20 @@ final class CameraController: NSObject, ObservableObject {
     private var recentReadings: [[RGBSample]] = []
     private let previewGeometry = PreviewGeometry()
     private let pendingFrame = PendingFrame()
+
+    /// Called on the main actor once each frame has been taken up.
+    ///
+    /// Whoever is scanning decides what to do with it. Driven by frames
+    /// arriving rather than by the steadiness *changing*: the screen used to
+    /// ask again only when that number moved, so the asking dried up exactly
+    /// when the cube was being held stillest and the number stopped moving —
+    /// and stopped altogether the moment the camera did.
+    var onFrame: (() -> Void)?
+
+    /// When the last frame arrived, so a session that has quietly died can be
+    /// noticed and started again.
+    private var lastFrameAt = Date.distantPast
+    private var watchdog: Task<Void, Never>?
     /// The delayed lock of exposure and white balance, so coming back to the
     /// camera can cancel one that is still pending from last time.
     private var lockTask: Task<Void, Never>?
@@ -156,6 +170,8 @@ final class CameraController: NSObject, ObservableObject {
     func stop() {
         lockTask?.cancel()
         lockTask = nil
+        watchdog?.cancel()
+        watchdog = nil
         isStarting = false
         sessionQueue.async { [weak self, session] in
             if session.isRunning { session.stopRunning() }
@@ -239,8 +255,46 @@ final class CameraController: NSObject, ObservableObject {
                 guard let self else { return }
                 self.isStarting = false
                 self.isRunning = running
-                if running { self.judgeTheRoomAgain(device) }
+                if running {
+                    self.lastFrameAt = Date()
+                    self.judgeTheRoomAgain(device)
+                    self.watchForAStalledSession()
+                }
             }
+        }
+    }
+
+    /// Notice a session that has stopped sending frames, and start it again.
+    ///
+    /// A capture session can stop delivering without saying so — the media
+    /// server restarts, something else takes the camera, the app spends a
+    /// moment in the background — and `isRunning` goes on reading true over a
+    /// session that is not running. What that looks like is a black picture
+    /// with the app still cheerfully asking for the next side, and no way out
+    /// of it but to kill the app.
+    ///
+    /// Rather than trying to name every cause, this watches the one thing that
+    /// matters: frames were arriving and now they are not. Whatever stopped
+    /// them, starting the session again is the answer.
+    private func watchForAStalledSession() {
+        watchdog?.cancel()
+        watchdog = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(2))
+                guard !Task.isCancelled, let self else { return }
+                guard self.isRunning, !self.isStarting, !self.permissionDenied else { continue }
+                guard Date().timeIntervalSince(self.lastFrameAt) > 3 else { continue }
+                self.startAgainAfterAStall()
+            }
+        }
+    }
+
+    private func startAgainAfterAStall() {
+        isRunning = false
+        lastFrameAt = Date()
+        sessionQueue.async { [weak self, session] in
+            if session.isRunning { session.stopRunning() }
+            Task { @MainActor in self?.start() }
         }
     }
 
@@ -396,6 +450,8 @@ final class CameraController: NSObject, ObservableObject {
 
     /// Fold a new frame into the running window and re-derive the steady reading.
     private func accept(_ reading: Reading, sawCube: Bool?, shapeCheckWorks: Bool) {
+        lastFrameAt = Date()
+        defer { onFrame?() }
         if let sawCube, sawCube { lastSawCube = Date() }
         // An empty table is perfectly still, which is why stillness alone was
         // never enough to know there was anything to read. Until a cube shape

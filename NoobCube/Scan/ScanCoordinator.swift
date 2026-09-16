@@ -169,6 +169,9 @@ final class ScanCoordinator: ObservableObject {
         holdFrames = 0
         lastCaptured = []
         announcedFace = nil
+        // Every frame gets a chance to be the one that takes the side, rather
+        // than only the frames where the steadiness happened to change.
+        camera.onFrame = { [weak self] in self?.considerAutoCapture() }
         camera.start()
         camera.resetSteadiness()
         announceStep()
@@ -186,6 +189,7 @@ final class ScanCoordinator: ObservableObject {
     }
 
     func stop() {
+        camera.onFrame = nil
         camera.stop()
     }
 
