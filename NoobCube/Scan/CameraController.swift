@@ -29,14 +29,21 @@ private final class PendingFrame: @unchecked Sendable {
     private let lock = NSLock()
     private var waiting: Frame?
     private var onItsWay = false
+    private var sentAt = Date.distantPast
 
     /// Leaves the frame ready to be collected. True if the caller should be
     /// the one to go and collect it.
+    ///
+    /// A hand-over that has been on its way for more than a second is treated
+    /// as lost and sent again. Nothing should lose one — but if anything ever
+    /// did, every frame after it would be dropped for the life of the app, and
+    /// no single dropped frame is worth that.
     func offer(_ frame: Frame) -> Bool {
         lock.lock(); defer { lock.unlock() }
         waiting = frame
-        if onItsWay { return false }
+        if onItsWay, Date().timeIntervalSince(sentAt) < 1 { return false }
         onItsWay = true
+        sentAt = Date()
         return true
     }
 
@@ -140,6 +147,7 @@ final class CameraController: NSObject, ObservableObject {
     /// noticed and started again.
     private var lastFrameAt = Date.distantPast
     private var watchdog: Task<Void, Never>?
+    private var sessionObservers: [NSObjectProtocol] = []
     /// The delayed lock of exposure and white balance, so coming back to the
     /// camera can cancel one that is still pending from last time.
     private var lockTask: Task<Void, Never>?
@@ -258,10 +266,59 @@ final class CameraController: NSObject, ObservableObject {
                 if running {
                     self.lastFrameAt = Date()
                     self.judgeTheRoomAgain(device)
+                    self.listenForTrouble()
                     self.watchForAStalledSession()
                 }
             }
         }
+    }
+
+    /// Ask the session to say when it goes wrong, and write it down.
+    ///
+    /// A camera that stops has a reason, and AVFoundation knows it: the media
+    /// server restarting, another app taking the camera, the app going to the
+    /// background. None of that reaches us unless we ask, which is why a
+    /// dropped camera has only ever looked like a black rectangle. Now it says
+    /// so in the console, and recovers.
+    private func listenForTrouble() {
+        guard sessionObservers.isEmpty else { return }
+        let centre = NotificationCenter.default
+
+        sessionObservers.append(centre.addObserver(
+            forName: AVCaptureSession.runtimeErrorNotification,
+            object: session, queue: .main) { [weak self] note in
+                let error = note.userInfo?[AVCaptureSessionErrorKey] as? NSError
+                Task { @MainActor in
+                    self?.note("the session hit a runtime error — "
+                             + (error?.localizedDescription ?? "no reason given"))
+                    self?.startAgainAfterAStall()
+                }
+            })
+
+        sessionObservers.append(centre.addObserver(
+            forName: AVCaptureSession.wasInterruptedNotification,
+            object: session, queue: .main) { [weak self] note in
+                let raw = note.userInfo?[AVCaptureSessionInterruptionReasonKey] as? Int
+                let reason = raw.flatMap(AVCaptureSession.InterruptionReason.init(rawValue:))
+                Task { @MainActor in
+                    self?.note("the session was interrupted — \(reason.map(String.init(describing:)) ?? "unknown")")
+                }
+            })
+
+        sessionObservers.append(centre.addObserver(
+            forName: AVCaptureSession.interruptionEndedNotification,
+            object: session, queue: .main) { [weak self] _ in
+                Task { @MainActor in
+                    self?.note("the interruption ended, starting again")
+                    self?.startAgainAfterAStall()
+                }
+            })
+    }
+
+    /// One line in the console, so a camera that drops out can be explained
+    /// rather than guessed at.
+    private func note(_ what: String) {
+        print("NoobCube camera: \(what)")
     }
 
     /// Notice a session that has stopped sending frames, and start it again.
@@ -284,6 +341,7 @@ final class CameraController: NSObject, ObservableObject {
                 guard !Task.isCancelled, let self else { return }
                 guard self.isRunning, !self.isStarting, !self.permissionDenied else { continue }
                 guard Date().timeIntervalSince(self.lastFrameAt) > 3 else { continue }
+                self.note("no frames for three seconds, starting the session again")
                 self.startAgainAfterAStall()
             }
         }

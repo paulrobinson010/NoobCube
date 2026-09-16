@@ -532,14 +532,24 @@ final class ScanCoordinator: ObservableObject {
             for bottomTurns in 0..<4 {
                 let settled = ColourClassifier.settle(
                     top.turning(.D, quarterTurns: bottomTurns), expectedCentres: expected)
-                let trial = (cube: ScannedCube(colours: settled.colours.map { Optional($0) }),
-                             fit: settled.averageFit)
+
                 // Kept so there is something to show, and something to complain
                 // about, when no turn makes a real cube.
-                if topTurns == 0 && bottomTurns == 0 { straight = trial }
-                guard let converted = try? trial.cube.cubeState(),
+                if topTurns == 0 && bottomTurns == 0 {
+                    straight = (ScannedCube(colours: settled.colours.map { Optional($0) }),
+                                settled.averageFit)
+                }
+
+                // Checking whether a cube could exist is the expensive part —
+                // twenty pieces, three parities — and a reading that explains
+                // the pixels worse than the best one so far cannot win however
+                // real it is. So ask about the fit first, and most of the
+                // hundred and twenty-eight readings never get checked at all.
+                guard settled.averageFit < (best?.fit ?? .greatestFiniteMagnitude) else { continue }
+                let cube = ScannedCube(colours: settled.colours.map { Optional($0) })
+                guard let converted = try? cube.cubeState(),
                       converted.state.isValid else { continue }
-                if trial.fit < (best?.fit ?? .greatestFiniteMagnitude) { best = trial }
+                best = (cube, settled.averageFit)
             }
         }
         return best ?? straight ?? (cube: ScannedCube(), fit: .greatestFiniteMagnitude)

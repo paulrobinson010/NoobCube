@@ -25,17 +25,20 @@ struct ScanView: View {
                 .frame(height: 150)
                 .padding(.horizontal, 20)
 
-            if coordinator.isComplete {
-                // The camera stays on. A side that came out wrong is put right
-                // by showing it again, which beats hunting for the squares that
-                // are wrong and tapping them one at a time.
-                viewfinder
-                finishedControls
-            } else {
-                sideChips
-                viewfinder
-                liveControls
-            }
+            if !coordinator.isComplete { sideChips }
+
+            // One viewfinder, in one place, whether the scan is finished or
+            // not. Having it inside both halves of an if meant SwiftUI counted
+            // them as two different views and pulled the camera preview layer
+            // down and built a new one the moment the last side went in — at
+            // exactly the point the picture was reported going black.
+            //
+            // It stays on afterwards on purpose: a side that came out wrong is
+            // put right by showing it again, which beats hunting for the
+            // squares that are wrong and tapping them one at a time.
+            viewfinder
+
+            if coordinator.isComplete { finishedControls } else { liveControls }
 
             Spacer(minLength: 0)
         }
