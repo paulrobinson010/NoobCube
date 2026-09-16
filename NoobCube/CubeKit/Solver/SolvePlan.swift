@@ -162,7 +162,7 @@ extension SolveStage.Kind {
         case .yellowFace:
             return "Now the whole top is yellow, even though the sides are still muddled. Only the corners moved, so the cross you just made is still there."
         case .lastCorners:
-            return "The corners go to their proper homes, ready for the very last move."
+            return "The corners go to their proper homes. Going back to the fish breaks the yellow face on purpose, and doing the fish again brings it straight back with two corners swapped."
         case .lastEdges:
             return "The last four pieces slide into place and the cube is done."
         }
@@ -175,7 +175,7 @@ extension SolveStage.Kind {
         case .middleRow:    return ("send it right", "U R U' R' U' F' U F")
         case .yellowCross:  return ("the cross move", "F U R U' R' F'")
         case .yellowFace:   return ("the fish", "R U R' U R U2 R'")
-        case .lastCorners:  return ("the corner swap", "R B' R F2 R' B R F2 R2")
+        case .lastCorners:  return ("back to the fish", "L' U R U' L U R'")
         case .lastEdges:    return ("the edge swap", "F2 U R' L F2 L' R U F2")
         default:            return nil
         }

@@ -34,14 +34,17 @@ seven algorithms, plus turning the whole cube:
 | the shuffle | `R U R' U'` |
 | send it right | `U R U' R' U' F' U F` |
 | send it left | `U' L' U L U F U' F'` |
-| the cross move | `F R U R' U' F'` |
+| the cross move | `F U R U' R' F'` |
 | the fish | `R U R' U R U2 R'` |
-| the corner swap | `R B' R F2 R' B R F2 R2` |
-| the edge swap | `R U' R U R U R U' R' U' R2` |
+| back to the fish | `L' U R U' L U R'` |
+| the edge swap | `F2 U R' L F2 L' R U F2` |
 
 The last four stages are reached by searching over "turn the top, then run the
 algorithm", which is exactly how the method is taught — so the child is never
-shown a move they have not been taught. Solves average about 145 moves.
+shown a move they have not been taught. There is no separate corner swap: going back to the fish breaks the finished
+yellow face on purpose, leaving the fish shape again, and doing the fish from
+there brings the face back with two corners traded over. Solves average about
+156 moves.
 
 ## Building it
 

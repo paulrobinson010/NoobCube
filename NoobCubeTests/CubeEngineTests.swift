@@ -51,6 +51,30 @@ final class CubeEngineTests: XCTestCase {
         }
     }
 
+    /// The last-corners stage leans on a claim that is easy to get wrong: that
+    /// going back to the fish and then doing the fish again leaves the yellow
+    /// face exactly as it was, but with the two corners on the right traded
+    /// over. Everything the child is told at that stage depends on it.
+    func testBackToTheFishThenTheFishSwapsTheTwoRightCorners() {
+        let broken = CubeState.solved.applying(BeginnerSolver.backToFish)
+        let stillUp = CubeSlots.topCorners.filter { $0.sticker(on: .U, in: broken) == .U }
+        XCTAssertEqual(stillUp.count, 1, "back to the fish should leave one yellow corner up")
+        XCTAssertEqual(stillUp.first.map { Set($0.faces) }, [.U, .F, .L],
+                       "and it should be the front left one, where the fish is taught from")
+
+        let after = broken.applying(BeginnerSolver.fish)
+        XCTAssertTrue(CubeSlots.topCorners.allSatisfy { $0.sticker(on: .U, in: after) == .U },
+                      "the fish should bring the whole yellow face back")
+        let swapped = CubeSlots.topCorners.filter { !$0.isSolved(in: after) }
+        XCTAssertEqual(Set(swapped.map { Set($0.faces) }), [[.U, .F, .R], [.U, .B, .R]],
+                       "exactly the front right and back right corners should trade places")
+        for slot in swapped {
+            let other = swapped.first { $0.name != slot.name }!
+            XCTAssertEqual(slot.piece(in: after), Set(other.faces),
+                           "each of the two should be holding the other's piece")
+        }
+    }
+
     func testSuperflip() {
         // Build superflip geometrically: every edge stays put but its two
         // stickers swap. The canonical 20 move algorithm must reach it.

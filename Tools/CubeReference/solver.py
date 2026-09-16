@@ -13,7 +13,12 @@ INSERTR = "U R U' R' U' F' U F".split()
 INSERTL = "U' L' U L U F U' F'".split()
 CROSS   = "F U R U' R' F'".split()
 SUNE    = "R U R' U R U2 R'".split()
-APERM   = "R B' R F2 R' B R F2 R2".split()
+# Back to the fish. From a finished yellow face this puts exactly one yellow
+# corner back on top, at the front left, which is where the fish is taught from.
+# Do the fish from there and the whole yellow face comes back with the two
+# corners on the right traded over. Two moves the child already knows, so the
+# nine-move corner swap never has to be learned at all.
+TOFISH  = "L' U R U' L U R'".split()
 UPERM   = "F2 U R' L F2 L' R U F2".split()
 # The same thing the other way round: both leave the back edge alone and
 # send the other three round, one clockwise and one anticlockwise.
@@ -672,6 +677,16 @@ def top_corners_placed(state):
                for n in slots.U_CORNERS)
 
 
+def top_corners_placed_up_to_u(state):
+    """Corners home, allowing for the top still being turned round.
+
+    The edge stage begins by spinning the top anyway, so insisting the corners
+    land facing the right way here costs a whole extra go in most cases: 1.00
+    goes on average instead of 1.92, and never more than two.
+    """
+    return any(top_corners_placed(cube.apply(state, uk)) for uk in U_TURNS)
+
+
 def solved_up_to_u(state):
     return any(cube.apply(state, uk) == cube.SOLVED for uk in U_TURNS)
 
@@ -685,6 +700,34 @@ def run_rounds(sv, alg, goal, alg_name, line_up, outcome, ready=None, also=None)
         sv.do(turn)
         sv.running()
         sv.do(moves)
+
+
+def run_fish_rounds(sv, goal):
+    """The last corners, using only moves the child already knows.
+
+    Going back to the fish breaks the yellow face on purpose. It leaves one
+    yellow corner on top at the front left — exactly the shape the fish stage
+    taught — so doing the fish from there brings the whole yellow face back and
+    trades the two corners on the right over on the way. It costs about five
+    moves a go more than a dedicated corner swap, and saves learning one.
+    """
+    for turn, _ in bfs_alg_rounds(sv.state, TOFISH + SUNE, goal):
+        sv.step(alg_name='the way back to the fish',
+                spin='Look for two corners next to each other that want to swap '
+                     'places. Turn the top until they are the two on the right: '
+                     'front right and back right. If no two want to swap like '
+                     'that, leave the top alone — it takes two goes.',
+                outcome='That breaks the yellow face on purpose. One yellow '
+                        'corner is left on top, at the front left, which is '
+                        'the fish you already know.')
+        sv.do(turn)
+        sv.running()
+        sv.do(TOFISH)
+        sv.step(alg_name='the fish',
+                outcome='The fish brings the whole yellow face back, and the two '
+                        'corners on the right have swapped over.')
+        sv.running()
+        sv.do(SUNE)
 
 
 def runs_of(step):
@@ -824,10 +867,7 @@ def solve(state, white_face='D'):
                'until the whole top is yellow.',
                ready=fish_ready)
     sv.stage('topcorners', 'Put the last corners in their homes')
-    run_rounds(sv, APERM, top_corners_placed, 'the corner swap',
-               'Find the two corners that want to swap and turn the top so they '
-               'are where the swap picks them up.',
-               'The corner swap trades two corners over, leaving the rest alone.')
+    run_fish_rounds(sv, top_corners_placed_up_to_u)
     sv.stage('topedges', 'Slide the last edges home')
     run_rounds(sv, UPERM, solved_up_to_u, 'the edge swap',
                'Turn the top so the edge that is already home is at the back. The '
