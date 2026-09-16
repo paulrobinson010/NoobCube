@@ -79,8 +79,27 @@ def build_app_icon(source):
 
 # ------------------------------------------------------------ launch screen
 
+# How much of the tile's edge is given over to fading out, as a fraction of
+# its width. The artwork is vignette out to about 6% in — the brightest pixel
+# anywhere in that band is 96 of 255, and nothing hits full brightness until
+# 7.8% in — so a fade this wide dissolves the edge without touching the cube,
+# the wordmark or either glow.
+LAUNCH_FADE = 0.06
+
+
 def build_launch_logo(source):
-    """The icon artwork as a rounded tile, centred on the launch screen."""
+    """The icon artwork as a rounded tile that fades out at its edge.
+
+    A hard-edged tile cannot be made to disappear into a flat colour, because
+    the artwork's own background is not flat: it is a vignette, running from
+    (3, 21, 56) at the top of the icon to (1, 6, 17) at the bottom. Whatever one
+    colour the screen is painted, one edge of the tile shows. Measured against
+    the colour the screen actually uses, the bottom edge was out by 12 and the
+    top by 44, and the bottom is where it reads as a seam rather than a glow.
+
+    So the tile stops having an edge. The outer band fades to nothing, and the
+    icon dissolves into the screen whatever shade the screen happens to be.
+    """
     folder = os.path.join(ASSETS, 'LaunchLogo.imageset')
     clear_pngs(folder)
 
@@ -89,16 +108,24 @@ def build_launch_logo(source):
     for scale in (1, 2, 3):
         side = base * scale
         tile = source.convert('RGBA').resize((side, side), Image.LANCZOS)
+
+        # A rounded rectangle drawn a fade's width in, then blurred by about
+        # the same amount: solid through the middle, nothing at all by the
+        # time it reaches where the edge used to be.
+        fade = side * LAUNCH_FADE
         mask = Image.new('L', (side, side), 0)
-        ImageDraw.Draw(mask).rounded_rectangle((0, 0, side - 1, side - 1),
-                                               radius=int(side * 0.225), fill=255)
+        ImageDraw.Draw(mask).rounded_rectangle(
+            (fade, fade, side - 1 - fade, side - 1 - fade),
+            radius=max(1, int((side - 2 * fade) * 0.225)), fill=255)
+        mask = mask.filter(ImageFilter.GaussianBlur(radius=fade * 0.55))
         tile.putalpha(mask)
+
         name = f'LaunchLogo@{scale}x.png'
         tile.save(os.path.join(folder, name))
         images.append({'filename': name, 'idiom': 'universal', 'scale': f'{scale}x'})
 
     write_json(folder, {'images': images, 'info': INFO})
-    print(f'  LaunchLogo         {base}pt tile')
+    print(f'  LaunchLogo         {base}pt tile, edge faded over {LAUNCH_FADE:.0%}')
 
 
 def edge_colour(source):
@@ -125,23 +152,36 @@ def edge_colour(source):
                  for index in range(3))
 
 
-def build_launch_background(source):
-    folder = os.path.join(ASSETS, 'LaunchBackground.colorset')
+def report_launch_background(source):
+    """Measure the artwork's edge and say whether the token still matches.
+
+    The colour set itself belongs to `Design/tokens.json` and is written by
+    `Tools/sync_design.py`, along with every other copy of the palette. Writing
+    it here as well meant two tools owned one file and quietly disagreed: this
+    one measures the 1254px master, the token was measured off the 1024px icon
+    that actually ships, and resampling put a unit of blue between them.
+
+    So this only looks, and says something if the two have drifted far enough
+    to matter.
+    """
     red, green, blue = edge_colour(source)
-    colour = {
-        'color-space': 'srgb',
-        'components': {
-            'alpha': '1.000',
-            'red': f'{red / 255:.3f}',
-            'green': f'{green / 255:.3f}',
-            'blue': f'{blue / 255:.3f}',
-        },
-    }
-    write_json(folder, {
-        'colors': [{'color': colour, 'idiom': 'universal'}],
-        'info': INFO,
-    })
-    print(f'  LaunchBackground   #{red:02x}{green:02x}{blue:02x}, from the icon edge')
+    measured = f'#{red:02x}{green:02x}{blue:02x}'
+
+    token = None
+    tokens_path = os.path.join(ROOT, 'Design', 'tokens.json')
+    if os.path.exists(tokens_path):
+        with open(tokens_path) as handle:
+            token = json.load(handle).get('surface', {}).get('background')
+
+    if token is None:
+        print(f'  LaunchBackground   {measured} from the artwork edge')
+    elif token.lower() == measured:
+        print(f'  LaunchBackground   {measured}, and the token agrees')
+    else:
+        print(f'  LaunchBackground   artwork edge is {measured}, '
+              f'Design/tokens.json says {token}')
+        print('                     put the new one in tokens.json and run '
+              'Tools/sync_design.py if it matters')
 
 
 # -------------------------------------------------------------- header mark
@@ -319,7 +359,7 @@ def main():
     print(f'source artwork {source.size[0]}x{source.size[1]}')
     build_app_icon(source)
     build_launch_logo(source)
-    build_launch_background(source)
+    report_launch_background(source)
     build_brand_mark(source)
     build_wordmark(source)
     build_web_assets(source)
