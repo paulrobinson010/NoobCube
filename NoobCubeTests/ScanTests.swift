@@ -358,6 +358,35 @@ final class ScanTests: XCTestCase {
     }
 
     @MainActor
+    func testTheMiddlesOnTheMapCannotBeAnythingElse() {
+        var generator = SeededGenerator(seed: 103)
+        let layout = CubeColourScheme.scanningLayout
+
+        // Whatever is handed to the map — a finished scan, a half one, one with
+        // its middles deliberately wrong, or nothing at all — the six middles
+        // come out as the grip the child was asked to use. They are not read,
+        // not guessed and not editable, so there is nothing for them to be.
+        for _ in 0..<50 {
+            var cube = ScannedCube(colours: scrambledColours(using: &generator).map { Optional($0) })
+            for face in Face.allCases {
+                cube[face.centreIndex] = CubeColour.allCases.randomElement(using: &generator)
+            }
+            let fixed = ScanCoordinator.withFixedMiddles(cube)
+            for face in Face.allCases {
+                XCTAssertEqual(fixed[face.centreIndex], layout[face])
+            }
+        }
+
+        let empty = ScanCoordinator.withFixedMiddles(ScannedCube())
+        for face in Face.allCases {
+            XCTAssertEqual(empty[face.centreIndex], layout[face])
+        }
+        // And they are six different colours, which is what makes the map a
+        // cube at all.
+        XCTAssertEqual(Set(Face.allCases.map { empty[$0.centreIndex] }).count, 6)
+    }
+
+    @MainActor
     func testALookGoesToTheSideItsMiddleNames() {
         var generator = SeededGenerator(seed: 97)
         for _ in 0..<40 {

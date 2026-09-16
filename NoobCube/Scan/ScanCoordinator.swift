@@ -61,6 +61,7 @@ final class ScanCoordinator: ObservableObject {
         CubeColourScheme.scanningLayout[face] ?? .white
     }
 
+    /// The flat map on screen. Written only through ``show``.
     @Published private(set) var scan = ScannedCube()
     @Published private(set) var stepIndex = 0
     @Published private(set) var isComplete = false
@@ -162,14 +163,11 @@ final class ScanCoordinator: ObservableObject {
     // MARK: - Running the scan
 
     func begin() {
-        scan = ScannedCube()
-        // Draw the six middles straight away. White is opposite yellow, red
+        // An empty map still has its six middles: white opposite yellow, red
         // opposite orange, blue opposite green, so the moment the child is
         // asked to hold it yellow-up and white-down, every middle is known
-        // before the camera has seen a thing.
-        for (face, colour) in CubeColourScheme.scanningLayout {
-            scan[face.centreIndex] = colour
-        }
+        // before the camera has seen a thing. ``show`` puts them there.
+        show(ScannedCube())
         lookAtSide = [:]
         lastSide = nil
         stepIndex = 0
@@ -344,19 +342,13 @@ final class ScanCoordinator: ObservableObject {
     ///
     /// Run after every look, so the net fills in as the child works.
     private func redraw() {
-        scan = ScannedCube()
-        for (face, colour) in CubeColourScheme.scanningLayout {
-            scan[face.centreIndex] = colour
-        }
+        var map = ScannedCube()
         for (face, look) in lookAtSide {
             let colour = Self.colour(for: face)
-            var guesses = ColourClassifier.bestGuesses(
-                ColourClassifier.relit(face: look, expecting: colour))
-            // The middle is never a guess: it is what put this look on this
-            // side in the first place.
-            guesses[4] = colour
-            scan.setFace(face, to: guesses)
+            map.setFace(face, to: ColourClassifier.bestGuesses(
+                ColourClassifier.relit(face: look, expecting: colour)))
         }
+        show(map)
     }
 
     /// Ask for whichever side has not been seen, in the order of the script.
@@ -407,7 +399,7 @@ final class ScanCoordinator: ObservableObject {
         let (candidate, fit) = bestReading(
             ColourClassifier.priced(arranged, expectedCentres: expected), expecting: expected)
 
-        scan = candidate
+        show(candidate)
         isComplete = true
 
         // Before asking whether this cube can exist, ask whether it is the one
@@ -503,8 +495,30 @@ final class ScanCoordinator: ObservableObject {
     }
 
     func setSticker(at index: Int, to colour: CubeColour) {
-        scan[index] = colour
+        var edited = scan
+        edited[index] = colour
+        show(edited)
         revalidate()
+    }
+
+    /// Put a cube on the map, with its middles set to what they must be.
+    ///
+    /// The one way `scan` is written. A middle is fixed by the grip the child
+    /// was asked to use — yellow up, white down, and the rest follows — so it
+    /// is not something any part of this can have an opinion about. Every
+    /// writer used to be trusted to remember that separately, which is four
+    /// places to get it right and one to get it wrong.
+    private func show(_ cube: ScannedCube) {
+        scan = Self.withFixedMiddles(cube)
+    }
+
+    /// A cube with the middles put back to the only thing they can be.
+    static func withFixedMiddles(_ cube: ScannedCube) -> ScannedCube {
+        var fixed = cube
+        for (face, colour) in CubeColourScheme.scanningLayout {
+            fixed[face.centreIndex] = colour
+        }
+        return fixed
     }
 
     /// A complaint about the cube, said in colours rather than in the letters
