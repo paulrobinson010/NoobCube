@@ -57,6 +57,30 @@ enum GANProtocol {
             return message
         }
 
+        /// The command asking the cube how full its battery is, where it is
+        /// known.
+        ///
+        /// Both of these are the position request with the event code swapped,
+        /// which is the shape the position requests above already have: gen 2
+        /// asks with the event code alone, gen 4 wraps it in the same envelope.
+        /// Generation 3's position request carries no event code to swap, so
+        /// there is nothing to pattern it on and nothing is sent — better to
+        /// show no reading than to write a made-up command to somebody's cube.
+        var requestBatteryCommand: [UInt8]? {
+            var message = [UInt8](repeating: 0, count: commandLength)
+            switch self {
+            case .gen2:
+                message[0] = 0x09
+            case .gen3:
+                return nil
+            case .gen4:
+                for (index, byte) in [0xDD, 0x04, 0x00, 0xEF, 0x00, 0x00].enumerated() {
+                    message[index] = UInt8(byte)
+                }
+            }
+            return message
+        }
+
         var serviceUUID: String {
             switch self {
             case .gen2: return "6E400001-B5A3-F393-E0A9-E50E24DC4179"

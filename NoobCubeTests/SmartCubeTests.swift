@@ -1,6 +1,26 @@
 import XCTest
 @testable import NoobCube
 
+final class SmartCubeBatteryTests: XCTestCase {
+
+    /// A cube reported 0% while plainly working. Whatever the offsets are
+    /// doing, a reading that cannot be true must never reach the screen.
+    func testAnImpossibleBatteryReadingIsNotShown() {
+        XCTAssertNil(SmartCubeManager.believableBattery(0),
+                     "a cube that is awake and talking is not flat")
+        XCTAssertNil(SmartCubeManager.believableBattery(-1))
+        XCTAssertNil(SmartCubeManager.believableBattery(101))
+        XCTAssertNil(SmartCubeManager.believableBattery(255),
+                     "an unset byte reads as 255, which is not a percentage")
+    }
+
+    func testARealBatteryReadingIsKept() {
+        for percent in [1, 42, 99, 100] {
+            XCTAssertEqual(SmartCubeManager.believableBattery(percent), percent)
+        }
+    }
+}
+
 /// A connected cube hangs entirely on knowing which way round it is being held.
 ///
 /// Get it wrong and every turn is read as the wrong face, so a child doing

@@ -128,6 +128,17 @@ final class SmartCubeManager: NSObject, ObservableObject {
 
     var isConnected: Bool { status.isConnected }
 
+    /// A battery reading worth showing, or nothing.
+    ///
+    /// A cube that is awake and talking to us is not flat, so a reading of 0 —
+    /// or of anything above 100 — is not a flat battery. It is the wrong bits
+    /// being read, and showing it as fact is worse than showing nothing at all.
+    /// The raw number goes to the diagnostics instead, which is what is needed
+    /// to put the offsets right.
+    static func believableBattery(_ percent: Int) -> Int? {
+        (1...100).contains(percent) ? percent : nil
+    }
+
     /// Colours matching `cubeState`, using the cube's standard scheme.
     var trackedColours: [CubeColour?]? {
         cubeState.map { state in
@@ -251,7 +262,10 @@ final class SmartCubeManager: NSObject, ObservableObject {
                 cubeState = state
             }
         case .battery(let percent):
-            batteryPercent = percent
+            batteryPercent = Self.believableBattery(percent)
+            if batteryPercent == nil {
+                note("Battery read as \(percent), which cannot be right — ignoring it")
+            }
         case .disconnected:
             note("Cube went to sleep")
         case .hardware, .ignored:
@@ -259,11 +273,29 @@ final class SmartCubeManager: NSObject, ObservableObject {
         }
     }
 
+    /// Ask the cube how full its battery is.
+    ///
+    /// Most of these cubes only say when asked. Nothing here ever asked, so the
+    /// only readings that ever arrived were unsolicited ones — which is how a
+    /// cube with plenty of charge came to show 0%.
+    ///
+    /// The request follows the shape already established for asking a cube its
+    /// position: the same envelope with the event code swapped. That holds for
+    /// the two generations whose position request carries its event code, and
+    /// is not guessed at for the one that does not.
+    private func requestBattery() {
+        guard let generation, let command = generation.requestBatteryCommand else { return }
+        send(command)
+    }
+
     /// Ask the cube to send its current state.
     private func requestState() {
-        guard let peripheral, let characteristic = commandCharacteristic, let cipher else { return }
         guard let generation else { return }
-        let command = generation.requestFaceletsCommand
+        send(generation.requestFaceletsCommand)
+    }
+
+    private func send(_ command: [UInt8]) {
+        guard let peripheral, let characteristic = commandCharacteristic, let cipher else { return }
         guard let encrypted = GANProtocol.encrypt(command, using: cipher) else { return }
         peripheral.writeValue(Data(encrypted), for: characteristic, type: .withResponse)
     }
@@ -412,6 +444,7 @@ extension SmartCubeManager: CBPeripheralDelegate {
             }
             self.status = .connected(peripheral.name ?? "Smart cube")
             self.requestState()
+            self.requestBattery()
         }
     }
 
