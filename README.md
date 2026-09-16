@@ -141,11 +141,27 @@ dim amber room, while a table top, a keyboard or a wall never came in under
 1.0. Above 0.62 the app says it could not see well enough rather than handing
 the solver a confident wrong cube.
 
-Two smaller things the app knows and used to throw away: a side is filed as the
-side that was asked for and its middle drawn as the colour that was asked for,
-never a read one; and a reading that is the same picture as a side already
-taken is refused, because the camera cannot always tell what it is looking at
-but it can tell it is looking at the same thing again.
+**Which look is which side** is decided the same way, one level up. The app
+guides the child — yellow on top, white underneath, top first, then the bottom,
+then spin round the four sides — but nothing depends on them following it. The
+six looks are kept as a list, never filed into a side as they arrive: filing on
+arrival loses sides, because a middle read wrongly puts a look in the wrong
+place, the side it should have filled still looks empty, the child shows that
+side again, and now two looks are of one side and another was never seen.
+Measured, that halved how often a dim room read a cube correctly.
+
+So the six looks go onto six different sides, decided together at the end.
+The middles alone are not enough — when two middles are read as each other,
+swapping the pair costs exactly what getting them right costs, a tie the
+middles never win — so they only narrow it to a shortlist of eight, and each of
+those is settled properly and judged on all 54 stickers. On cubes with one
+middle painted the wrong colour, the middles alone got it right none of the
+time and the shortlist and fit together got it right every time.
+
+Deciding all six together costs nothing when the sides do come in the order
+asked — 59% of cubes read perfectly against 61% — and is the difference between
+working and not when they do not: 53% against none at all. A side that came out
+wrong is put right by showing it again, which replaces that look.
 
 What survives is caught before it reaches the solver: a scan is checked for the
 three ways a cube becomes impossible — a flipped edge, a twisted corner, a

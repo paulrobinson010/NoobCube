@@ -26,6 +26,10 @@ struct ScanView: View {
                 .padding(.horizontal, 20)
 
             if coordinator.isComplete {
+                // The camera stays on. A side that came out wrong is put right
+                // by showing it again, which beats hunting for the squares that
+                // are wrong and tapping them one at a time.
+                viewfinder
                 finishedControls
             } else {
                 sideChips
@@ -202,7 +206,8 @@ struct ScanView: View {
 
     private var finishedControls: some View {
         VStack(spacing: 12) {
-            Text("Tap any square that's the wrong colour.")
+            Text("Something wrong? Hold up that side and take it again, "
+               + "or tap any square to fix it.")
                 .font(.brand(size: 16, weight: .medium))
                 .foregroundStyle(Theme.muted)
                 .multilineTextAlignment(.center)
@@ -225,8 +230,11 @@ struct ScanView: View {
             .disabled(coordinator.result == nil)
             .opacity(coordinator.result == nil ? 0.5 : 1)
 
-            Button("Look again") { coordinator.begin() }
+            Button("Take that side again") { coordinator.captureCurrentFace() }
                 .buttonStyle(BigButtonStyle(isProminent: false))
+
+            Button("Start the whole thing again") { coordinator.begin() }
+                .buttonStyle(BigButtonStyle(tint: Theme.muted, isProminent: false))
         }
         .padding(.horizontal, 20)
     }

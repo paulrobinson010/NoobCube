@@ -38,6 +38,10 @@ struct ScreenHeader: View {
     let title: String
     var subtitle: String? = nil
     @ObservedObject var narrator: Narrator
+    /// Going back to the camera, where a screen offers it. Up here with the
+    /// other small round buttons rather than down among the big ones: it is a
+    /// way out, not somewhere to go.
+    var onRescan: (() -> Void)? = nil
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
@@ -57,6 +61,16 @@ struct ScreenHeader: View {
             }
 
             Spacer(minLength: 4)
+
+            if let onRescan {
+                Button(action: onRescan) {
+                    Image(systemName: "camera.circle.fill")
+                        .font(.system(size: 34))
+                        .foregroundStyle(Theme.muted)
+                }
+                .accessibilityLabel("Look at my cube again")
+            }
+
             NarratorControls(narrator: narrator)
         }
     }

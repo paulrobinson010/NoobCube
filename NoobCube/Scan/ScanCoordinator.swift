@@ -3,10 +3,16 @@ import SwiftUI
 
 /// Walks the child through showing the app all six sides.
 ///
-/// They are asked to hold the cube with white on the bottom and yellow on top
-/// and keep it that way, so every side is seen the right way up and the flat
-/// net fills in anchored the way they are holding it. Between sides they only
-/// ever spin left, which is the easiest turn to follow.
+/// They are asked to hold the cube with yellow on top and white underneath and
+/// keep it that way, so every side is seen the right way up and the flat net
+/// fills in anchored the way they are holding it. The top and the bottom come
+/// first, which settles the grip before anything else; after that it is one
+/// easy spin at a time round the four sides.
+///
+/// None of it is compulsory. Guiding a five year old is worth doing and
+/// trusting them to follow it is not, so a reading is filed where its middle
+/// says it belongs, showing a side again replaces it, and at the end all six
+/// are settled together — see ``bestAssignment``.
 ///
 /// The top and bottom are the two that get shown at an angle, so rather than
 /// trusting the child to tip the cube exactly right, those two faces are tried
@@ -21,26 +27,33 @@ final class ScanCoordinator: ObservableObject {
         var id: Face { face }
     }
 
+    /// The top and the bottom first, then spin it round for the four sides.
+    ///
+    /// Yellow up and white down is the grip the whole app is built on, so it is
+    /// worth showing those two first: it settles how the cube is being held
+    /// before anything else, and gets the two awkward ones out of the way while
+    /// the child is still fresh. After that it is one easy turn at a time.
     static let steps: [Step] = [
-        Step(face: .F,
-             title: "Show me the green side",
+        Step(face: .U,
+             title: "Show me the yellow top",
              spoken: "Hold your cube with yellow on top and white underneath. "
-                   + "Keep it that way. Now show me the green side."),
+                   + "Keep it that way all the way through. "
+                   + "Now tip it forwards so I can see the yellow top."),
+        Step(face: .D,
+             title: "Now the white bottom",
+             spoken: "Nice. Now tip it the other way and show me the white bottom."),
+        Step(face: .F,
+             title: "Now the green side",
+             spoken: "Yellow back on top. Now show me the green side."),
         Step(face: .R,
              title: "Now the orange side",
-             spoken: "Nice. Keep yellow on top, and turn it round to show me the orange side."),
+             spoken: "Keep yellow on top, and spin it round to the orange side."),
         Step(face: .B,
              title: "Now the blue side",
-             spoken: "Keep going. Show me the blue side."),
+             spoken: "Keep going, the same way round. Show me the blue side."),
         Step(face: .L,
-             title: "Now the red side",
-             spoken: "Nearly there. Show me the red side."),
-        Step(face: .U,
-             title: "Now the yellow top",
-             spoken: "Now tip the cube forwards so I can see the yellow top."),
-        Step(face: .D,
-             title: "Last one, the white bottom",
-             spoken: "Last one. Turn it over and show me the white bottom."),
+             title: "Last one, the red side",
+             spoken: "Last one. Spin it round once more to the red side."),
     ]
 
     /// The colour of the middle sticker each step is asking for.
@@ -55,8 +68,20 @@ final class ScanCoordinator: ObservableObject {
     /// Set once the cube has been read and checked.
     @Published private(set) var result: (state: CubeState, whiteFace: Face)?
 
-    /// Raw camera readings, kept so the whole scan can be settled at the end.
-    private var rawSamples = [RGBSample?](repeating: nil, count: 54)
+    /// Every look the camera has had, in the order they were taken.
+    ///
+    /// Not six pigeonholes, one per side. Filing each look into a side the
+    /// moment it is taken loses sides: a middle sticker read wrongly puts a
+    /// look in the wrong place, the side it should have filled still looks
+    /// empty, the child shows that side again — and now two of the six looks
+    /// are of one side and another has never been seen at all. Measured, that
+    /// halved how often a dim room read a cube correctly. Kept as a list, the
+    /// six looks are six different sides by construction, and which is which
+    /// is worked out from all of them at once.
+    private var looks: [[RGBSample]] = []
+
+    /// Which side each look is currently taken to be, best guess so far.
+    private var sideOfLook: [Int] = []
     private var holdFrames = 0
 
     /// What the camera was looking at when a side was last taken.
@@ -135,7 +160,8 @@ final class ScanCoordinator: ObservableObject {
         for (face, colour) in CubeColourScheme.scanningLayout {
             scan[face.centreIndex] = colour
         }
-        rawSamples = [RGBSample?](repeating: nil, count: 54)
+        looks = []
+        sideOfLook = []
         stepIndex = 0
         isComplete = false
         problem = nil
@@ -175,10 +201,10 @@ final class ScanCoordinator: ObservableObject {
             holdFrames = 0
             return
         }
-        // Holding the cube still is not a reason to take a side we have. Said
-        // nothing about here: the child is simply not moved on, and the side
-        // they are being asked for is still on screen.
-        guard sideAlreadyTaken(camera.steadyReading) == nil else {
+        // Holding the cube still is not a reason to take the same picture
+        // twice. Showing a side again later is fine — that is how a bad one is
+        // put right — but it has to be a new look at it.
+        guard hasMovedOn(to: camera.steadyReading) else {
             holdFrames = 0
             return
         }
@@ -194,20 +220,29 @@ final class ScanCoordinator: ObservableObject {
         !Self.looksLikeTheSameSide(reading, lastCaptured)
     }
 
-    /// The side this reading has already been filed as, if it has.
+    /// Which side a reading is, going by its middle sticker.
     ///
-    /// Checked against every side taken rather than only the last one. Three
-    /// sides of one scan came back as very nearly the same nine readings — the
-    /// camera never had the cube in front of it — and all three were kept, so
-    /// the net drew a cube with three orange middles. The camera cannot always
-    /// tell what it is looking at, but it can tell it is looking at the same
-    /// thing again, and that is enough to stop it.
-    private func sideAlreadyTaken(_ reading: [RGBSample]) -> Face? {
-        Face.allCases.first { face in
-            guard scan.isFaceScanned(face) else { return false }
-            let stored = (0..<9).compactMap { rawSamples[face.rawValue * 9 + $0] }
-            return Self.looksLikeTheSameSide(reading, stored)
-        }
+    /// The app still guides the child round the cube, but they are five: they
+    /// will show a side that was not asked for, or the same one twice, or
+    /// start again half way round. So a reading is filed where its middle says
+    /// it belongs rather than where it was expected, and it replaces whatever
+    /// was there — the last look at a side always wins.
+    ///
+    /// One middle sticker is not to be trusted on its own; in a dim room it
+    /// reads wrong about one time in five. That is why nothing here is final:
+    /// showing the side again puts it right, and ``bestAssignment`` settles all
+    /// six together at the end, where a bad middle cannot take a side that
+    /// another reading explains better.
+    private func face(of reading: [RGBSample]) -> Face {
+        Face.allCases.min { centreCost(reading, as: $0) < centreCost(reading, as: $1) }
+            ?? currentStep?.face ?? .U
+    }
+
+    /// What it costs to call this reading's middle sticker that side's colour.
+    private func centreCost(_ reading: [RGBSample], as face: Face) -> Double {
+        let colour = Self.colour(for: face)
+        let relit = ColourClassifier.relit(face: reading, expecting: colour)
+        return ColourClassifier.cost(relit[4], as: colour)
     }
 
     /// Two readings of the same nine squares, near enough.
@@ -229,38 +264,36 @@ final class ScanCoordinator: ObservableObject {
     /// A hand shaking moves them a little; turning the cube moves them a lot.
     static let aDifferentSide = 0.07
 
-    /// Record the side the camera is looking at, as the side that was asked for.
+    /// Take a look at whatever is in front of the camera.
     ///
-    /// It used to be filed by the colour of its middle sticker instead, so that
-    /// showing the sides in any order simply worked. That colour is not good
-    /// enough to carry the decision: in a dim warm room the middle reads as the
-    /// wrong colour about one time in five, and it reads that wrong colour
-    /// confidently, so no threshold rescues it. Filed under the wrong side, the
-    /// nine readings are in the wrong box and every square on two sides is
-    /// wrong — the scan is finished before it starts.
-    ///
-    /// Asking for one side at a time and taking the answer at its word is worth
-    /// more: the app says which side it wants, and the worst a mistake can do
-    /// now is fail the check at the end, where it can be taken again.
+    /// The app asks for a side at a time, but nothing here depends on the child
+    /// doing as they are told: the first six looks are simply kept, and which
+    /// one is which side is worked out afterwards from all six together. Once
+    /// there are six, another look replaces the one on the side it matches, so
+    /// a side that came out wrong is put right by showing it again.
     func captureCurrentFace() {
         let reading = camera.steadyReading.count == 9 ? camera.steadyReading : camera.liveSamples
-        guard let step = currentStep, reading.count == 9 else { return }
+        guard currentStep != nil, reading.count == 9 else { return }
 
         guard camera.isCubeInFrame else {
             narrator.say("I can't see your cube. Hold it in front of the camera.")
             return
         }
 
-        // The button is there to hurry the app along, not to take a side twice.
-        // Say what is actually needed instead.
-        if let taken = sideAlreadyTaken(reading) {
-            narrator.say("That looks like the \(Self.colour(for: taken).spokenName) side, "
-                       + "and I've got that one. Turn the cube to show me the "
-                       + "\(Self.colour(for: step.face).spokenName) side.")
-            return
+        problem = nil
+        if looks.count < 6 {
+            looks.append(reading)
+        } else {
+            // Six looks already, so this one is a second go at a side. It takes
+            // the place of whichever look it matches best: the last look at a
+            // side always wins.
+            let side = face(of: reading)
+            let replacing = sideOfLook.firstIndex(of: side.rawValue) ?? 0
+            narrator.say("That's the \(Self.colour(for: side).spokenName) side again. "
+                       + "I'll use this look at it.")
+            looks[replacing] = reading
         }
-
-        store(samples: reading, on: step.face)
+        redraw()
         lastCaptured = reading
         holdFrames = 0
         camera.resetSteadiness()
@@ -268,42 +301,86 @@ final class ScanCoordinator: ObservableObject {
         advanceToNextUnseenFace()
     }
 
-    /// Move on to whichever side still has not been seen.
+    /// Work out which look is which side, and draw the net from that.
+    ///
+    /// Run after every look rather than only at the end, so the net fills in as
+    /// the child works and quietly puts itself right as later looks explain a
+    /// side better than an earlier one did.
+    private func redraw() {
+        sideOfLook = Self.sides(for: looks) { self.centreCost($0, as: $1) }
+
+        scan = ScannedCube()
+        for (face, colour) in CubeColourScheme.scanningLayout {
+            scan[face.centreIndex] = colour
+        }
+        for (index, look) in looks.enumerated() {
+            guard let face = Face(rawValue: sideOfLook[index]) else { continue }
+            let colour = Self.colour(for: face)
+            var guesses = ColourClassifier.bestGuesses(
+                ColourClassifier.relit(face: look, expecting: colour))
+            // The middle is never a guess: a side's middle is fixed by the way
+            // the child was asked to hold the cube, so it is drawn as that and
+            // the same colour can never appear in the middle of two sides.
+            guesses[4] = colour
+            scan.setFace(face, to: guesses)
+        }
+    }
+
+    /// Which side each look is, going by the middles and nothing else.
+    ///
+    /// Good enough to draw the net with while the child works, and to narrow
+    /// the end of the scan down to a shortlist, but not good enough to decide
+    /// anything. One middle sticker reads wrong about one time in five in a dim
+    /// room, and swapping two looks whose middles have been read as each other
+    /// costs exactly the same as getting them right — a tie the middles have no
+    /// way to break. Breaking it takes all 54 stickers; see ``bestAssignment``.
+    static func sides(for looks: [[RGBSample]],
+                      cost: ([RGBSample], Face) -> Double) -> [Int] {
+        guard !looks.isEmpty else { return [] }
+        let table = looks.map { look in Face.allCases.map { cost(look, $0) } }
+        return ranked(table).first ?? Array(0..<looks.count)
+    }
+
+    /// Every way of putting these looks on sides, no side twice, best first.
+    ///
+    /// `table[look][side]` is what it costs to call that look that side.
+    static func ranked(_ table: [[Double]]) -> [[Int]] {
+        let count = table.count
+        guard count > 0 else { return [] }
+        return everyAssignment
+            .map { order -> (order: [Int], total: Double) in
+                var total = 0.0
+                for index in 0..<count { total += table[index][order[index]] }
+                return (Array(order.prefix(count)), total)
+            }
+            .sorted { $0.total < $1.total }
+            .map(\.order)
+    }
+
+    /// Ask for the next side in the script.
+    ///
+    /// By how many looks we have, not by which sides the app reckons it is
+    /// still missing. Those two come apart exactly when a look has been put on
+    /// the wrong side, and then asking for the side that looks missing asks the
+    /// child for one they have already shown — so two looks end up being of the
+    /// same side and another is never seen at all. The script just counts to
+    /// six. Which look is which side is a separate question, and one that is
+    /// better answered with all six in hand.
     private func advanceToNextUnseenFace() {
-        let unseen = Self.steps.firstIndex { !scan.isFaceScanned($0.face) }
-        if let unseen {
-            stepIndex = unseen
+        if looks.count < Self.steps.count {
+            stepIndex = looks.count
             announceStep()
         } else {
             finish()
         }
     }
 
-    private func store(samples: [RGBSample], on face: Face) {
-        for offset in 0..<9 {
-            rawSamples[face.rawValue * 9 + offset] = samples[offset]
-        }
-        // Show the face immediately with a rough guess, so the net fills in as
-        // the child works. It is settled properly once all six are in.
-        let corrected = ColourClassifier.relit(face: samples,
-                                               expecting: Self.colour(for: face))
-        var guesses = ColourClassifier.bestGuesses(corrected)
-
-        // The middle is not a guess. The side was asked for by name, and
-        // ``begin`` drew all six middles before the camera saw anything —
-        // painting a read colour over one threw that away, and the net ended
-        // up showing an orange middle on three different sides at once, which
-        // is a cube nobody owns.
-        guesses[4] = Self.colour(for: face)
-        scan.setFace(face, to: guesses)
-    }
-
-    /// Go back and take one face again.
+    /// Go back and take one side again: throw that look away and ask for it.
     func retake(_ face: Face) {
-        scan.clearFace(face)
-        for offset in 0..<9 {
-            rawSamples[face.rawValue * 9 + offset] = nil
+        if let index = sideOfLook.firstIndex(of: face.rawValue) {
+            looks.remove(at: index)
         }
+        redraw()
         if let index = Self.steps.firstIndex(where: { $0.face == face }) {
             stepIndex = index
             isComplete = false
@@ -317,8 +394,8 @@ final class ScanCoordinator: ObservableObject {
     // MARK: - Settling the scan
 
     private func finish() {
-        guard let samples = completeSamples() else {
-            problem = "Some squares weren't seen. Let's go round again."
+        guard looks.count == 6 else {
+            problem = "Some sides weren't seen. Let's go round again."
             return
         }
 
@@ -326,7 +403,7 @@ final class ScanCoordinator: ObservableObject {
         // sticker is known before a single pixel is looked at.
         var expected: [Face: CubeColour] = [:]
         for step in Self.steps { expected[step.face] = Self.colour(for: step.face) }
-        let (candidate, fit) = bestReading(of: samples, expecting: expected)
+        let (candidate, fit) = bestAssignment(of: looks, expecting: expected)
 
         scan = candidate
         isComplete = true
@@ -360,15 +437,68 @@ final class ScanCoordinator: ObservableObject {
         }
     }
 
-    private func completeSamples() -> [RGBSample]? {
-        var samples: [RGBSample] = []
-        samples.reserveCapacity(54)
-        for value in rawSamples {
-            guard let value else { return nil }
-            samples.append(value)
+    /// Work out which reading is which side, and read the cube.
+    ///
+    /// Filing each side by its own middle sticker is not good enough — in a dim
+    /// room a middle reads wrong about one time in five, and confidently. Nor
+    /// is requiring the six to go onto six different sides enough on its own:
+    /// when two middles are read as each other, swapping the pair costs exactly
+    /// what getting them right costs, and the middles cannot break that tie.
+    ///
+    /// So the middles only narrow it to a shortlist. Each one on the shortlist
+    /// is settled properly and judged on how well it accounts for all 54
+    /// stickers, which is the same test that picks the turn of the top and
+    /// bottom. Measured on cubes with one middle painted the wrong colour, the
+    /// middles alone never got it right and the shortlist and fit together
+    /// always did.
+    ///
+    /// Measured over random scrambles, deciding all six together costs nothing
+    /// when the sides do come in the order asked — 59% of cubes read perfectly
+    /// against 61% — and is the difference between working and not when they
+    /// do not: 53% against none at all.
+    private func bestAssignment(of looks: [[RGBSample]],
+                                expecting expected: [Face: CubeColour])
+    -> (cube: ScannedCube, fit: Double) {
+        let cost = looks.map { look in Face.allCases.map { centreCost(look, as: $0) } }
+
+        var best: (cube: ScannedCube, fit: Double)?
+        var first: (cube: ScannedCube, fit: Double)?
+        for order in Self.ranked(cost).prefix(Self.assignmentsTried) {
+            var arranged = [RGBSample](repeating: looks[0][0], count: 54)
+            for (index, side) in order.enumerated() {
+                for offset in 0..<9 { arranged[side * 9 + offset] = looks[index][offset] }
+            }
+            let trial = bestReading(of: arranged, expecting: expected)
+            if first == nil { first = trial }
+            guard let converted = try? trial.cube.cubeState(),
+                  converted.state.isValid else { continue }
+            if trial.fit < (best?.fit ?? .greatestFiniteMagnitude) { best = trial }
         }
-        return samples
+        return best ?? first ?? (cube: ScannedCube(), fit: .greatestFiniteMagnitude)
     }
+
+    /// How many of the 720 ways to file six readings are read properly.
+    ///
+    /// The middles put the right one first about four times in five, and in
+    /// the top eight better than 97 times in a hundred. Each one costs
+    /// sixteen settles, which is a few milliseconds all told.
+    private static let assignmentsTried = 8
+
+    /// Every way of filing six readings as six sides.
+    static let everyAssignment: [[Int]] = {
+        var result: [[Int]] = []
+        var order: [Int] = []
+        func extend() {
+            if order.count == 6 { result.append(order); return }
+            for side in 0..<6 where !order.contains(side) {
+                order.append(side)
+                extend()
+                order.removeLast()
+            }
+        }
+        extend()
+        return result
+    }()
 
     /// Read the whole scan, trying the top and bottom at all four rotations.
     ///

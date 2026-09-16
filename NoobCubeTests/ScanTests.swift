@@ -357,6 +357,56 @@ final class ScanTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(refused, 18)
     }
 
+    @MainActor
+    func testEveryWayOfFilingSixReadingsIsThere() {
+        let all = ScanCoordinator.everyAssignment
+        XCTAssertEqual(all.count, 720)
+        XCTAssertEqual(Set(all.map { $0.map(String.init).joined() }).count, 720)
+        for order in all {
+            XCTAssertEqual(Set(order), Set(0..<6))
+        }
+    }
+
+    @MainActor
+    func testTheSixLooksAreSortedOutWhicheverOrderTheyComeIn() {
+        var generator = SeededGenerator(seed: 83)
+        for _ in 0..<40 {
+            let truth = scrambledColours(using: &generator)
+            // The six sides, shown in whatever order the child felt like.
+            let shown = Face.allCases.shuffled(using: &generator)
+            let looks = shown.map { readings(of: truth, face: $0) }
+            let sides = ScanCoordinator.sides(for: looks) { look, face in
+                ColourClassifier.cost(look[4], as: ScanCoordinator.colour(for: face))
+            }
+
+            XCTAssertEqual(Set(sides), Set(0..<6), "every side used exactly once")
+            for (index, face) in shown.enumerated() {
+                XCTAssertEqual(sides[index], face.rawValue)
+            }
+        }
+    }
+
+    @MainActor
+    func testTwoMiddlesReadAsEachOtherStayOnTheShortlist() {
+        var generator = SeededGenerator(seed: 89)
+        let truth = scrambledColours(using: &generator)
+        var looks = Face.allCases.map { readings(of: truth, face: $0) }
+
+        // The green side's middle comes back looking orange. Swapping green
+        // and orange then costs the middles exactly what getting them right
+        // costs, so they cannot break the tie and never do — measured over 200
+        // cubes, the middles alone got this wrong every single time. What they
+        // can do is keep the truth on the shortlist for the fit to pick out.
+        let (red, green, blue) = CubeColour.orange.rgb
+        looks[Face.F.rawValue][4] = RGBSample(red: red, green: green, blue: blue)
+
+        let table = looks.map { look in
+            Face.allCases.map { ColourClassifier.cost(look[4], as: ScanCoordinator.colour(for: $0)) }
+        }
+        let shortlist = Array(ScanCoordinator.ranked(table).prefix(8))
+        XCTAssertTrue(shortlist.contains(Face.allCases.map(\.rawValue)))
+    }
+
     // MARK: - Taking the same side twice
 
     private func readings(of colours: [CubeColour], face: Face) -> [RGBSample] {

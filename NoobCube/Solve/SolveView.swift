@@ -80,7 +80,8 @@ struct SolveView: View {
         VStack(spacing: 10) {
             ScreenHeader(title: session.stage?.kind.title ?? "All done!",
                          subtitle: session.stageLabel,
-                         narrator: narrator)
+                         narrator: narrator,
+                         onRescan: onRescan)
 
             StageChecklistStrip(stages: session.plan.stages,
                                 currentKind: session.stage?.kind,
@@ -185,10 +186,7 @@ struct SolveView: View {
             }
 
         case .introducingStep:
-            VStack(spacing: 8) {
-                nextButton { session.beginStepMoves() }
-                rescanButton
-            }
+            nextButton { session.beginStepMoves() }
 
         case .coaching:
             switch session.help {
@@ -205,16 +203,11 @@ struct SolveView: View {
                         session.announceStage()
                     }
                     .buttonStyle(BigButtonStyle(tint: Theme.done, isProminent: false))
-
-                    rescanButton
                 }
 
             case .moveByMove:
-                VStack(spacing: 8) {
-                    nextButton(isEnabled: session.currentMove != nil) {
-                        session.confirmCurrentMove()
-                    }
-                    rescanButton
+                nextButton(isEnabled: session.currentMove != nil) {
+                    session.confirmCurrentMove()
                 }
 
             case .wholeStage:
@@ -236,8 +229,6 @@ struct SolveView: View {
                         session.startStage()
                     }
                     .buttonStyle(BigButtonStyle(isProminent: false))
-
-                    rescanButton
                 }
             }
         }
@@ -258,17 +249,4 @@ struct SolveView: View {
         .disabled(session.isBusy || !isEnabled)
     }
 
-    /// Small on purpose: a way back to the camera, not somewhere to go.
-    private var rescanButton: some View {
-        Button {
-            onRescan()
-        } label: {
-            Label("Look at my cube again", systemImage: "camera.fill")
-                .font(.brand(size: 15, weight: .semibold))
-                .foregroundStyle(Theme.muted)
-                .frame(maxWidth: .infinity, minHeight: 40)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
 }
