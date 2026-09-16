@@ -80,27 +80,10 @@ final class ScanTests: XCTestCase {
     /// assignment plus white balance is what fixes it.
     func testWarmLightingIsRecovered() {
         var generator = SeededGenerator(seed: 41)
-        // The six centres, then eight more of each colour scattered about,
-        // which is what any real cube looks like.
-        var labels = [CubeColour?](repeating: nil, count: 54)
-        // The centres have to be a cube that could exist: white opposite
-        // yellow and the right handedness. Six colours in whatever order they
-        // happen to be declared in is not one, and the naming step is right to
-        // refuse it.
-        for face in Face.allCases {
-            labels[face.centreIndex] = CubeColourScheme.scanningLayout[face]
-        }
-        var pool: [CubeColour] = []
-        for colour in CubeColour.allCases {
-            pool.append(contentsOf: Array(repeating: colour, count: 8))
-        }
-        pool.shuffle(using: &generator)
-        var next = 0
-        for index in 0..<54 where labels[index] == nil {
-            labels[index] = pool[next]
-            next += 1
-        }
-        let settled = labels.compactMap { $0 }
+        // A cube that has really been turned. Nine of each colour is not
+        // enough on its own: settling a scan fits whole pieces into slots, so
+        // the stickers have to be arranged the way a cube can be.
+        let settled = scrambledColours(using: &generator)
 
         let samples = settled.map { colour -> RGBSample in
             let (red, green, blue) = colour.rgb
@@ -215,45 +198,118 @@ final class ScanTests: XCTestCase {
     /// with the white side already solved — which is exactly when a child comes
     /// back for another look, and exactly when a white side has nothing on it
     /// to compare itself against.
+    /// A cube that has really been turned, laid out the way the scan asks for.
+    private func scrambledColours(using generator: inout SeededGenerator) -> [CubeColour] {
+        let layout = CubeColourScheme.scanningLayout
+        let state = CubeState.solved.applying(randomScramble(using: &generator))
+        return state.facelets.map { layout[$0] ?? .white }
+    }
+
+    /// Measured off the photograph: a lamp about this warm, and each side
+    /// caught at its own angle so each is its own brightness.
+    private func underTheAmberLamp(_ truth: [CubeColour]) -> [RGBSample] {
+        let lamp = (red: 1.0, green: 0.77, blue: 0.49)
+        return truth.enumerated().map { index, colour in
+            let (red, green, blue) = colour.rgb
+            let dim = 0.65 + 0.35 * Double((index / 9) % 3) / 2
+            return RGBSample(red: min(1, red * lamp.red * dim),
+                             green: min(1, green * lamp.green * dim),
+                             blue: min(1, blue * lamp.blue * dim))
+        }
+    }
+
     func testAWholeCubeUnderTheAmberLamp() {
         var generator = SeededGenerator(seed: 17)
-        let layout = CubeColourScheme.scanningLayout
-
-        var labels = [CubeColour?](repeating: nil, count: 54)
-        for face in Face.allCases { labels[face.centreIndex] = layout[face] }
-        // The white side is done, so it is nine white stickers.
-        for index in Face.D.faceletIndices { labels[index] = .white }
-
-        var pool: [CubeColour] = []
-        for colour in CubeColour.allCases {
-            pool.append(contentsOf: Array(repeating: colour, count: colour == .white ? 0 : 8))
-        }
-        pool.shuffle(using: &generator)
-        var next = 0
-        for index in 0..<54 where labels[index] == nil {
-            labels[index] = pool[next]
-            next += 1
-        }
-        let truth = labels.compactMap { $0 }
-        XCTAssertEqual(truth.count, 54)
-
-        // Measured off the photograph: a lamp about this warm.
-        let lamp = (red: 1.0, green: 0.77, blue: 0.49)
-        var samples: [RGBSample] = []
-        for (index, colour) in truth.enumerated() {
-            let (red, green, blue) = colour.rgb
-            // Each side is caught at its own angle, so each is its own brightness.
-            let dim = 0.65 + 0.35 * Double((index / 9) % 3) / 2
-            samples.append(RGBSample(red: min(1, red * lamp.red * dim),
-                                     green: min(1, green * lamp.green * dim),
-                                     blue: min(1, blue * lamp.blue * dim)))
-        }
+        let truth = scrambledColours(using: &generator)
 
         // Without being told which side was which, this comes out wrong about
         // nineteen times in twenty — which is not something to assert on, but
         // is the measure of what knowing the middles is worth.
-        XCTAssertEqual(ColourClassifier.resolve(rawSamples: samples, expectedCentres: layout),
+        XCTAssertEqual(ColourClassifier.resolve(rawSamples: underTheAmberLamp(truth),
+                                                expectedCentres: CubeColourScheme.scanningLayout),
                        truth)
+    }
+
+    func testAMisreadMiddleCannotRotateTheWholeScan() {
+        var generator = SeededGenerator(seed: 23)
+        let layout = CubeColourScheme.scanningLayout
+        let truth = scrambledColours(using: &generator)
+        var samples = underTheAmberLamp(truth)
+
+        // Paint every middle sticker the colour of the side above it. Reading
+        // the middles used to mean choosing between the 24 ways a cube can be
+        // held, so one bad middle turned the whole cube and nothing after it
+        // could be right.
+        for face in Face.allCases {
+            let (red, green, blue) = (layout[face.opposite] ?? .white).rgb
+            samples[face.centreIndex] = RGBSample(red: red, green: green, blue: blue)
+        }
+
+        let resolved = ColourClassifier.resolve(rawSamples: samples, expectedCentres: layout)
+        for face in Face.allCases {
+            XCTAssertEqual(resolved[face.centreIndex], layout[face])
+        }
+    }
+
+    /// One face's nine readings, turned on the spot.
+    private func turning(_ samples: [RGBSample], _ face: Face, quarterTurns: Int) -> [RGBSample] {
+        var turned = samples
+        for _ in 0..<quarterTurns {
+            let grid = (0..<9).map { turned[face.rawValue * 9 + $0] }
+            for row in 0..<3 {
+                for column in 0..<3 {
+                    turned[face.rawValue * 9 + row * 3 + column] = grid[(2 - column) * 3 + row]
+                }
+            }
+        }
+        return turned
+    }
+
+    func testTheTrueArrangementExplainsThePixelsBest() {
+        var generator = SeededGenerator(seed: 47)
+        let layout = CubeColourScheme.scanningLayout
+        let truth = scrambledColours(using: &generator)
+        let samples = truth.map { colour -> RGBSample in
+            let (red, green, blue) = colour.rgb
+            return RGBSample(red: red, green: green, blue: blue)
+        }
+
+        // Turning the top face on the spot is the mistake a child makes holding
+        // the cube up to the camera. Every wrong turn costs more to believe,
+        // which is what lets the scan try all four and keep the one that fits.
+        let square = ColourClassifier.settle(rawSamples: samples, expectedCentres: layout)
+        XCTAssertEqual(square.colours, truth)
+        for quarterTurns in 1...3 {
+            let turned = turning(samples, .U, quarterTurns: quarterTurns)
+            XCTAssertGreaterThan(
+                ColourClassifier.settle(rawSamples: turned, expectedCentres: layout).fit,
+                square.fit)
+        }
+    }
+
+    func testEveryReadingIsMadeOfRealPieces() {
+        var generator = SeededGenerator(seed: 31)
+        let layout = CubeColourScheme.scanningLayout
+
+        for _ in 0..<50 {
+            // Nonsense on purpose: whatever the camera hands over, the answer
+            // has to be twenty pieces, each of them one the cube really has.
+            let samples = (0..<54).map { _ in
+                RGBSample(red: Double.random(in: 0...1, using: &generator),
+                          green: Double.random(in: 0...1, using: &generator),
+                          blue: Double.random(in: 0...1, using: &generator))
+            }
+            let resolved = ColourClassifier.resolve(rawSamples: samples, expectedCentres: layout)
+            let scan = ScannedCube(colours: resolved.map { Optional($0) })
+            let converted = try? scan.cubeState()
+            XCTAssertNotNil(converted)
+            guard let state = converted?.state else { continue }
+            for group in [CubeSlots.edges, CubeSlots.corners] {
+                let pieces = group.map { $0.piece(in: state) }
+                XCTAssertEqual(Set(pieces).count, group.count)
+                XCTAssertEqual(Set(pieces), Set(group.map { Set($0.faces) }))
+            }
+        }
     }
 
     func testResolveAlwaysReturnsNineOfEach() {

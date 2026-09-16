@@ -199,15 +199,19 @@ final class ScanCoordinator: ObservableObject {
         return difference / 27 > 0.07
     }
 
-    /// Record the side the camera is looking at.
+    /// Record the side the camera is looking at, as the side that was asked for.
     ///
-    /// Which side it is filed as comes from the colour of its middle sticker,
-    /// so showing the sides in the wrong order simply works. But only while
-    /// that colour names a side we have not already seen: a middle sticker read
-    /// wrongly used to file the new side on top of a good one, quietly undoing
-    /// earlier work, and then the app asked for the missing side again — and
-    /// again, because it was never going to arrive. When the colour names a
-    /// side already done, the side being asked for is the better answer.
+    /// It used to be filed by the colour of its middle sticker instead, so that
+    /// showing the sides in any order simply worked. That colour is not good
+    /// enough to carry the decision: in a dim warm room the middle reads as the
+    /// wrong colour about one time in five, and it reads that wrong colour
+    /// confidently, so no threshold rescues it. Filed under the wrong side, the
+    /// nine readings are in the wrong box and every square on two sides is
+    /// wrong — the scan is finished before it starts.
+    ///
+    /// Asking for one side at a time and taking the answer at its word is worth
+    /// more: the app says which side it wants, and the worst a mistake can do
+    /// now is fail the check at the end, where it can be taken again.
     func captureCurrentFace() {
         let reading = camera.steadyReading.count == 9 ? camera.steadyReading : camera.liveSamples
         guard let step = currentStep, reading.count == 9 else { return }
@@ -224,11 +228,7 @@ final class ScanCoordinator: ObservableObject {
             return
         }
 
-        let guesses = ColourClassifier.bestGuesses(relit(reading))
-        let named = CubeColourScheme.face(forCentre: guesses[4])
-        let face = (named.map { !scan.isFaceScanned($0) } ?? false) ? named! : step.face
-
-        store(samples: reading, on: face)
+        store(samples: reading, on: step.face)
         lastCaptured = reading
         holdFrames = 0
         camera.resetSteadiness()
@@ -286,14 +286,7 @@ final class ScanCoordinator: ObservableObject {
         // sticker is known before a single pixel is looked at.
         var expected: [Face: CubeColour] = [:]
         for step in Self.steps { expected[step.face] = Self.colour(for: step.face) }
-        let settled = ColourClassifier.resolve(rawSamples: samples, expectedCentres: expected)
-        var candidate = ScannedCube(colours: settled.map { Optional($0) })
-
-        // The top and bottom are the awkward ones to hold square to the camera,
-        // so try them every way round and keep whichever makes a real cube.
-        if let fixed = bestOrientation(for: candidate) {
-            candidate = fixed
-        }
+        let candidate = bestReading(of: samples, expecting: expected)
 
         scan = candidate
         isComplete = true
@@ -326,25 +319,59 @@ final class ScanCoordinator: ObservableObject {
         return samples
     }
 
-    /// Try the top and bottom at all four rotations, keep a combination that
-    /// makes a solvable cube.
-    private func bestOrientation(for candidate: ScannedCube) -> ScannedCube? {
-        var firstValid: ScannedCube?
+    /// Read the whole scan, trying the top and bottom at all four rotations.
+    ///
+    /// Those two are the awkward ones to hold square to the camera. The turn
+    /// has to be tried before the colours are settled rather than after:
+    /// settling fits whole pieces into slots, so where a sticker sits is part
+    /// of the reading.
+    ///
+    /// Of the turns that make a cube that could exist, the winner is whichever
+    /// accounts best for the pixels. Being a real cube is not enough on its own
+    /// — a wrong turn can still land on one — but it cannot also explain the
+    /// colours better than the truth does. The straight reading is kept as the
+    /// tie-break, because the child was probably holding it as asked.
+    private func bestReading(of samples: [RGBSample],
+                             expecting expected: [Face: CubeColour]) -> ScannedCube {
+        var straight: ScannedCube?
+        var best: (cube: ScannedCube, fit: Double)?
         for topTurns in 0..<4 {
             for bottomTurns in 0..<4 {
-                var trial = candidate
-                trial.rotateFaceStickers(.U, quarterTurns: topTurns)
-                trial.rotateFaceStickers(.D, quarterTurns: bottomTurns)
-                guard let converted = try? trial.cubeState() else { continue }
-                if converted.state.isValid {
-                    // The child was probably holding it as asked, so an
-                    // unrotated fit wins outright.
-                    if topTurns == 0 && bottomTurns == 0 { return trial }
-                    if firstValid == nil { firstValid = trial }
+                let settled = ColourClassifier.settle(
+                    rawSamples: Self.rotating(samples, top: topTurns, bottom: bottomTurns),
+                    expectedCentres: expected)
+                let trial = ScannedCube(colours: settled.colours.map { Optional($0) })
+                // Kept so there is something to show, and something to complain
+                // about, when no turn makes a real cube.
+                if topTurns == 0 && bottomTurns == 0 { straight = trial }
+                guard let converted = try? trial.cubeState(), converted.state.isValid else { continue }
+                if settled.fit < (best?.fit ?? .greatestFiniteMagnitude) {
+                    best = (trial, settled.fit)
                 }
             }
         }
-        return firstValid
+        return best?.cube ?? straight ?? ScannedCube()
+    }
+
+    /// The same readings with the top and bottom faces turned on the spot.
+    private static func rotating(_ samples: [RGBSample],
+                                 top: Int, bottom: Int) -> [RGBSample] {
+        var turned = samples
+        for (face, quarterTurns) in [(Face.U, top), (Face.D, bottom)] {
+            var grid = (0..<9).map { samples[face.rawValue * 9 + $0] }
+            for _ in 0..<(((quarterTurns % 4) + 4) % 4) {
+                // Clockwise: the new (row, column) comes from (2 - column, row).
+                var next = grid
+                for row in 0..<3 {
+                    for column in 0..<3 {
+                        next[row * 3 + column] = grid[(2 - column) * 3 + row]
+                    }
+                }
+                grid = next
+            }
+            for offset in 0..<9 { turned[face.rawValue * 9 + offset] = grid[offset] }
+        }
+        return turned
     }
 
     // MARK: - Fixing a square by hand

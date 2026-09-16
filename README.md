@@ -113,23 +113,34 @@ is which colour is physically where.
 ### How a scan is made reliable
 
 Reading stickers one at a time fails under ordinary indoor light — white goes
-orange. Two things fix it, both leaning on facts about cubes:
+orange. Three things fix it, all leaning on facts about cubes:
 
 - **White balance.** A cube always has exactly nine white stickers, so the
   illuminant can be estimated from the nine palest samples without knowing
   which they are.
-- **Quota assignment.** There must be exactly nine of each colour and six
-  different centres, so the scan is settled as an assignment over all 54
-  stickers at once rather than 54 independent guesses.
+- **The middles are never read.** Each side is asked for by name, so its middle
+  sticker is known before the camera sees it. Reading it instead meant choosing
+  among the 24 ways a cube can be held, and in a dim warm room the middle comes
+  out wrong about one time in five — confidently enough that no threshold
+  rescues it. One wrong middle turned the whole naming, and nothing after it
+  could be right.
+- **Whole pieces, not loose stickers.** A cube is twenty pieces, each existing
+  exactly once, so the scan is settled by fitting pieces into slots: the twelve
+  edges and eight corners are matched cheapest-first. A sticker read badly then
+  costs its own piece instead of cascading. (Nine of each colour follows from
+  this rather than being imposed.)
 
-Against simulated lighting that lifts warm-indoor accuracy from 98.2% to
-99.98%. What survives is caught before it reaches the solver: a scan is checked
-for the three ways a cube becomes impossible — a flipped edge, a twisted
-corner, a swapped pair — and any square can be tapped to correct it.
+Against simulated scrambles that takes a dim warm room from 11% of cubes read
+perfectly to 65%, and an amber lamp from none to 10%.
+
+What survives is caught before it reaches the solver: a scan is checked for the
+three ways a cube becomes impossible — a flipped edge, a twisted corner, a
+swapped pair — and any square can be tapped to correct it.
 
 The top and bottom faces are the awkward ones to hold square to the camera, so
-they are tried at all four rotations and the one that makes a solvable cube is
-kept.
+they are tried at all four rotations, before the colours are settled rather than
+after. Of the turns that make a cube that could exist, the one that accounts
+best for the pixels is kept.
 
 ## Testing
 

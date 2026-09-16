@@ -278,15 +278,33 @@ enum ColourClassifier {
         return result
     }
 
+    /// Work out all 54 stickers at once, keeping only the colours.
+    static func resolve(rawSamples: [RGBSample],
+                        expectedCentres: [Face: CubeColour] = [:]) -> [CubeColour] {
+        settle(rawSamples: rawSamples, expectedCentres: expectedCentres).colours
+    }
+
+    /// A settled reading, and how well it explains the pixels.
+    struct Settled: Equatable, Sendable {
+        let colours: [CubeColour]
+        /// The total cost of calling every sticker what it was called. Lower is
+        /// a better account of what the camera saw, and two readings of the
+        /// same 54 samples can be compared by it.
+        let fit: Double
+    }
+
     /// Work out all 54 stickers at once.
     ///
     /// Three facts about cubes do most of the work, and each is worth more than
     /// any amount of tuning the colour maths:
     ///
-    ///   * The centres must make a cube that could exist — white opposite
-    ///     yellow, red opposite orange, blue opposite green, and in the right
-    ///     handedness. That is 24 possibilities, not 720.
-    ///   * There are exactly nine stickers of each colour.
+    ///   * Every side was asked for by name, so the six middle stickers are
+    ///     known before the camera sees them and are never read at all. A
+    ///     middle read wrongly used to rotate the whole naming, and from there
+    ///     nothing else could be right.
+    ///   * The cube is made of twenty pieces, not fifty-four loose stickers.
+    ///     Each edge and each corner exists exactly once, so reading one
+    ///     sticker badly costs that one piece instead of cascading.
     ///   * Nine white stickers means the light can be measured off the cube
     ///     itself, without knowing which nine they are.
     ///
@@ -294,8 +312,8 @@ enum ColourClassifier {
     /// one sticker on each side whose colour was known before the camera saw
     /// it. Without that, a white cube face under a warm lamp is orange, and no
     /// amount of counting stickers afterwards can tell you otherwise.
-    static func resolve(rawSamples: [RGBSample],
-                        expectedCentres: [Face: CubeColour] = [:]) -> [CubeColour] {
+    static func settle(rawSamples: [RGBSample],
+                       expectedCentres: [Face: CubeColour] = [:]) -> Settled {
         precondition(rawSamples.count == 54)
         var relitSamples = rawSamples
         if let light = illuminant(ofScan: rawSamples, expectedCentres: expectedCentres) {
@@ -303,39 +321,67 @@ enum ColourClassifier {
         }
         let samples = levelled(whiteBalanced(relitSamples))
 
-        // Name the centres first: they anchor everything and there are only 24
-        // ways they can be arranged.
-        let naming = nameCentres(samples: samples)
+        // The centres anchor everything, so take them from what the scan
+        // asked for rather than from the camera. Only fall back to reading
+        // them when the caller could not say.
+        let naming = given(expectedCentres) ?? nameCentres(samples: samples)
 
         var assignment = [CubeColour?](repeating: nil, count: 54)
-        var remaining: [CubeColour: Int] = [:]
-        for colour in CubeColour.allCases { remaining[colour] = 9 }
         for face in Face.allCases {
-            let colour = naming[face] ?? .white
-            assignment[face.centreIndex] = colour
-            remaining[colour, default: 0] -= 1
+            assignment[face.centreIndex] = naming[face] ?? .white
         }
+        var fit = fill(&assignment, slots: CubeSlots.edges, naming: naming, samples: samples)
+        fit += fill(&assignment, slots: CubeSlots.corners, naming: naming, samples: samples)
+        return Settled(colours: assignment.map { $0 ?? .white }, fit: fit)
+    }
 
-        var candidates: [(cost: Double, index: Int, colour: CubeColour)] = []
-        for index in 0..<54 where assignment[index] == nil {
-            for colour in CubeColour.allCases {
-                candidates.append((cost(samples[index], as: colour), index, colour))
+    /// The caller's centres, if they name all six sides of a cube that exists.
+    private static func given(_ centres: [Face: CubeColour]) -> [Face: CubeColour]? {
+        guard centres.count == Face.allCases.count else { return nil }
+        guard CubeColourScheme.isPlausible(centres: centres) else { return nil }
+        return centres
+    }
+
+    /// Hand out one set of slots — all the edges, or all the corners.
+    ///
+    /// Every piece the cube has is used exactly once, so a sticker read badly
+    /// can only spoil the piece it is on. Cheapest fit first: each round takes
+    /// the best remaining (slot, piece, way round) whose slot and piece are
+    /// both still free.
+    private static func fill(_ assignment: inout [CubeColour?],
+                             slots: [CubeSlot],
+                             naming: [Face: CubeColour],
+                             samples: [RGBSample]) -> Double {
+        // The pieces that exist are exactly the colours of the slots: a cube
+        // has one of each, wherever it has been turned to.
+        let pieces = slots.map { slot in slot.faces.map { naming[$0] ?? .white } }
+
+        var options: [(cost: Double, slot: Int, piece: Int, colours: [CubeColour])] = []
+        for (s, slot) in slots.enumerated() {
+            for (p, piece) in pieces.enumerated() {
+                for turn in 0..<piece.count {
+                    let turned = Array(piece[turn...] + piece[..<turn])
+                    let total = zip(slot.indices, turned)
+                        .reduce(0.0) { $0 + cost(samples[$1.0], as: $1.1) }
+                    options.append((total, s, p, turned))
+                }
             }
         }
-        candidates.sort { $0.cost < $1.cost }
+        options.sort { $0.cost < $1.cost }
 
-        for candidate in candidates {
-            guard assignment[candidate.index] == nil else { continue }
-            guard (remaining[candidate.colour] ?? 0) > 0 else { continue }
-            assignment[candidate.index] = candidate.colour
-            remaining[candidate.colour, default: 0] -= 1
+        var slotTaken = [Bool](repeating: false, count: slots.count)
+        var pieceTaken = [Bool](repeating: false, count: pieces.count)
+        var fit = 0.0
+        for option in options {
+            guard !slotTaken[option.slot], !pieceTaken[option.piece] else { continue }
+            slotTaken[option.slot] = true
+            pieceTaken[option.piece] = true
+            fit += option.cost
+            for (index, colour) in zip(slots[option.slot].indices, option.colours) {
+                assignment[index] = colour
+            }
         }
-        for index in 0..<54 where assignment[index] == nil {
-            let colour = remaining.first { $0.value > 0 }?.key ?? .white
-            assignment[index] = colour
-            remaining[colour, default: 0] -= 1
-        }
-        return assignment.map { $0 ?? .white }
+        return fit
     }
 
     /// Name the six centres, choosing among the 24 ways a cube can be held.
