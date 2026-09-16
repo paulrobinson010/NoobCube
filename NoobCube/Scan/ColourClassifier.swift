@@ -68,6 +68,12 @@ enum ColourClassifier {
         samples.map(bestGuess)
     }
 
+    /// What the best name for this square costs — how sure we are it is any
+    /// sticker colour at all, rather than which one.
+    static func costOfBestGuess(_ sample: RGBSample) -> Double {
+        CubeColour.allCases.map { cost(sample, as: $0) }.min() ?? 10
+    }
+
     /// The illuminant, estimated from the nine palest, brightest samples.
     ///
     /// A cube always has exactly nine white stickers, so they can be found

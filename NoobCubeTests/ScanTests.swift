@@ -400,6 +400,84 @@ final class ScanTests: XCTestCase {
         }
     }
 
+    /// The real room, which is where this went wrong.
+    ///
+    /// `gain` dims it, `warm` tints it the colour of a lamp, and `haze` is
+    /// veiling glare: every square pulled towards a bright grey, which is what
+    /// a light source reflecting off shiny plastic actually does.
+    private func lit(_ samples: [RGBSample],
+                     warm: (Double, Double, Double) = (1, 0.88, 0.72),
+                     gain: Double = 0.9,
+                     haze: Double = 0) -> [RGBSample] {
+        samples.map { sample in
+            let channels = [sample.red * warm.0, sample.green * warm.1, sample.blue * warm.2]
+                .map { min(1, $0 * gain) }
+                .map { $0 * (1 - haze) + 0.92 * gain * haze }
+            return RGBSample(red: channels[0], green: channels[1], blue: channels[2])
+        }
+    }
+
+    /// The bug from the screenshot: a green side reported as white, over and
+    /// over, so the green side never got written down.
+    ///
+    /// The light used to be worked out once per candidate colour, assuming that
+    /// candidate — which let a candidate choose a light that made its own
+    /// answer come true. Only white could do it, because only white is bright
+    /// in all three channels, so on a washed-out face white scored a flat zero
+    /// and won whatever the sticker really was.
+    @MainActor
+    func testAWashedOutSideIsStillNamedByItsMiddle() {
+        var generator = SeededGenerator(seed: 5)
+        let truth = scrambledColours(using: &generator)
+        for haze in [0.0, 0.2, 0.35, 0.5] {
+            for face in Face.allCases {
+                let seen = lit(readings(of: truth, face: face), haze: haze)
+                XCTAssertEqual(ScanCoordinator.side(of: seen), face,
+                               "a face washed out by \(haze) should still be itself")
+            }
+        }
+    }
+
+    /// No candidate may fit a light that flatters its own answer: the same
+    /// nine squares must cost the same whichever side is being considered.
+    @MainActor
+    func testNoSideGetsToChooseTheLightThatJudgesIt() {
+        var generator = SeededGenerator(seed: 23)
+        let truth = scrambledColours(using: &generator)
+        let seen = lit(readings(of: truth, face: .F), haze: 0.4)
+        let costs = Face.allCases.map { ScanCoordinator.centreCost(seen, as: $0) }
+        XCTAssertEqual(costs.filter { $0 < 0.35 }.count, 1,
+                       "exactly one side should be a close match, not several")
+    }
+
+    /// If every square can be read, write the side down. If one of them cannot
+    /// be read at all, wait for a better moment instead of filing a guess.
+    ///
+    /// What this catches is a square that is not a colour: a finger over it,
+    /// the edge of the cube in the crop, a sticker lost to shadow. What it
+    /// cannot catch is a picture washed out evenly, because a washed-out square
+    /// reads as a white sticker perfectly well — that one is caught at the end
+    /// of the scan, where six sides have to add up to a cube.
+    @MainActor
+    func testASideIsOnlyBelievedWhenEverySquareReads() {
+        var generator = SeededGenerator(seed: 41)
+        let truth = scrambledColours(using: &generator)
+        let clean = readings(of: truth, face: .R)
+
+        XCTAssertTrue(ScanCoordinator.readsClearly(clean))
+        XCTAssertTrue(ScanCoordinator.readsClearly(lit(clean, gain: 0.55)),
+                      "a dim room is still readable")
+        XCTAssertTrue(ScanCoordinator.readsClearly(lit(clean, haze: 0.3)),
+                      "ordinary glare is still readable")
+        XCTAssertFalse(ScanCoordinator.readsClearly([]), "nothing at all is not a side")
+
+        // One square lost to shadow — a thumb over it, or the cube's own edge.
+        var shadowed = lit(clean)
+        shadowed[2] = RGBSample(red: 0.06, green: 0.05, blue: 0.07)
+        XCTAssertFalse(ScanCoordinator.readsClearly(shadowed),
+                       "a square that is not any colour should stop the whole side")
+    }
+
     // MARK: - Taking the same side twice
 
     private func readings(of colours: [CubeColour], face: Face) -> [RGBSample] {
