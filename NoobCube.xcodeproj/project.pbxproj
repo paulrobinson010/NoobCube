@@ -51,6 +51,7 @@
 		EEF9AF9EFB0A7A2EB2F9E954 = {isa = PBXBuildFile; fileRef = 6BEB24798A2D0DEAB288070A; };
 		55BB87842B3FE64420CC6E2A = {isa = PBXBuildFile; fileRef = 2CB8ABBE97ECC7DBA44FEF31; };
 		19A106E97D3AD1DEA3726B55 = {isa = PBXBuildFile; fileRef = 6CF8DFCB545CEF3BE984C198; };
+		B86B7592733FD9D7C7686F42 = {isa = PBXBuildFile; fileRef = 371793A352BB06B90F08D827; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -111,6 +112,7 @@
 		6BEB24798A2D0DEAB288070A = {isa = PBXFileReference; lastKnownFileType = file.ttf; path = "Resources/Fonts/Baloo2.ttf"; sourceTree = "<group>"; };
 		2CB8ABBE97ECC7DBA44FEF31 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "BrandFont.swift"; sourceTree = "<group>"; };
 		6CF8DFCB545CEF3BE984C198 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StageTint.swift"; sourceTree = "<group>"; };
+		371793A352BB06B90F08D827 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "JourneyArrow.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -223,6 +225,7 @@
 		B8D54DD56E1B215ADA9798FF /* Cube3D */ = {
 			isa = PBXGroup;
 			children = (
+				371793A352BB06B90F08D827,
 				413DFAFD930F1981D4E42D42 /* CubeFold.swift */,
 				DC2657C05C5AD613137128D9 /* CubeSceneController.swift */,
 				0E58FFEF9982AE19064EB498 /* CubeSceneView.swift */,
@@ -364,6 +367,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B86B7592733FD9D7C7686F42,
 				19A106E97D3AD1DEA3726B55,
 				55BB87842B3FE64420CC6E2A,
 				E34560B5AC9B96ACB4259B9E,
