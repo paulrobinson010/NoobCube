@@ -12,6 +12,42 @@ private let guideFraction: Double = 0.62
 /// How many frames are kept and reduced to one steady reading.
 private let steadyWindow = 18
 
+/// The newest frame waiting to be taken up on the main actor.
+///
+/// Frames arrive sixty times a second on the capture queue, and taking one up
+/// means five published changes and a redraw of the whole scanning screen.
+/// Handing every frame over separately let them pile up without limit whenever
+/// the main actor could not keep pace, and since the camera never pauses it
+/// could not catch up either — the app simply stopped answering.
+///
+/// So at most one hand-over is ever in flight. Frames that arrive while it is
+/// on its way replace the one waiting rather than joining a queue behind it,
+/// which is also what you want: the newest frame is the only interesting one.
+private final class PendingFrame: @unchecked Sendable {
+    typealias Frame = (reading: CameraController.Reading, sawCube: Bool?, shapeCheckWorks: Bool)
+
+    private let lock = NSLock()
+    private var waiting: Frame?
+    private var onItsWay = false
+
+    /// Leaves the frame ready to be collected. True if the caller should be
+    /// the one to go and collect it.
+    func offer(_ frame: Frame) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        waiting = frame
+        if onItsWay { return false }
+        onItsWay = true
+        return true
+    }
+
+    func collect() -> Frame? {
+        lock.lock(); defer { lock.unlock() }
+        onItsWay = false
+        defer { waiting = nil }
+        return waiting
+    }
+}
+
 /// Where the preview is on screen, shared between the main actor and the
 /// capture queue.
 ///
@@ -77,9 +113,19 @@ final class CameraController: NSObject, ObservableObject {
 
     let session = AVCaptureSession()
     private let output = AVCaptureVideoDataOutput()
+    /// Frames arrive here.
     private let queue = DispatchQueue(label: "noobcube.camera")
+    /// Starting, stopping and configuring happen here, and nowhere else.
+    ///
+    /// Apart from the frame queue on purpose. That one is busy sixty times a
+    /// second reading stickers and, every fourth frame, looking for a cube
+    /// shape; a start or a stop sharing it would have to wait its turn behind
+    /// all of that, which is the sort of coupling that turns a busy moment into
+    /// a stuck camera.
+    private let sessionQueue = DispatchQueue(label: "noobcube.camera.session")
     private var recentReadings: [[RGBSample]] = []
     private let previewGeometry = PreviewGeometry()
+    private let pendingFrame = PendingFrame()
     /// The delayed lock of exposure and white balance, so coming back to the
     /// camera can cancel one that is still pending from last time.
     private var lockTask: Task<Void, Never>?
@@ -110,11 +156,12 @@ final class CameraController: NSObject, ObservableObject {
     func stop() {
         lockTask?.cancel()
         lockTask = nil
-        queue.async { [session] in
-            if session.isRunning { session.stopRunning() }
-        }
-        isRunning = false
         isStarting = false
+        sessionQueue.async { [weak self, session] in
+            if session.isRunning { session.stopRunning() }
+            let running = session.isRunning
+            Task { @MainActor in self?.isRunning = running }
+        }
     }
 
     /// Set the session up if it has never been set up, and start it.
@@ -123,13 +170,25 @@ final class CameraController: NSObject, ObservableObject {
     /// committing a session's configuration take their time, and doing that on
     /// the main thread means the screen the child is looking at is frozen for
     /// as long as it takes.
+    ///
+    /// Whether the session is running is the session's business, not a flag
+    /// kept alongside it. Stopping used to say so straight away while the
+    /// stopping itself waited its turn on the queue, so a start and a stop
+    /// close together could leave the flag saying "running" over a session that
+    /// had been stopped after it started — and every start after that would see
+    /// the flag, decide there was nothing to do, and leave the screen black for
+    /// good. Now the queue does both in order and reports back what is true.
     private func configureAndRun() {
-        guard !isRunning, !isStarting else { return }
+        guard !isStarting else { return }
         permissionDenied = false
         isStarting = true
 
         let needsSetUp = session.inputs.isEmpty
-        queue.async { [weak self, session, output] in
+        // Set before the session runs, so there are no frames in flight for
+        // this to have to synchronise with.
+        if needsSetUp { output.setSampleBufferDelegate(self, queue: queue) }
+
+        sessionQueue.async { [weak self, session, output] in
             guard let device = AVCaptureDevice.default(.builtInWideAngleCamera,
                                                        for: .video, position: .back) else {
                 Task { @MainActor in
@@ -174,13 +233,13 @@ final class CameraController: NSObject, ObservableObject {
             }
 
             if !session.isRunning { session.startRunning() }
+            let running = session.isRunning
 
             Task { @MainActor in
                 guard let self else { return }
-                if needsSetUp { output.setSampleBufferDelegate(self, queue: self.queue) }
                 self.isStarting = false
-                self.isRunning = true
-                self.judgeTheRoomAgain(device)
+                self.isRunning = running
+                if running { self.judgeTheRoomAgain(device) }
             }
         }
     }
@@ -274,7 +333,7 @@ final class CameraController: NSObject, ObservableObject {
 
     /// One frame's worth of reading: the nine squares, and whether what the
     /// camera is looking at is a cube at all.
-    struct Reading {
+    struct Reading: Sendable {
         var samples: [RGBSample]
         /// Whether the camera is looking at anything at all, as opposed to a
         /// pocket or a blown-out window.
@@ -419,8 +478,11 @@ extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate {
         let sawCube = presence.look(at: buffer)
         let settled = presence.hasAnOpinion
 
+        guard pendingFrame.offer((reading, sawCube, settled)) else { return }
         Task { @MainActor in
-            self.accept(reading, sawCube: sawCube, shapeCheckWorks: settled)
+            guard let frame = self.pendingFrame.collect() else { return }
+            self.accept(frame.reading, sawCube: frame.sawCube,
+                        shapeCheckWorks: frame.shapeCheckWorks)
         }
     }
 }
