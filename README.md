@@ -5,10 +5,10 @@ daisy method. Built for a five year old: every instruction is spoken aloud,
 nothing depends on being able to read, and the cube on screen shows each move
 with an arrow pointing the way it turns.
 
-| | | | | |
-|---|---|---|---|---|
-| ![Does this look right?](docs/screenshots/1-scan.jpg) | ![Hold it like this](docs/screenshots/2-hold.jpg) | ![Make a daisy](docs/screenshots/3-daisy.jpg) | ![Fill in the white corners](docs/screenshots/4-white-corners.jpg) | ![Finish the middle row](docs/screenshots/5-middle-row.jpg) |
-| Does this look right? | Hold it like this | Make a daisy | Fill in the white corners | Finish the middle row |
+| | | | | | |
+|---|---|---|---|---|---|
+| ![Let's solve your cube together](docs/screenshots/1-home.jpg) | ![Does this look right?](docs/screenshots/2-scan.jpg) | ![Hold it like this](docs/screenshots/3-hold.jpg) | ![Make a daisy](docs/screenshots/4-daisy.jpg) | ![Fill in the white corners](docs/screenshots/5-white-corners.jpg) | ![Finish the middle row](docs/screenshots/6-middle-row.jpg) |
+| Let's solve your cube together | Does this look right? | Hold it like this | Make a daisy | Fill in the white corners | Finish the middle row |
 
 Full-size copies are in `Screenshots/`, at the size the App Store asks for.
 The web copies the site uses are in `docs/screenshots/`.
