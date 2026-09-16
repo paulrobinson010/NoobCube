@@ -115,7 +115,7 @@ extension SolveStage.Kind {
         case .whiteCross:
             return "Spin each petal until its side colour matches the middle underneath, then turn that side twice to drop it down."
         case .whiteCorners:
-            return "Find a corner with white on it in the top layer, put it right above its home, then do the shuffle until it drops in."
+            return "Find a corner with white on it in the top layer, put it above the gap whose three middles match its colours, then do righty until it drops in."
         case .middleRow:
             return "Find a top edge with no yellow, line its colour up with the middle, then send it left or right."
         case .yellowCross:
@@ -171,7 +171,7 @@ extension SolveStage.Kind {
     /// The one algorithm this stage leans on, if it has one.
     var algorithm: (name: String, moves: String)? {
         switch self {
-        case .whiteCorners: return ("the shuffle", "R U R' U'")
+        case .whiteCorners: return ("righty", "R U R' U'")
         case .middleRow:    return ("send it right", "U R U' R' U' F' U F")
         case .yellowCross:  return ("the cross move", "F R U R' U' F'")
         case .yellowFace:   return ("the fish", "R U R' U R U2 R'")

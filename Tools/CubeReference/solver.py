@@ -437,10 +437,18 @@ def solve_white_cross(sv):
         sv.step(piece=piece, home=slot_name(piece),
                 spin='Spin the top until this colour is above the middle that '
                      'matches it.',
-                outcome='Turn this side over twice and the white drops into the cross.')
+                grip='Turn the cube so that side faces you, and check: the colour '
+                     'on the petal and the middle underneath must match. If they '
+                     'do not, the cube cannot come out right.',
+                outcome='Now turn this whole side over twice. The white drops to '
+                        'the bottom and the colour stays matched.')
         sv.do(u_turn_moving(from_face, colour))
+        # Bring that side to the front so the child can see the match for
+        # themselves. Lining the colours up is the whole point of this stage:
+        # a cross with the sides wrong looks finished and is not.
+        sv.do(y_to_front(colour))
         sv.running()
-        sv.do([colour + '2'])
+        sv.do(['F2'])
 
 
 # ------------------------------------------------------------ stage 3  white corners
@@ -450,18 +458,44 @@ def d_corner_solved(state, name):
 
 
 def corner_plan(state, name):
-    """What it would take to put this corner in, from where it is now.
+    """What it takes to put this corner in, the way it is taught.
 
-    Returns the lining up, the moves that do it, and whether it actually
-    places the corner — pulling one out of the bottom does not.
+    Turn the cube so the gap is at the front right, spin the top until the
+    corner is sitting directly over it, then do righty until it drops in. That
+    is the whole method: no searching, nothing to work out, and the child can
+    check each part by looking at the middles.
+
+    Returns the re-grip, the spin, the moves, and whether it places the corner —
+    one stuck in the bottom has to come out first and does not.
     """
     here, _ = slots.find_corner(state, set(name))
     if 'D' in here:
-        # Stuck in the bottom the wrong way round: it has to come out first.
-        return solver_grip(here), "R U R'".split(), False
+        return solver_grip(here), [], "R U R'".split(), False
+
     grip = solver_grip(name)
     after = cube.apply_regrip(state, grip)
-    return grip, bfs_alg(after, SEXY, lambda st: d_corner_solved(st, 'DFR')), True
+    # The gap is now the front-right one, so the corner that belongs there is
+    # the one carrying those three colours.
+    piece = {'D', 'F', 'R'}
+    spin = None
+    for uk in U_TURNS:
+        at, _ = slots.find_corner(cube.apply(after, uk), piece)
+        if at == 'UFR':
+            spin = uk
+            break
+    if spin is None:
+        raise RuntimeError(f'cannot bring {name} over its gap')
+
+    working = cube.apply(after, spin)
+    moves = []
+    for _ in range(6):
+        if d_corner_solved(working, 'DFR'):
+            break
+        working = cube.apply(working, SEXY)
+        moves += SEXY
+    else:
+        raise RuntimeError(f'righty did not drop {name} in')
+    return grip, spin, moves, True
 
 
 def solver_grip(name):
@@ -475,36 +509,35 @@ def solve_first_layer_corners(sv):
         if not unsolved:
             return
 
-        # Count the moves rather than guessing at them. Every corner waiting in
-        # the top can go straight in, but one sitting above its own gap the
-        # right way round takes three moves and another takes fifteen, and a
-        # child watching the long one has no idea why.
         plans = {n: corner_plan(sv.state, n) for n in unsolved}
-        ready = {n: p for n, p in plans.items() if p[2]}
-        # Only pull a corner out of the bottom when nothing can go in: no
-        # amount of arithmetic makes taking a piece out look sensible to
-        # someone who can see one waiting to go in.
+        ready = {n: p for n, p in plans.items() if p[3]}
+        # Never take a corner out of the bottom while one is waiting to go in.
         choices = ready or plans
-        target = min(choices, key=lambda n: len(choices[n][0]) + len(choices[n][1]))
-        grip, moves, places = choices[target]
+        target = min(choices, key=lambda n: sum(len(part) for part in choices[n][:3]))
+        grip, spin, moves, places = choices[target]
 
         if not places:
             sv.step(piece=set(target), home=target, places=False,
                     grip='This corner is in the bottom the wrong way round. Turn '
                          'the cube so it is at the front right.',
-                    outcome='One shuffle lifts it out into the top.')
+                    outcome='One righty lifts it out into the top.')
             sv.do(grip)
             sv.running()
             sv.do(moves)
             continue
 
-        sv.step(piece=set(target), home=target, alg_name='the shuffle',
-                grip='Turn the cube so this corner\'s gap is at the front right.',
-                outcome=('This one is the easiest — it is already over its gap.')
-                        if len(moves) <= 4 else
-                        ('Spin the top to bring the corner over its gap, then shuffle '
-                         'until it drops in.'))
+        sv.step(piece=set(target), home=target, alg_name='righty',
+                grip='Look at the three middles around this corner\'s gap — those '
+                     'are its colours. Turn the cube so that gap is at the front '
+                     'right.',
+                spin='Spin the top until the corner is sitting directly over its '
+                     'gap, so its colours are above the middles that match.',
+                outcome=('It is already the right way round — one righty drops it '
+                         'straight in.') if len(moves) <= 4 else
+                        'Now do righty over and over until it drops in. It only '
+                        'goes in the right way round, so it sorts itself out.')
         sv.do(grip)
+        sv.do(spin)
         sv.running()
         sv.do(moves)
     raise RuntimeError('white corners did not converge')

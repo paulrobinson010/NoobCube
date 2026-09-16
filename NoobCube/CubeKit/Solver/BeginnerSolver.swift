@@ -18,7 +18,7 @@ enum SolverError: Error, LocalizedError {
 ///
 /// The child only ever needs these, plus turning the whole cube:
 ///
-///     the shuffle     R U R' U'
+///     righty          R U R' U'
 ///     send it right   U R U' R' U' F' U F
 ///     send it left    U' L' U L U F U' F'
 ///     the cross move  F R U R' U' F'
@@ -33,7 +33,7 @@ enum BeginnerSolver {
 
     // MARK: - Algorithms
 
-    static let shuffle    = Move.parse("R U R' U'")
+    static let righty      = Move.parse("R U R' U'")
     static let insertRight = Move.parse("U R U' R' U' F' U F")
     static let insertLeft  = Move.parse("U' L' U L U F U' F'")
     static let crossMove  = Move.parse("F R U R' U' F'")
@@ -632,43 +632,74 @@ enum BeginnerSolver {
             builder.step(piece: piece, home: piece,
                          spin: "Spin the top until this colour is above the middle "
                              + "that matches it.",
-                         outcome: "Turn this side over twice and the white drops into "
-                                + "the cross.")
+                         grip: "Turn the cube so that side faces you, and check: the "
+                             + "colour on the petal and the middle underneath have to "
+                             + "match. If they don't, the cube can't come out right.",
+                         outcome: "Now turn this whole side over twice. The white "
+                                + "drops to the bottom and the colour stays matched.")
             builder.perform(topTurn(from: from, to: colour))
+            // Bring that side to the front so the child can see the match for
+            // themselves. Lining the colours up is the whole point of this
+            // stage: a cross with the sides wrong looks finished and is not.
+            builder.perform(turnToFront(colour))
             builder.running()
-            builder.perform([Move(MoveBase(colour), .half)])
+            builder.perform([Move(.F, .half)])
         }
     }
 
     // MARK: - Stage 3, the white corners
 
-    /// What it would take to put one corner in, from where it is now.
+    /// What it takes to put one corner in, the way it is taught.
     private struct CornerPlan {
         var grip: [Move]
+        var spin: [Move]
         var moves: [Move]
         /// False for a corner that has to come out of the bottom first.
         var places: Bool
-        var length: Int { grip.count + moves.count }
+        var length: Int { grip.count + spin.count + moves.count }
     }
 
+    /// Turn the cube so the gap is at the front right, spin the top until the
+    /// corner sits over it, then righty until it drops in.
+    ///
+    /// That is the whole method — no searching and nothing to work out, and a
+    /// child can check every part of it by looking at the middles. It costs
+    /// more turns than hunting for the shortest way in, which is the trade:
+    /// a corner takes one, three or five rightys and never more.
     private static func cornerPlan(for slot: CubeSlot,
                                    in state: CubeState) throws -> CornerPlan {
         guard let here = CubeSlots.slot(holding: Set(slot.faces), in: state),
-              let frontRight = CubeSlots.slot(with: [.D, .F, .R]) else {
+              let frontRight = CubeSlots.slot(with: [.D, .F, .R]),
+              let aboveIt = CubeSlots.slot(with: [.U, .F, .R]) else {
             throw SolverError.stuck("Lost track of a white corner.")
         }
         if here.contains(.D) {
             // Stuck in the bottom the wrong way round: it has to come out first.
-            return CornerPlan(grip: turnToFrontRight(here.sideFaces),
-                              moves: Move.parse("R U R'"),
-                              places: false)
+            return CornerPlan(grip: turnToFrontRight(here.sideFaces), spin: [],
+                              moves: Move.parse("R U R'"), places: false)
         }
+
         let grip = turnToFrontRight(slot.sideFaces)
-        let after = state.applying(grip)
-        let moves = try search(from: after, algorithm: shuffle) {
-            frontRight.isSolved(in: $0)
-        }.flatMap(\.moves)
-        return CornerPlan(grip: grip, moves: moves, places: true)
+        let gripped = state.applying(grip)
+        // The gap is the front-right one now, so the corner that belongs in it
+        // is the one carrying those three colours.
+        let piece = Set(frontRight.faces)
+        guard let spin = topTurns.first(where: { turn in
+            CubeSlots.slot(holding: piece, in: gripped.applying(turn)) == aboveIt
+        }) else {
+            throw SolverError.stuck("Couldn't bring a corner over its gap.")
+        }
+
+        var working = gripped.applying(spin)
+        var moves: [Move] = []
+        for _ in 0..<6 {
+            if frontRight.isSolved(in: working) {
+                return CornerPlan(grip: grip, spin: spin, moves: moves, places: true)
+            }
+            working = working.applying(righty)
+            moves += righty
+        }
+        throw SolverError.stuck("Righty didn't drop that corner in.")
     }
 
     private static func solveBottomCorners(_ builder: Builder) throws {
@@ -678,17 +709,12 @@ enum BeginnerSolver {
             let unsolved = CubeSlots.bottomCorners.filter { !$0.isSolved(in: builder.state) }
             if unsolved.isEmpty { return }
 
-            // Count the moves rather than guessing at them. Every corner waiting
-            // in the top can go straight in, but one sitting above its own gap
-            // the right way round takes three moves and another takes fifteen,
-            // and a child watching the long one has no idea why.
             var plans: [(slot: CubeSlot, plan: CornerPlan)] = []
             for slot in unsolved {
                 plans.append((slot, try cornerPlan(for: slot, in: builder.state)))
             }
-            // Only pull a corner out of the bottom when nothing can go in: no
-            // amount of arithmetic makes taking a piece out look sensible to
-            // somebody who can see one waiting to go in.
+            // Never take a corner out of the bottom while one is waiting to go
+            // in, and among those that can go in, take the shortest.
             let ready = plans.filter(\.plan.places)
             let choices = ready.isEmpty ? plans : ready
             guard let chosen = choices.min(by: { $0.plan.length < $1.plan.length }) else {
@@ -700,17 +726,24 @@ enum BeginnerSolver {
                 builder.step(piece: piece, home: piece, places: false,
                              grip: "This corner is in the bottom the wrong way round. "
                                  + "Turn the cube so it's at the front right.",
-                             outcome: "One shuffle lifts it out into the top.")
+                             outcome: "One righty lifts it out into the top.")
             } else {
                 builder.step(piece: piece, home: piece,
-                             grip: "Turn the cube so this corner's gap is at the front right.",
+                             grip: "Look at the three middles around this corner's "
+                                 + "gap — those are its colours. Turn the cube so that "
+                                 + "gap is at the front right.",
+                             spin: "Spin the top until the corner sits directly over "
+                                 + "its gap, its colours above the middles that match.",
                              outcome: chosen.plan.moves.count <= 4
-                                 ? "This one's the easiest — it's already over its gap."
-                                 : "Spin the top to bring the corner over its gap, then "
-                                 + "shuffle until it drops in.",
-                             algorithmName: "the shuffle")
+                                 ? "It's already the right way round — one righty "
+                                 + "drops it straight in."
+                                 : "Now do righty over and over until it drops in. It "
+                                 + "only goes in the right way round, so it sorts "
+                                 + "itself out.",
+                             algorithmName: "righty")
             }
             builder.perform(chosen.plan.grip)
+            builder.perform(chosen.plan.spin)
             builder.running()
             builder.perform(chosen.plan.moves)
         }
