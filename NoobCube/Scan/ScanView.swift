@@ -173,6 +173,9 @@ struct ScanView: View {
     /// draws both of them, one on top of the other, and this one changes often
     /// enough that the overlap is what you mostly see.
     private var caption: String {
+        if coordinator.camera.isStarting || !coordinator.camera.isRunning {
+            return "Waking the camera up…"
+        }
         if !coordinator.camera.isCubeInFrame {
             return "Hold your cube in front of the camera."
         }

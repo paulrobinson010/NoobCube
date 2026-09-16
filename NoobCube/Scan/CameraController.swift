@@ -55,7 +55,11 @@ final class CameraController: NSObject, ObservableObject {
     /// actually records.
     @Published private(set) var steadyReading: [RGBSample] = []
 
+    /// Whether frames are actually arriving.
     @Published private(set) var isRunning = false
+    /// Whether the camera is being woken up. Starting a capture session takes
+    /// the best part of a second, and saying so beats a black rectangle.
+    @Published private(set) var isStarting = false
     @Published private(set) var permissionDenied = false
 
     /// How still the reading has been, 0 to 1.
@@ -76,6 +80,9 @@ final class CameraController: NSObject, ObservableObject {
     private let queue = DispatchQueue(label: "noobcube.camera")
     private var recentReadings: [[RGBSample]] = []
     private let previewGeometry = PreviewGeometry()
+    /// The delayed lock of exposure and white balance, so coming back to the
+    /// camera can cancel one that is still pending from last time.
+    private var lockTask: Task<Void, Never>?
 
     /// Tell the reader how large the preview is drawn, so the square the child
     /// lines the cube up in is the square that actually gets sampled.
@@ -101,67 +108,99 @@ final class CameraController: NSObject, ObservableObject {
     }
 
     func stop() {
+        lockTask?.cancel()
+        lockTask = nil
         queue.async { [session] in
             if session.isRunning { session.stopRunning() }
         }
         isRunning = false
+        isStarting = false
     }
 
+    /// Set the session up if it has never been set up, and start it.
+    ///
+    /// All of it on the capture queue. Building an input from the device and
+    /// committing a session's configuration take their time, and doing that on
+    /// the main thread means the screen the child is looking at is frozen for
+    /// as long as it takes.
     private func configureAndRun() {
-        guard !isRunning else { return }
+        guard !isRunning, !isStarting else { return }
         permissionDenied = false
+        isStarting = true
 
-        if session.inputs.isEmpty {
-            session.beginConfiguration()
-            session.sessionPreset = .hd1280x720
-
+        let needsSetUp = session.inputs.isEmpty
+        queue.async { [weak self, session, output] in
             guard let device = AVCaptureDevice.default(.builtInWideAngleCamera,
-                                                       for: .video, position: .back),
-                  let input = try? AVCaptureDeviceInput(device: device),
-                  session.canAddInput(input) else {
-                session.commitConfiguration()
-                permissionDenied = true
+                                                       for: .video, position: .back) else {
+                Task { @MainActor in
+                    self?.permissionDenied = true
+                    self?.isStarting = false
+                }
                 return
             }
-            session.addInput(input)
 
-            output.videoSettings = [
-                kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
-            ]
-            output.alwaysDiscardsLateVideoFrames = true
-            output.setSampleBufferDelegate(self, queue: queue)
-            if session.canAddOutput(output) {
-                session.addOutput(output)
-            }
-
-            // Without this the buffers arrive the way the sensor sees the
-            // world — on its side — while the preview layer quietly rotates
-            // them for display. The sampling grid would then be at right
-            // angles to the cube the child is looking at.
-            if let connection = output.connection(with: .video) {
-                if connection.isVideoRotationAngleSupported(90) {
-                    connection.videoRotationAngle = 90          // portrait
+            if needsSetUp {
+                guard let input = try? AVCaptureDeviceInput(device: device),
+                      session.canAddInput(input) else {
+                    Task { @MainActor in
+                        self?.permissionDenied = true
+                        self?.isStarting = false
+                    }
+                    return
                 }
-                connection.isVideoMirrored = false
+                session.beginConfiguration()
+                session.sessionPreset = .hd1280x720
+                session.addInput(input)
+
+                output.videoSettings = [
+                    kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+                ]
+                output.alwaysDiscardsLateVideoFrames = true
+                if session.canAddOutput(output) {
+                    session.addOutput(output)
+                }
+
+                // Without this the buffers arrive the way the sensor sees the
+                // world — on its side — while the preview layer quietly rotates
+                // them for display. The sampling grid would then be at right
+                // angles to the cube the child is looking at.
+                if let connection = output.connection(with: .video) {
+                    if connection.isVideoRotationAngleSupported(90) {
+                        connection.videoRotationAngle = 90          // portrait
+                    }
+                    connection.isVideoMirrored = false
+                }
+                session.commitConfiguration()
             }
-            session.commitConfiguration()
 
-            configure(device)
-        }
-
-        isRunning = true
-        queue.async { [session] in
             if !session.isRunning { session.startRunning() }
+
+            Task { @MainActor in
+                guard let self else { return }
+                if needsSetUp { output.setSampleBufferDelegate(self, queue: self.queue) }
+                self.isStarting = false
+                self.isRunning = true
+                self.judgeTheRoomAgain(device)
+            }
         }
     }
 
-    /// Focus close, and stop the exposure and white balance hunting.
+    /// Let the camera judge the room, then hold it there.
     ///
     /// Auto white balance is the enemy here: it re-judges what counts as white
     /// every time the cube turns, so the same sticker reads differently from
     /// one side to the next. Locking it after a moment keeps all six sides
     /// measured under the same assumptions.
-    private func configure(_ device: AVCaptureDevice) {
+    ///
+    /// Done every time the camera is come back to, not once ever. It used to
+    /// run only when the session was first built, so a second scan was measured
+    /// under a judgement made about the room as it was during the first one —
+    /// and since the lock was never lifted, the picture could not adapt to a
+    /// different room, a different lamp or a different distance. Waiting for a
+    /// camera to come right when it has been told not to is a long wait.
+    private func judgeTheRoomAgain(_ device: AVCaptureDevice) {
+        lockTask?.cancel()
+
         try? device.lockForConfiguration()
         if device.isFocusModeSupported(.continuousAutoFocus) {
             device.focusMode = .continuousAutoFocus
@@ -177,10 +216,9 @@ final class CameraController: NSObject, ObservableObject {
         }
         device.unlockForConfiguration()
 
-        // Give it a second to settle on the scene, then hold it there.
-        Task { @MainActor [weak self] in
+        lockTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(1.5))
-            guard self != nil else { return }
+            guard !Task.isCancelled, self != nil else { return }
             try? device.lockForConfiguration()
             if device.isWhiteBalanceModeSupported(.locked) {
                 device.whiteBalanceMode = .locked

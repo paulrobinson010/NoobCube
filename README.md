@@ -164,6 +164,13 @@ order managed 61% when it was obeyed and nothing whatsoever when it was not. A
 side that came out wrong is put right by showing it again, which replaces that
 look.
 
+The camera is asked to judge the room every time the scan comes back to it,
+and is only told to hold that judgement once it has had a second and a half to
+make it. Exposure and white balance used to be locked once, the first time the
+session was ever built, and never let go — so a second scan was measured under
+a judgement made about the room during the first one, and the picture could not
+adapt to a different lamp or a different distance however long you waited.
+
 What survives is caught before it reaches the solver: a scan is checked for the
 three ways a cube becomes impossible — a flipped edge, a twisted corner, a
 swapped pair — and any square can be tapped to correct it.
