@@ -9,6 +9,19 @@ enum CubeColour: String, CaseIterable, Codable, Hashable, Sendable, Identifiable
 
     var id: String { rawValue }
 
+    /// Where this colour sits in ``allCases``, for indexing tables by colour
+    /// without hashing or searching for it every time.
+    var ordinal: Int {
+        switch self {
+        case .white: return 0
+        case .yellow: return 1
+        case .green: return 2
+        case .blue: return 3
+        case .red: return 4
+        case .orange: return 5
+        }
+    }
+
     /// What the app calls this colour out loud.
     var spokenName: String { rawValue }
 

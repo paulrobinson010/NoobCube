@@ -340,6 +340,60 @@ enum ColourClassifier {
     /// amount of counting stickers afterwards can tell you otherwise.
     static func settle(rawSamples: [RGBSample],
                        expectedCentres: [Face: CubeColour] = [:]) -> Settled {
+        settle(priced(rawSamples, expectedCentres: expectedCentres),
+               expectedCentres: expectedCentres)
+    }
+
+    /// A scan relit, levelled, and with every sticker priced as every colour.
+    ///
+    /// Working those prices out is nearly all of the work of settling a scan,
+    /// and none of it changes when the stickers are rearranged — so the top and
+    /// bottom can be tried at all four turns each, and six looks tried on six
+    /// sides several ways round, for the price of doing it once. Settling used
+    /// to redo the lot every time, and a hundred and twenty-eight of those at
+    /// the end of a scan was enough to hang the app.
+    struct Priced {
+        let samples: [RGBSample]
+        /// `prices[sticker * 6 + colour.ordinal]`.
+        fileprivate let prices: [Double]
+
+        func price(of sticker: Int, as colour: CubeColour) -> Double {
+            prices[sticker * 6 + colour.ordinal]
+        }
+
+        /// The same scan with one face's stickers turned on the spot.
+        func turning(_ face: Face, quarterTurns: Int) -> Priced {
+            let turns = ((quarterTurns % 4) + 4) % 4
+            guard turns > 0 else { return self }
+
+            var order = Array(0..<9)
+            for _ in 0..<turns {
+                // Clockwise: the new (row, column) comes from (2 - column, row).
+                var next = order
+                for row in 0..<3 {
+                    for column in 0..<3 {
+                        next[row * 3 + column] = order[(2 - column) * 3 + row]
+                    }
+                }
+                order = next
+            }
+
+            var samples = self.samples
+            var prices = self.prices
+            let base = face.rawValue * 9
+            for offset in 0..<9 {
+                let from = base + order[offset]
+                samples[base + offset] = self.samples[from]
+                for colour in 0..<6 {
+                    prices[(base + offset) * 6 + colour] = self.prices[from * 6 + colour]
+                }
+            }
+            return Priced(samples: samples, prices: prices)
+        }
+    }
+
+    static func priced(_ rawSamples: [RGBSample],
+                       expectedCentres: [Face: CubeColour] = [:]) -> Priced {
         precondition(rawSamples.count == 54)
         var relitSamples = rawSamples
         if let light = illuminant(ofScan: rawSamples, expectedCentres: expectedCentres) {
@@ -347,17 +401,28 @@ enum ColourClassifier {
         }
         let samples = levelled(whiteBalanced(relitSamples))
 
+        var prices = [Double](repeating: 0, count: 54 * 6)
+        for index in 0..<54 {
+            for colour in CubeColour.allCases {
+                prices[index * 6 + colour.ordinal] = cost(samples[index], as: colour)
+            }
+        }
+        return Priced(samples: samples, prices: prices)
+    }
+
+    static func settle(_ priced: Priced,
+                       expectedCentres: [Face: CubeColour] = [:]) -> Settled {
         // The centres anchor everything, so take them from what the scan
         // asked for rather than from the camera. Only fall back to reading
         // them when the caller could not say.
-        let naming = given(expectedCentres) ?? nameCentres(samples: samples)
+        let naming = given(expectedCentres) ?? nameCentres(samples: priced.samples)
 
         var assignment = [CubeColour?](repeating: nil, count: 54)
         for face in Face.allCases {
             assignment[face.centreIndex] = naming[face] ?? .white
         }
-        var fit = fill(&assignment, slots: CubeSlots.edges, naming: naming, samples: samples)
-        fit += fill(&assignment, slots: CubeSlots.corners, naming: naming, samples: samples)
+        var fit = fill(&assignment, slots: CubeSlots.edges, naming: naming, priced: priced)
+        fit += fill(&assignment, slots: CubeSlots.corners, naming: naming, priced: priced)
         return Settled(colours: assignment.map { $0 ?? .white }, fit: fit)
     }
 
@@ -377,19 +442,26 @@ enum ColourClassifier {
     private static func fill(_ assignment: inout [CubeColour?],
                              slots: [CubeSlot],
                              naming: [Face: CubeColour],
-                             samples: [RGBSample]) -> Double {
+                             priced: Priced) -> Double {
         // The pieces that exist are exactly the colours of the slots: a cube
         // has one of each, wherever it has been turned to.
         let pieces = slots.map { slot in slot.faces.map { naming[$0] ?? .white } }
+        let sides = pieces[0].count
 
-        var options: [(cost: Double, slot: Int, piece: Int, colours: [CubeColour])] = []
+        // Nothing but numbers in here: this list is built and sorted for every
+        // way the scan might be arranged, so carrying the colours along and
+        // allocating an array per option was most of the cost of settling.
+        var options: [(cost: Double, slot: Int, piece: Int, turn: Int)] = []
+        options.reserveCapacity(slots.count * pieces.count * sides)
         for (s, slot) in slots.enumerated() {
             for (p, piece) in pieces.enumerated() {
-                for turn in 0..<piece.count {
-                    let turned = Array(piece[turn...] + piece[..<turn])
-                    let total = zip(slot.indices, turned)
-                        .reduce(0.0) { $0 + cost(samples[$1.0], as: $1.1) }
-                    options.append((total, s, p, turned))
+                for turn in 0..<sides {
+                    var total = 0.0
+                    for position in 0..<sides {
+                        total += priced.price(of: slot.indices[position],
+                                              as: piece[(position + turn) % sides])
+                    }
+                    options.append((total, s, p, turn))
                 }
             }
         }
@@ -403,8 +475,10 @@ enum ColourClassifier {
             slotTaken[option.slot] = true
             pieceTaken[option.piece] = true
             fit += option.cost
-            for (index, colour) in zip(slots[option.slot].indices, option.colours) {
-                assignment[index] = colour
+            let piece = pieces[option.piece]
+            for position in 0..<sides {
+                assignment[slots[option.slot].indices[position]] =
+                    piece[(position + option.turn) % sides]
             }
         }
         return fit

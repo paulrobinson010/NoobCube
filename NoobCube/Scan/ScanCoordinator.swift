@@ -468,7 +468,11 @@ final class ScanCoordinator: ObservableObject {
             for (index, side) in order.enumerated() {
                 for offset in 0..<9 { arranged[side * 9 + offset] = looks[index][offset] }
             }
-            let trial = bestReading(of: arranged, expecting: expected)
+            // Priced once for this arrangement and reused for all sixteen
+            // turns of the top and bottom: turning stickers on the spot does
+            // not change what any of them costs to name.
+            let trial = bestReading(ColourClassifier.priced(arranged, expectedCentres: expected),
+                                    expecting: expected)
             if first == nil { first = trial }
             guard let converted = try? trial.cube.cubeState(),
                   converted.state.isValid else { continue }
@@ -477,11 +481,13 @@ final class ScanCoordinator: ObservableObject {
         return best ?? first ?? (cube: ScannedCube(), fit: .greatestFiniteMagnitude)
     }
 
-    /// How many of the 720 ways to file six readings are read properly.
+    /// How many of the 720 ways to file six looks are settled properly.
     ///
     /// The middles put the right one first about four times in five, and in
-    /// the top eight better than 97 times in a hundred. Each one costs
-    /// sixteen settles, which is a few milliseconds all told.
+    /// the top eight better than 97 times in a hundred. Each one is settled at
+    /// all sixteen turns of the top and bottom, so this is a hundred and
+    /// twenty-eight settles — which is only affordable because a scan is
+    /// priced once per arrangement rather than once per settle.
     private static let assignmentsTried = 8
 
     /// Every way of filing six readings as six sides.
@@ -512,16 +518,16 @@ final class ScanCoordinator: ObservableObject {
     /// — a wrong turn can still land on one — but it cannot also explain the
     /// colours better than the truth does. The straight reading is kept as the
     /// tie-break, because the child was probably holding it as asked.
-    private func bestReading(of samples: [RGBSample],
+    private func bestReading(_ priced: ColourClassifier.Priced,
                              expecting expected: [Face: CubeColour])
     -> (cube: ScannedCube, fit: Double) {
         var straight: (cube: ScannedCube, fit: Double)?
         var best: (cube: ScannedCube, fit: Double)?
         for topTurns in 0..<4 {
+            let top = priced.turning(.U, quarterTurns: topTurns)
             for bottomTurns in 0..<4 {
                 let settled = ColourClassifier.settle(
-                    rawSamples: Self.rotating(samples, top: topTurns, bottom: bottomTurns),
-                    expectedCentres: expected)
+                    top.turning(.D, quarterTurns: bottomTurns), expectedCentres: expected)
                 let trial = (cube: ScannedCube(colours: settled.colours.map { Optional($0) }),
                              fit: settled.averageFit)
                 // Kept so there is something to show, and something to complain
@@ -533,27 +539,6 @@ final class ScanCoordinator: ObservableObject {
             }
         }
         return best ?? straight ?? (cube: ScannedCube(), fit: .greatestFiniteMagnitude)
-    }
-
-    /// The same readings with the top and bottom faces turned on the spot.
-    private static func rotating(_ samples: [RGBSample],
-                                 top: Int, bottom: Int) -> [RGBSample] {
-        var turned = samples
-        for (face, quarterTurns) in [(Face.U, top), (Face.D, bottom)] {
-            var grid = (0..<9).map { samples[face.rawValue * 9 + $0] }
-            for _ in 0..<(((quarterTurns % 4) + 4) % 4) {
-                // Clockwise: the new (row, column) comes from (2 - column, row).
-                var next = grid
-                for row in 0..<3 {
-                    for column in 0..<3 {
-                        next[row * 3 + column] = grid[(2 - column) * 3 + row]
-                    }
-                }
-                grid = next
-            }
-            for offset in 0..<9 { turned[face.rawValue * 9 + offset] = grid[offset] }
-        }
-        return turned
     }
 
     // MARK: - Fixing a square by hand
