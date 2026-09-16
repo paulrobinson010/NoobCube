@@ -252,10 +252,22 @@ final class SolveSession: ObservableObject {
         narrator.say(explanation(of: step))
     }
 
-    /// Light up the one square this step is about, and arc an arrow from it to
-    /// the place it is going.
+    /// Show what this step is about: the one square, and where it is going.
     func showStepMarks() {
         guard let step = currentStep else { return }
+
+        // Turning the whole cube moves nothing *on* the cube, so an arrow from
+        // one square to another says nothing — it just draws a line between two
+        // places that stay exactly where they are relative to each other. The
+        // curled arrow, which means "spin this round", is the honest picture.
+        if let spin = step.moves.first, step.moves.allSatisfy(\.isWholeCubeTurn) {
+            scene.highlight(square: nil)
+            scene.hideJourney()
+            scene.showTurnArrow(for: spin)
+            return
+        }
+
+        scene.hideTurnArrow()
         scene.highlight(square: step.marker)
         if let marker = step.marker, let target = step.target {
             scene.showJourney(from: marker, to: target)

@@ -27,8 +27,10 @@ final class CubeSceneController {
     /// The curved arrow showing which way the next move goes, if one is showing.
     var arrowNode: SCNNode?
 
-    /// The arrow arcing from a square to where it is about to end up.
+    /// The arrow arcing from a square to where it is about to end up, and the
+    /// ring around the square it is going to.
     var journeyNode: SCNNode?
+    var journeyRing: SCNNode?
 
     private static let cubeletSize: CGFloat = 1.0
     private static let gap: CGFloat = 0.06

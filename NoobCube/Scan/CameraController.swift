@@ -65,7 +65,11 @@ final class CameraController: NSObject, ObservableObject {
     @Published private(set) var settling: Double = 0
 
     /// Whether the guide square is looking at a cube rather than the room.
-    @Published private(set) var isCubeInFrame = false
+    ///
+    /// Decided by shape (see ``CubePresence``). While nothing cube-shaped has
+    /// ever been seen — which is also what it looks like when the check does
+    /// not work — this stays true, so it can never be the reason a scan fails.
+    @Published private(set) var isCubeInFrame = true
 
     let session = AVCaptureSession()
     private let output = AVCaptureVideoDataOutput()
@@ -219,6 +223,10 @@ final class CameraController: NSObject, ObservableObject {
                          blue: median(blues) / 255)
     }
 
+    /// When a cube shape was last seen, and the shape check itself.
+    private var lastSawCube = Date.distantPast
+    private let presence = CubePresence()
+
     private nonisolated func median(_ values: [Double]) -> Double {
         let sorted = values.sorted()
         let middle = sorted.count / 2
@@ -230,23 +238,9 @@ final class CameraController: NSObject, ObservableObject {
     /// camera is looking at is a cube at all.
     struct Reading {
         var samples: [RGBSample]
-        var looksLikeACube: Bool
-    }
-
-    /// The average brightness of a few pixels, for the gaps between stickers.
-    private nonisolated func brightness(atX x: Double, y: Double, radius: Double,
-                                        width: Int, height: Int, bytesPerRow: Int,
-                                        base: UnsafeMutablePointer<UInt8>) -> Double? {
-        var values: [Double] = []
-        for step in 0..<6 {
-            let angle = 2 * Double.pi * Double(step) / 6
-            let px = Int(x + radius * cos(angle))
-            let py = Int(y + radius * sin(angle))
-            guard px >= 0, px < width, py >= 0, py < height else { continue }
-            let pixel = base.advanced(by: py * bytesPerRow + px * 4)
-            values.append(Double(max(pixel[0], max(pixel[1], pixel[2]))) / 255)
-        }
-        return values.isEmpty ? nil : median(values)
+        /// Whether the camera is looking at anything at all, as opposed to a
+        /// pocket or a blown-out window.
+        var isLit: Bool
     }
 
     fileprivate nonisolated func readStickers(from buffer: CVPixelBuffer) -> Reading? {
@@ -289,53 +283,30 @@ final class CameraController: NSObject, ObservableObject {
             }
         }
 
-        // Is this a cube at all?
-        //
-        // A cube's stickers are separated by black plastic, and almost nothing
-        // else the camera gets pointed at has a dark grid ruled across it. A
-        // wall, a carpet or the ceiling is perfectly still, which is exactly
-        // why the app used to settle on one and record a side of nothing.
-        var gaps: [Double] = []
-        for row in 0..<3 {
-            for column in 0..<2 {
-                if let value = brightness(atX: originX + cell * (Double(column) + 1),
-                                          y: originY + cell * (Double(row) + 0.5),
-                                          radius: cell * 0.06,
-                                          width: width, height: height,
-                                          bytesPerRow: bytesPerRow, base: base) {
-                    gaps.append(value)
-                }
-            }
-        }
-        for row in 0..<2 {
-            for column in 0..<3 {
-                if let value = brightness(atX: originX + cell * (Double(column) + 0.5),
-                                          y: originY + cell * (Double(row) + 1),
-                                          radius: cell * 0.06,
-                                          width: width, height: height,
-                                          bytesPerRow: bytesPerRow, base: base) {
-                    gaps.append(value)
-                }
-            }
-        }
+        // Bright enough to be looking at something at all. Anything more
+        // specific than that is done by shape, in CubePresence: the first
+        // attempt tested for the black grid between stickers, which a
+        // stickerless cube does not have — measured on a real one, the seams
+        // came out 1.03 times the brightness of the squares, so the test threw
+        // out exactly the cubes it was supposed to be reading.
+        let light = median(samples.map { $0.hsv.value })
+        let lit = light > 0.10 && light < 0.995
 
-        let stickerLight = median(samples.map { $0.hsv.value })
-        let gapLight = gaps.isEmpty ? stickerLight : median(gaps)
-        // Bright enough to be looking at something, and ruled with lines
-        // noticeably darker than the squares between them.
-        let looksLikeACube = stickerLight > 0.12 && gapLight < stickerLight * 0.7
-
-        return Reading(samples: samples, looksLikeACube: looksLikeACube)
+        return Reading(samples: samples, isLit: lit)
     }
 
     // MARK: - Settling
 
     /// Fold a new frame into the running window and re-derive the steady reading.
-    private func accept(_ reading: Reading) {
-        // An empty table is perfectly still. Nothing settles until there is a
-        // cube to settle on, so the app can no longer take a picture of a wall.
-        isCubeInFrame = reading.looksLikeACube
-        guard reading.looksLikeACube else {
+    private func accept(_ reading: Reading, sawCube: Bool?, shapeCheckWorks: Bool) {
+        if let sawCube, sawCube { lastSawCube = Date() }
+        // An empty table is perfectly still, which is why stillness alone was
+        // never enough to know there was anything to read. Until a cube shape
+        // has ever been recognised the check has no opinion and is ignored.
+        let recently = Date().timeIntervalSince(lastSawCube) < 0.8
+        isCubeInFrame = reading.isLit && (!shapeCheckWorks || recently)
+
+        guard isCubeInFrame else {
             liveSamples = reading.samples
             resetSteadiness()
             return
@@ -392,6 +363,7 @@ final class CameraController: NSObject, ObservableObject {
     }
 
     func resetSteadiness() {
+        lastSawCube = .distantPast
         recentReadings.removeAll()
         steadyReading = []
         steadiness = 0
@@ -405,8 +377,12 @@ extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate {
                                    from connection: AVCaptureConnection) {
         guard let buffer = CMSampleBufferGetImageBuffer(sampleBuffer),
               let reading = readStickers(from: buffer) else { return }
+
+        let sawCube = presence.look(at: buffer)
+        let settled = presence.hasAnOpinion
+
         Task { @MainActor in
-            self.accept(reading)
+            self.accept(reading, sawCube: sawCube, shapeCheckWorks: settled)
         }
     }
 }

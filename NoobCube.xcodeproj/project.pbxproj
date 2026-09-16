@@ -52,6 +52,7 @@
 		55BB87842B3FE64420CC6E2A = {isa = PBXBuildFile; fileRef = 2CB8ABBE97ECC7DBA44FEF31; };
 		19A106E97D3AD1DEA3726B55 = {isa = PBXBuildFile; fileRef = 6CF8DFCB545CEF3BE984C198; };
 		B86B7592733FD9D7C7686F42 = {isa = PBXBuildFile; fileRef = 371793A352BB06B90F08D827; };
+		DCD88F911A5534E1D24AA251 = {isa = PBXBuildFile; fileRef = 3D7EDCFB0475A1E69EC17AEE; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -113,6 +114,7 @@
 		2CB8ABBE97ECC7DBA44FEF31 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "BrandFont.swift"; sourceTree = "<group>"; };
 		6CF8DFCB545CEF3BE984C198 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StageTint.swift"; sourceTree = "<group>"; };
 		371793A352BB06B90F08D827 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "JourneyArrow.swift"; sourceTree = "<group>"; };
+		3D7EDCFB0475A1E69EC17AEE = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CubePresence.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -158,6 +160,7 @@
 		3FE09AD2DEA8103ED1C5C2FF /* Scan */ = {
 			isa = PBXGroup;
 			children = (
+				3D7EDCFB0475A1E69EC17AEE,
 				F399168BC23552D0FC060EFF /* CameraController.swift */,
 				66D93017330A460C5A222D0E /* ColourClassifier.swift */,
 				D229CF9C00BAD3B49258385F /* ReadyView.swift */,
@@ -367,6 +370,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DCD88F911A5534E1D24AA251,
 				B86B7592733FD9D7C7686F42,
 				19A106E97D3AD1DEA3726B55,
 				55BB87842B3FE64420CC6E2A,
