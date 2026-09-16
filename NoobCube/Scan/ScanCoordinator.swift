@@ -470,9 +470,9 @@ final class ScanCoordinator: ObservableObject {
             let converted = try candidate.cubeState()
             let problems = converted.state.validate()
             if let first = problems.first {
-                problem = first.message
+                problem = inColours(first)
                 result = nil
-                narrator.say("Hmm, something doesn't look right. \(first.message) Tap any square to fix it.")
+                narrator.say("Hmm, that doesn't look right. \(inColours(first))")
             } else {
                 problem = nil
                 result = converted
@@ -614,6 +614,31 @@ final class ScanCoordinator: ObservableObject {
         revalidate()
     }
 
+    /// A complaint about the cube, said in colours rather than in the letters
+    /// the solver thinks in.
+    ///
+    /// "There are 8 U stickers" means nothing to anyone holding a cube. U is
+    /// the top face in the solver's notation; what the child is looking at is
+    /// yellow. And every one of these is fixable by showing the side again, so
+    /// each one says so.
+    private func inColours(_ problem: CubeState.Problem) -> String {
+        switch problem {
+        case .wrongStickerCount(let face, let count):
+            let colour = scan[face.centreIndex]?.displayName ?? "those"
+            return "I counted \(count) \(colour) squares, and there should be 9. "
+                 + "Hold that side up and take it again."
+        case .duplicateCentre:
+            return "Two sides have the same middle, which a cube cannot have. "
+                 + "Let's go round again."
+        case .badPiece:
+            return "One of the corners or edges came out wrong. "
+                 + "Hold that side up and take it again."
+        case .unsolvable(let detail):
+            return detail.replacingOccurrences(of: "check the scan.",
+                                               with: "hold that side up and take it again.")
+        }
+    }
+
     private func revalidate() {
         guard scan.isComplete else {
             result = nil
@@ -623,7 +648,7 @@ final class ScanCoordinator: ObservableObject {
             let converted = try scan.cubeState()
             let problems = converted.state.validate()
             if let first = problems.first {
-                problem = first.message
+                problem = inColours(first)
                 result = nil
             } else {
                 problem = nil

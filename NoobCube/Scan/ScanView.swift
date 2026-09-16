@@ -111,7 +111,11 @@ struct ScanView: View {
                 guideOverlay
             }
         }
-        .frame(height: 300)
+        // Smaller once the scan is in: the same screen then also carries the
+        // net, whatever went wrong, and the way on, and at full height none of
+        // it fitted — the bottom button was off the screen and the top of the
+        // header was pushed up under the clock.
+        .frame(height: coordinator.isComplete ? 196 : 300)
         .padding(.horizontal, 20)
     }
 
@@ -225,19 +229,23 @@ struct ScanView: View {
 
     private var finishedControls: some View {
         VStack(spacing: 12) {
-            Text("Something wrong? Hold up that side and take it again, "
-               + "or tap any square to fix it.")
+            Text("Not right? Hold that side up and take it again.")
                 .font(.brand(size: 16, weight: .medium))
                 .foregroundStyle(Theme.muted)
                 .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
 
             if let problem = coordinator.problem {
                 Text(problem)
                     .font(.brand(size: 16, weight: .semibold))
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity)
-                    .cardBackground()
+                    .padding(12)
+                    .background(
+                        RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
+                            .fill(Theme.card))
             }
 
             Button("Yes, that's my cube!") {
@@ -253,7 +261,11 @@ struct ScanView: View {
                 .buttonStyle(BigButtonStyle(isProminent: false))
 
             Button("Start the whole thing again") { coordinator.begin() }
-                .buttonStyle(BigButtonStyle(tint: Theme.muted, isProminent: false))
+                .buttonStyle(.plain)
+                .font(.brand(size: 15, weight: .semibold))
+                .foregroundStyle(Theme.muted)
+                .frame(maxWidth: .infinity, minHeight: 40)
+                .contentShape(Rectangle())
         }
         .padding(.horizontal, 20)
     }
