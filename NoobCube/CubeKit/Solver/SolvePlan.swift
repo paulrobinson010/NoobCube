@@ -1,5 +1,48 @@
 import Foundation
 
+/// One piece being put where it belongs, and why.
+///
+/// A child can copy "F, then R, then U" all afternoon and learn nothing. What
+/// makes it stick is knowing that *this* piece is going into *that* gap, that
+/// you line it up first, and that the moves after the lining up are always the
+/// same ones. So the plan is kept in those units and the app says what it is
+/// about to do before it does it.
+struct SolveStep: Identifiable, Hashable, Sendable {
+
+    /// The colours of the piece being put right, in solver space. Empty for a
+    /// step that is not about one piece, like the first turn of the whole cube.
+    var piece: [Face] = []
+
+    /// Where that piece is now, and the gap it is going into, as sticker
+    /// positions. Both are read before any of the step's moves run, so they
+    /// are the positions on screen while the child is being told about it.
+    var from: [Int] = []
+    var to: [Int] = []
+
+    /// Getting it lined up. Leaving this out is how the method gets taught
+    /// badly: the moves look like magic because the setting up was invisible.
+    var lineUp: [Move] = []
+
+    /// The moves that do the work — the same ones every time, which is the
+    /// whole point of learning them.
+    var algorithm: [Move] = []
+    var algorithmName: String?
+
+    /// What the lining up is for, and what happens when the moves run.
+    var lineUpText: String?
+    var outcome: String?
+
+    /// False for a step that only gets something out of the way, so nothing
+    /// claims to have finished a piece it has not.
+    var places = false
+
+    var index = 0
+    var id: Int { index }
+
+    var moves: [Move] { lineUp + algorithm }
+    var isEmpty: Bool { moves.isEmpty }
+}
+
 /// One step of the beginner method: a goal to reach and the moves that reach it.
 struct SolveStage: Identifiable, Hashable, Sendable {
 
@@ -16,11 +59,26 @@ struct SolveStage: Identifiable, Hashable, Sendable {
     }
 
     let kind: Kind
-    var moves: [Move]
+    /// The pieces this stage puts right, in order.
+    var steps: [SolveStep]
+
+    /// Every move of the stage, which is simply its steps end to end.
+    var moves: [Move] { steps.flatMap(\.moves) }
 
     var id: Kind { kind }
-    var isDone: Bool { moves.isEmpty }
+    var isDone: Bool { steps.allSatisfy(\.isEmpty) }
     var moveCount: Int { moves.count }
+
+    /// The step that move number `index` belongs to, and where the step starts.
+    func step(atMove index: Int) -> (step: SolveStep, start: Int)? {
+        var start = 0
+        for step in steps {
+            let end = start + step.moves.count
+            if index < end { return (step, start) }
+            start = end
+        }
+        return nil
+    }
 }
 
 extension SolveStage.Kind {

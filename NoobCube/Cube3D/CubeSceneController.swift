@@ -191,6 +191,25 @@ final class CubeSceneController {
         pulse(faceletIndices)
     }
 
+    /// Point at a piece and at the gap it is going into, in the two colours the
+    /// app uses everywhere for "look here" and "done", so that "this one goes
+    /// there" is a single picture rather than two separate instructions.
+    func highlight(piece: Set<Int>, destination: Set<Int>) {
+        let lookHere = UIColor(Theme.attention.dimmed(to: 0.5))
+        let going = UIColor(Theme.done.dimmed(to: 0.4))
+        for (index, node) in stickerNodes {
+            guard let material = node.geometry?.firstMaterial else { continue }
+            if piece.contains(index) {
+                material.emission.contents = lookHere
+            } else if destination.contains(index) {
+                material.emission.contents = going
+            } else {
+                material.emission.contents = UIColor.black
+            }
+        }
+        pulse(piece)
+    }
+
     private func pulse(_ indices: Set<Int>) {
         for index in indices {
             guard let node = stickerNodes[index] else { continue }

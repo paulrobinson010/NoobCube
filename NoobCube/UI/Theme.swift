@@ -55,12 +55,14 @@ extension Color {
     ///
     /// The same sum the website does for `--action-shadow`, so a button looks
     /// the same in both places rather than nearly the same.
-    var buttonShadow: Color {
+    var buttonShadow: Color { dimmed(to: Theme.shadowDepth) }
+
+    /// This colour with the light turned down, keeping its hue.
+    func dimmed(to depth: CGFloat) -> Color {
         var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
         guard UIColor(self).getRed(&red, green: &green, blue: &blue, alpha: &alpha) else {
             return self
         }
-        let depth = Theme.shadowDepth
         return Color(red: red * depth, green: green * depth, blue: blue * depth)
     }
 }

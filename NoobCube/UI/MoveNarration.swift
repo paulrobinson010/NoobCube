@@ -66,3 +66,12 @@ extension Array where Element == Move {
         return map(\.spokenInstruction).joined(separator: " ")
     }
 }
+
+extension String {
+    /// The same words with a capital letter at the front, for a label that
+    /// starts a line rather than sitting inside a sentence.
+    var sentenceCased: String {
+        guard let first else { return self }
+        return first.uppercased() + dropFirst()
+    }
+}

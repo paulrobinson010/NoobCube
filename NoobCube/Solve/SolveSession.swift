@@ -22,6 +22,9 @@ final class SolveSession: ObservableObject {
     }
 
     enum Phase: Hashable {
+        /// Saying which piece is about to move and where it is going, before
+        /// any of the moves that do it.
+        case introducingStep
         /// Working through the current stage.
         case coaching
         /// The child said they finished a stage themselves; offer a re-scan.
@@ -67,6 +70,45 @@ final class SolveSession: ObservableObject {
     var currentMove: Move? {
         guard let stage, moveIndex < stage.moves.count else { return nil }
         return stage.moves[moveIndex]
+    }
+
+    /// The piece being put right at the moment, and the moves that do it.
+    var currentStep: SolveStep? { stage?.step(atMove: moveIndex)?.step }
+
+    /// How far into the current step we are, for the move strip.
+    var moveIndexWithinStep: Int {
+        guard let found = stage?.step(atMove: moveIndex) else { return 0 }
+        return moveIndex - found.start
+    }
+
+    /// The colours of the piece a step is about, read off the cube as it is
+    /// now — which is what the child is looking at.
+    func colours(of step: SolveStep) -> [CubeColour] {
+        step.piece.compactMap { displayCube[$0.centreIndex] }
+    }
+
+    /// "the white and blue edge", "the white, blue and red corner".
+    func name(of step: SolveStep) -> String {
+        let names = colours(of: step).map(\.spokenName)
+        let kind = step.piece.count == 3 ? "corner" : "edge"
+        switch names.count {
+        case 2: return "the \(names[0]) and \(names[1]) \(kind)"
+        case 3: return "the \(names[0]), \(names[1]) and \(names[2]) \(kind)"
+        default: return "this piece"
+        }
+    }
+
+    /// The whole of what a step is about, in one paragraph, for saying aloud.
+    func explanation(of step: SolveStep) -> String {
+        var parts: [String] = []
+        if !step.piece.isEmpty {
+            parts.append(step.places
+                         ? "Now \(name(of: step)) goes where it belongs."
+                         : "First, \(name(of: step)) is in the way.")
+        }
+        if let lineUp = step.lineUpText { parts.append(lineUp) }
+        if let outcome = step.outcome { parts.append(outcome) }
+        return parts.joined(separator: " ")
     }
 
     var remainingMoves: [Move] {
@@ -118,7 +160,9 @@ final class SolveSession: ObservableObject {
     }
 
     func announceCurrentStep() {
-        if help == .moveByMove, currentMove != nil {
+        if phase == .introducingStep, let step = currentStep {
+            narrator.say(explanation(of: step))
+        } else if help == .moveByMove, currentMove != nil {
             announceCurrentMove()
         } else {
             announceStage()
@@ -131,6 +175,7 @@ final class SolveSession: ObservableObject {
     func confirmCurrentMove() {
         guard !isBusy, let move = currentMove else { return }
         isBusy = true
+        let wasStep = currentStep
         scene.animate(move, duration: 0.42) { [weak self] in
             guard let self else { return }
             self.displayCube = self.displayCube.applying(move)
@@ -138,6 +183,9 @@ final class SolveSession: ObservableObject {
             self.isBusy = false
             if self.currentMove == nil {
                 self.finishStage()
+            } else if self.currentStep != wasStep {
+                // A new piece: say what it is before moving it.
+                self.introduceStep()
             } else {
                 self.presentCurrentMove()
             }
@@ -174,10 +222,56 @@ final class SolveSession: ObservableObject {
         scene.reset(to: displayCube.colours)
         phase = .coaching
         if help == .moveByMove {
-            presentCurrentMove()
+            introduceStep()
         } else {
             scene.hideTurnArrow()
             announceStage()
+        }
+    }
+
+    /// Say what the next piece is and where it is going, before moving it.
+    ///
+    /// This is the part that turns copying into learning. The moves on their
+    /// own are a recipe; knowing that *this* piece is going into *that* gap,
+    /// and that you line it up first, is the thing a child can still do
+    /// tomorrow without the app.
+    func introduceStep() {
+        guard help == .moveByMove, let step = currentStep, currentMove != nil else {
+            phase = .coaching
+            presentCurrentMove()
+            return
+        }
+        phase = .introducingStep
+        scene.hideTurnArrow()
+        showStepMarks()
+        narrator.say(explanation(of: step))
+    }
+
+    /// Light up the piece and the gap it is going into.
+    func showStepMarks() {
+        guard let step = currentStep else { return }
+        scene.highlight(piece: Set(step.from), destination: Set(step.to))
+    }
+
+    /// Get on with the moves for the step just explained.
+    func beginStepMoves() {
+        phase = .coaching
+        presentCurrentMove()
+    }
+
+    /// Play the whole step through and wind it straight back, so the child can
+    /// watch the piece travel before trying it themselves.
+    func demonstrateStep() {
+        guard !isBusy, let step = currentStep, !step.moves.isEmpty else { return }
+        isBusy = true
+        narrator.say("Watch where it goes.")
+        playSequence(step.moves) { [weak self] in
+            guard let self else { return }
+            self.playSequence(Move.invert(step.moves)) {
+                self.isBusy = false
+                self.scene.hideTurnArrow()
+                self.showStepMarks()
+            }
         }
     }
 
@@ -289,6 +383,9 @@ final class SolveSession: ObservableObject {
     func handleSmartCubeTurn(_ move: Move) -> Bool {
         guard let expected = currentMove else { return false }
         guard move == expected else { return false }
+        // Turning the cube is the child saying they are ready, so a step being
+        // explained gets on with it rather than waiting for a tap as well.
+        if phase == .introducingStep { beginStepMoves() }
         confirmCurrentMove()
         return true
     }

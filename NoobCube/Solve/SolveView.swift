@@ -20,8 +20,12 @@ struct SolveView: View {
                 .frame(height: 300)
                 .padding(.vertical, 4)
 
-            if session.help == .moveByMove, let stage = session.stage {
-                MoveStripView(moves: stage.moves, currentIndex: session.moveIndex)
+            if session.help == .moveByMove, let step = session.currentStep {
+                // The step's own moves, not the whole stage's: this is the set
+                // that goes together, and the set worth learning.
+                MoveStripView(moves: step.moves,
+                              currentIndex: session.phase == .introducingStep
+                                  ? -1 : session.moveIndexWithinStep)
             }
 
             instructionCard
@@ -58,7 +62,66 @@ struct SolveView: View {
         .padding(.top, 12)
     }
 
+    /// What is about to happen, before it happens: which piece, going where.
+    @ViewBuilder
+    private func stepCard(_ step: SolveStep) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                ForEach(Array(session.colours(of: step).enumerated()), id: \.offset) { _, colour in
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(colour.swiftUIColor)
+                        .frame(width: 26, height: 26)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                .strokeBorder(.black.opacity(0.35), lineWidth: 1)
+                        )
+                }
+                if !step.piece.isEmpty {
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 15, weight: .black))
+                        .foregroundStyle(Theme.done)
+                    Text(step.places ? "goes home" : "out of the way")
+                        .font(.brand(size: 16, weight: .bold))
+                        .foregroundStyle(Theme.done)
+                }
+            }
+
+            if !step.piece.isEmpty {
+                Text(session.name(of: step).sentenceCased)
+                    .font(.brand(size: 24, weight: .heavy))
+                    .foregroundStyle(.white)
+            }
+
+            if let lineUp = step.lineUpText {
+                Label(lineUp, systemImage: "scope")
+                    .font(.brand(size: 16, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.9))
+            }
+            if let outcome = step.outcome {
+                Text(outcome)
+                    .font(.brand(size: 15, weight: .medium))
+                    .foregroundStyle(Theme.muted)
+            }
+            if let name = step.algorithmName {
+                Text("Then \(name): \(step.algorithm.map(\.notation).joined(separator: " "))")
+                    .font(.brand(size: 15, weight: .bold))
+                    .foregroundStyle(Theme.attention)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .cardBackground(stripe: Theme.attention)
+    }
+
+    @ViewBuilder
     private var instructionCard: some View {
+        if session.phase == .introducingStep, let step = session.currentStep {
+            stepCard(step)
+        } else {
+            movesCard
+        }
+    }
+
+    private var movesCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             if session.phase == .finished {
                 Text("You solved it! 🎉")
@@ -102,6 +165,23 @@ struct SolveView: View {
                     .buttonStyle(BigButtonStyle())
                 Button("Keep going without looking") { session.skipToNextStage() }
                     .buttonStyle(BigButtonStyle(tint: Theme.muted, isProminent: false))
+            }
+
+        case .introducingStep:
+            VStack(spacing: 12) {
+                Button {
+                    session.beginStepMoves()
+                } label: {
+                    Label("Show me how", systemImage: "arrow.turn.up.right")
+                }
+                .buttonStyle(BigButtonStyle())
+                .disabled(session.isBusy)
+
+                Button("Watch it happen first") { session.demonstrateStep() }
+                    .buttonStyle(BigButtonStyle(tint: Theme.attention, isProminent: false))
+                    .disabled(session.isBusy)
+
+                rescanButton
             }
 
         case .coaching:

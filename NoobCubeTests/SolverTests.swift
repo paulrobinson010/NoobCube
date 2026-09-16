@@ -132,6 +132,117 @@ final class SolverTests: XCTestCase {
         XCTAssertThrowsError(try BeginnerSolver.solve(CubeState(facelets: facelets)))
     }
 
+    // MARK: - Steps
+
+    /// What each face is called after a step's whole-cube turns.
+    ///
+    /// Turning the whole cube renames the faces so that a solved cube still
+    /// reads as solved, which means a piece cannot be followed across a step by
+    /// its colours alone.
+    private func renaming(after moves: [Move]) -> [Face: Face] {
+        var map: [Face: Face] = Dictionary(uniqueKeysWithValues: Face.allCases.map { ($0, $0) })
+        let spins = moves.filter(\.isWholeCubeTurn)
+        guard !spins.isEmpty else { return map }
+
+        // Draw the faces as colours, turn the picture, and read the middles.
+        let drawn = ScannedCube(colours: CubeState.solved.facelets.map {
+            Optional(CubeColour.defaultColour(for: $0))
+        })
+        let turned = drawn.applying(spins)
+        for face in Face.allCases {
+            guard let colour = turned[face.centreIndex],
+                  let origin = Face.allCases.first(where: {
+                      CubeColour.defaultColour(for: $0) == colour
+                  }) else { continue }
+            map[origin] = face
+        }
+        return map
+    }
+
+    /// Every step says which piece it is moving and where it is going. If any
+    /// of that is wrong the app teaches a child something false, which is worse
+    /// than teaching them nothing — so each one is replayed and checked.
+    func testEveryStepDoesWhatItSaysItWill() throws {
+        var generator = SeededGenerator(seed: 5)
+        var placed = 0
+
+        for _ in 0..<60 {
+            let start = CubeState.solved.applying(randomScramble(using: &generator))
+            let plan = try BeginnerSolver.solve(start)
+            var state = start
+
+            for stage in plan.stages {
+                for step in stage.steps {
+                    if !step.piece.isEmpty {
+                        // The piece really is where the step points.
+                        let slot = CubeSlots.slot(holding: Set(step.piece), in: state)
+                        XCTAssertEqual(slot?.indices, step.from,
+                                       "\(stage.kind) pointed at the wrong place")
+                    }
+
+                    state = state.applying(step.moves)
+                    guard step.places else { continue }
+                    placed += 1
+
+                    let renamed = renaming(after: step.moves)
+                    let piece = Set(step.piece.compactMap { renamed[$0] })
+                    if stage.kind == .daisy {
+                        // A petal: up top with its white sticker facing the sky.
+                        let slot = CubeSlots.slot(holding: piece, in: state)
+                        XCTAssertTrue(slot?.contains(.U) ?? false,
+                                      "a daisy step did not make a petal")
+                        XCTAssertEqual(slot?.sticker(on: .U, in: state), renamed[.D],
+                                       "a daisy petal came up the wrong way round")
+                    } else {
+                        XCTAssertTrue(CubeSlots.slot(with: piece)?.isSolved(in: state) ?? false,
+                                      "\(stage.kind) claimed to place a piece and did not")
+                    }
+                }
+            }
+            XCTAssertTrue(state.isSolved, "replaying the steps did not solve the cube")
+        }
+        XCTAssertGreaterThan(placed, 1000, "hardly any steps were checked")
+    }
+
+    /// Nothing the child is shown may be blank, and nothing that claims to put
+    /// a piece right may be vague about which piece.
+    func testEveryStepHasSomethingToSay() throws {
+        var generator = SeededGenerator(seed: 31)
+        for _ in 0..<20 {
+            let plan = try BeginnerSolver.solve(
+                CubeState.solved.applying(randomScramble(using: &generator)))
+            for stage in plan.stages {
+                for step in stage.steps {
+                    XCTAssertFalse(step.moves.isEmpty, "an empty step survived")
+                    XCTAssertTrue(step.lineUpText != nil || step.outcome != nil,
+                                  "\(stage.kind) has a step with nothing to say")
+                    if step.places {
+                        XCTAssertFalse(step.piece.isEmpty)
+                        XCTAssertEqual(step.from.count, step.piece.count)
+                    }
+                }
+            }
+        }
+    }
+
+    /// The steps are the stage: no move belongs to one and not the other.
+    func testStepsAccountForEveryMove() throws {
+        var generator = SeededGenerator(seed: 12)
+        for _ in 0..<20 {
+            let plan = try BeginnerSolver.solve(
+                CubeState.solved.applying(randomScramble(using: &generator)))
+            for stage in plan.stages {
+                XCTAssertEqual(stage.steps.flatMap(\.moves), stage.moves)
+                for index in stage.moves.indices {
+                    guard let found = stage.step(atMove: index) else {
+                        return XCTFail("move \(index) of \(stage.kind) belongs to no step")
+                    }
+                    XCTAssertEqual(found.step.moves[index - found.start], stage.moves[index])
+                }
+            }
+        }
+    }
+
     func testSimplifyCollapsesTurns() {
         XCTAssertEqual(BeginnerSolver.simplify(Move.parse("U U")), Move.parse("U2"))
         XCTAssertEqual(BeginnerSolver.simplify(Move.parse("U U'")), [])
