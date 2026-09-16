@@ -161,14 +161,30 @@ struct ScanView: View {
         .padding(24)
     }
 
+    /// One line of help under the viewfinder.
+    ///
+    /// Swapped outright rather than faded: a cross-fade between two sentences
+    /// draws both of them, one on top of the other, and this one changes often
+    /// enough that the overlap is what you mostly see.
+    private var caption: String {
+        if coordinator.isStillOnTheSideJustTaken {
+            return "Got that one. Turn the cube to the next side."
+        }
+        return coordinator.camera.settling < 1
+            ? "Keep it still while I look…"
+            : "Hold it still and I'll take it myself."
+    }
+
     private var liveControls: some View {
         VStack(spacing: 12) {
-            Text(coordinator.camera.settling < 1
-                 ? "Keep it still while I look…"
-                 : "Hold it still and I'll take it myself.")
+            Text(caption)
                 .font(.brand(size: 16, weight: .medium))
                 .foregroundStyle(Theme.muted)
-                .animation(.easeInOut, value: coordinator.camera.settling < 1)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .frame(height: 44)
+                .contentTransition(.identity)
+                .animation(nil, value: caption)
 
             Button("Take this side now") { coordinator.captureCurrentFace() }
                 .buttonStyle(BigButtonStyle())

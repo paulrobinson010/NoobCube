@@ -32,8 +32,14 @@ final class Narrator: ObservableObject {
     /// The phrase is remembered even when muted, so unmuting and pressing
     /// repeat says the right thing.
     func say(_ phrase: String) {
+        let alreadySaying = phrase == lastPhrase && synthesiser.isSpeaking
         lastPhrase = phrase
         guard !isMuted else { return }
+        // Saying the same sentence again while it is still being said stops it
+        // and starts it from the beginning, which comes out as a stutter. The
+        // child asking for it again goes through `repeatLast`, which does not
+        // come through here.
+        guard !alreadySaying else { return }
         speak(phrase)
     }
 

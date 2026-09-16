@@ -107,6 +107,148 @@ enum ColourClassifier {
         }
     }
 
+    // MARK: - Taking the colour of the light out
+
+    /// A light can be warm or cold, but it is never a strong colour, so an
+    /// estimate outside this range came from something that is not the light.
+    private static let dimmestPlausibleChannel = 0.30
+
+    /// The colour of the light, from one sticker whose colour we already know.
+    ///
+    /// Under a warm lamp a white sticker photographs cream — around hue 33 and
+    /// half saturated — which is a poor white and a very good orange. That is
+    /// not a fault in the maths, it is genuinely what arrived: no amount of
+    /// looking at that one sticker can tell you whether it is white under an
+    /// amber lamp or orange under a white one. Something outside the sticker
+    /// has to break the tie, and the scan has exactly that — it asked the
+    /// child for a particular side, so it knows what the middle sticker is.
+    ///
+    /// Dividing the light back out then puts every other sticker on the face
+    /// right as well, which is what makes a mid-solve rescan work: by then the
+    /// white side really is nine white stickers with nothing to compare them
+    /// against.
+    ///
+    /// Returns nil if the answer is not a colour a light can be. That is the
+    /// safety catch: if the child is showing the orange side while being asked
+    /// for white, this comes out the colour of orange, which no lamp is, and
+    /// the face is read as it was found instead.
+    static func illuminant(from sample: RGBSample, knownToBe colour: CubeColour) -> RGBSample? {
+        let (red, green, blue) = colour.rgb
+        guard min(red, min(green, blue)) > 0.4 else { return nil }
+
+        let ratio = [sample.red / red, sample.green / green, sample.blue / blue]
+        guard let strongest = ratio.max(), strongest > 0.001 else { return nil }
+        let normalised = ratio.map { $0 / strongest }
+        guard let dimmest = normalised.min(), dimmest >= dimmestPlausibleChannel else { return nil }
+
+        return RGBSample(red: normalised[0], green: normalised[1], blue: normalised[2])
+    }
+
+    /// The stickers on a face that look like the one at `index`.
+    ///
+    /// Averaging over them rather than trusting a single reading covers the
+    /// logo printed on the middle of many cubes, and the glare that lands on
+    /// one sticker and not its neighbour.
+    private static func matching(_ index: Int, in samples: [RGBSample]) -> [RGBSample] {
+        let anchor = samples[index].hsv
+        return samples.filter {
+            let other = $0.hsv
+            var difference = abs(other.hue - anchor.hue)
+            if difference > 180 { difference = 360 - difference }
+            return difference < 20 && abs(other.saturation - anchor.saturation) < 0.18
+        }
+    }
+
+    private static func mean(of samples: [RGBSample]) -> RGBSample {
+        let count = Double(max(samples.count, 1))
+        return RGBSample(red: samples.reduce(0) { $0 + $1.red } / count,
+                         green: samples.reduce(0) { $0 + $1.green } / count,
+                         blue: samples.reduce(0) { $0 + $1.blue } / count)
+    }
+
+    /// One face's nine readings, with the colour of the light divided out.
+    ///
+    /// Two ways to find that light, because each covers the other's blind spot:
+    ///
+    ///   * The middle sticker, when the scan knows which side it asked for.
+    ///     This is the one that saves a face of nine identical whites, where
+    ///     there is nothing on the face to compare anything with.
+    ///   * Failing that, the palest sticker on the face — but only when it is
+    ///     markedly paler than the strongest one, which is the only honest
+    ///     evidence that it is a white sticker rather than simply the least
+    ///     saturated of nine strong colours.
+    static func illuminant(onFace samples: [RGBSample], expecting centre: CubeColour?) -> RGBSample? {
+        guard samples.count == 9 else { return nil }
+
+        if let centre, centre.rgb.red > 0.4, centre.rgb.green > 0.4, centre.rgb.blue > 0.4,
+           let light = illuminant(from: mean(of: matching(4, in: samples)), knownToBe: centre) {
+            return light
+        }
+
+        let saturations = samples.map { $0.hsv.saturation }
+        guard let palest = saturations.min(), let strongest = saturations.max(), strongest > 0.001,
+              1 - palest / strongest >= paleEnoughToBeWhite,
+              let index = saturations.firstIndex(of: palest) else { return nil }
+        return illuminant(from: mean(of: matching(index, in: samples)), knownToBe: .white)
+    }
+
+    /// How much paler than the strongest sticker on a face the palest one has
+    /// to be before it is taken for a white one. The palest of nine strong
+    /// colours is not evidence of anything.
+    private static let paleEnoughToBeWhite = 0.30
+
+    static func relit(face samples: [RGBSample], expecting centre: CubeColour?) -> [RGBSample] {
+        guard let light = illuminant(onFace: samples, expecting: centre) else { return samples }
+        return divide(samples, by: light)
+    }
+
+    private static func divide(_ samples: [RGBSample], by light: RGBSample) -> [RGBSample] {
+        samples.map {
+            RGBSample(red: min(1, $0.red / light.red),
+                      green: min(1, $0.green / light.green),
+                      blue: min(1, $0.blue / light.blue))
+        }
+    }
+
+    /// The colour of the room, from every side that can offer an opinion.
+    ///
+    /// One estimate for the whole scan rather than one per side, because there
+    /// is one room. Six noisy readings of the same thing, taken to the middle,
+    /// are far steadier than six separate corrections — and correcting each
+    /// side by its own guess turned out to be worse than not correcting at all
+    /// in a dim room, because it moved the sides relative to each other. How
+    /// bright each side came out is a separate matter, and ``levelled`` deals
+    /// with that.
+    static func illuminant(ofScan samples: [RGBSample],
+                           expectedCentres: [Face: CubeColour]) -> RGBSample? {
+        var lights: [RGBSample] = []
+        for face in Face.allCases {
+            let nine = face.faceletIndices.map { samples[$0] }
+            if let light = illuminant(onFace: nine, expecting: expectedCentres[face]) {
+                lights.append(light)
+            }
+        }
+        guard !lights.isEmpty else { return nil }
+
+        let middle = RGBSample(red: median(lights.map(\.red)),
+                               green: median(lights.map(\.green)),
+                               blue: median(lights.map(\.blue)))
+        let strongest = max(middle.red, max(middle.green, middle.blue))
+        guard strongest > 0.001 else { return nil }
+        return RGBSample(red: middle.red / strongest,
+                         green: middle.green / strongest,
+                         blue: middle.blue / strongest)
+    }
+
+    private static func median(_ values: [Double]) -> Double {
+        let sorted = values.sorted()
+        guard !sorted.isEmpty else { return 1 }
+        let middle = sorted.count / 2
+        return sorted.count.isMultiple(of: 2)
+            ? (sorted[middle - 1] + sorted[middle]) / 2
+            : sorted[middle]
+    }
+
     // MARK: - Settling a whole scan
 
     /// Even out the six faces before comparing them.
@@ -147,9 +289,19 @@ enum ColourClassifier {
     ///   * There are exactly nine stickers of each colour.
     ///   * Nine white stickers means the light can be measured off the cube
     ///     itself, without knowing which nine they are.
-    static func resolve(rawSamples: [RGBSample]) -> [CubeColour] {
+    ///
+    /// The colour of the room is measured first and taken back out, using the
+    /// one sticker on each side whose colour was known before the camera saw
+    /// it. Without that, a white cube face under a warm lamp is orange, and no
+    /// amount of counting stickers afterwards can tell you otherwise.
+    static func resolve(rawSamples: [RGBSample],
+                        expectedCentres: [Face: CubeColour] = [:]) -> [CubeColour] {
         precondition(rawSamples.count == 54)
-        let samples = levelled(whiteBalanced(rawSamples))
+        var relitSamples = rawSamples
+        if let light = illuminant(ofScan: rawSamples, expectedCentres: expectedCentres) {
+            relitSamples = divide(rawSamples, by: light)
+        }
+        let samples = levelled(whiteBalanced(relitSamples))
 
         // Name the centres first: they anchor everything and there are only 24
         // ways they can be arranged.

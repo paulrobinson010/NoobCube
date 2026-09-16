@@ -80,11 +80,15 @@ final class ScanTests: XCTestCase {
     /// assignment plus white balance is what fixes it.
     func testWarmLightingIsRecovered() {
         var generator = SeededGenerator(seed: 41)
-        // Six different centres, then eight more of each colour scattered about,
+        // The six centres, then eight more of each colour scattered about,
         // which is what any real cube looks like.
         var labels = [CubeColour?](repeating: nil, count: 54)
-        for (position, face) in Face.allCases.enumerated() {
-            labels[face.centreIndex] = CubeColour.allCases[position]
+        // The centres have to be a cube that could exist: white opposite
+        // yellow and the right handedness. Six colours in whatever order they
+        // happen to be declared in is not one, and the naming step is right to
+        // refuse it.
+        for face in Face.allCases {
+            labels[face.centreIndex] = CubeColourScheme.scanningLayout[face]
         }
         var pool: [CubeColour] = []
         for colour in CubeColour.allCases {
@@ -106,8 +110,150 @@ final class ScanTests: XCTestCase {
                              blue: min(1, blue * 0.88 * 0.8))
         }
 
-        let resolved = ColourClassifier.resolve(rawSamples: samples)
+        let resolved = ColourClassifier.resolve(rawSamples: samples,
+                                                expectedCentres: CubeColourScheme.scanningLayout)
         XCTAssertEqual(resolved, settled)
+    }
+
+    // MARK: - The amber lamp
+
+    /// The nine readings below are the real thing: measured off a photograph of
+    /// a white cube face taken on a phone, indoors, in the evening. They come
+    /// back at hue 33 and half saturated — which is to say, orange. The whole
+    /// side read as orange, so the app never recorded the white side at all and
+    /// asked for it again and again.
+    ///
+    /// Nothing about those nine readings says white. The tie is broken from
+    /// outside: the scan asked for the white side, so it knows the middle
+    /// sticker is white, and that is enough to work out the colour of the lamp.
+    private static let whiteSideUnderAnAmberLamp = [
+        RGBSample(red: 0.957, green: 0.714, blue: 0.439),
+        RGBSample(red: 0.969, green: 0.745, blue: 0.463),
+        RGBSample(red: 0.988, green: 0.769, blue: 0.478),
+        RGBSample(red: 0.620, green: 0.498, blue: 0.353),
+        RGBSample(red: 0.608, green: 0.486, blue: 0.337),
+        RGBSample(red: 0.600, green: 0.478, blue: 0.329),
+        RGBSample(red: 0.957, green: 0.714, blue: 0.439),
+        RGBSample(red: 0.969, green: 0.745, blue: 0.463),
+        RGBSample(red: 0.988, green: 0.769, blue: 0.478),
+    ]
+
+    func testAWhiteSideUnderAnAmberLampReadsAsOrangeUntilItIsRelit() {
+        let raw = ColourClassifier.bestGuesses(Self.whiteSideUnderAnAmberLamp)
+        XCTAssertEqual(raw, Array(repeating: .orange, count: 9),
+                       "the readings really are orange; that is the whole problem")
+
+        let relit = ColourClassifier.relit(face: Self.whiteSideUnderAnAmberLamp,
+                                           expecting: .white)
+        XCTAssertEqual(ColourClassifier.bestGuesses(relit),
+                       Array(repeating: .white, count: 9))
+    }
+
+    /// The safety catch. If the child shows the orange side while being asked
+    /// for the white one, taking the middle sticker at its word would make the
+    /// lamp the colour of orange — which no lamp is — so the face is read as it
+    /// was found instead, and stays orange.
+    func testShowingTheWrongSideDoesNotTurnItWhite() {
+        for colour in CubeColour.allCases where colour != .white {
+            let (red, green, blue) = colour.rgb
+            let face = Array(repeating: RGBSample(red: red, green: green, blue: blue), count: 9)
+            let relit = ColourClassifier.relit(face: face, expecting: .white)
+            XCTAssertEqual(ColourClassifier.bestGuesses(relit),
+                           Array(repeating: colour, count: 9),
+                           "\(colour) was mistaken for white under a made-up light")
+        }
+    }
+
+    /// Mid-solve the white side is nine white stickers, but at the start it is
+    /// a white middle and eight of whatever else. Both have to work.
+    func testAScrambledWhiteSideUnderTheSameLamp() {
+        let lamp = (red: 1.0, green: 0.77, blue: 0.49)
+        let truth: [CubeColour] = [.orange, .white, .green, .blue, .white, .yellow,
+                                   .white, .red, .orange]
+        let shade: [Double] = [1, 0.92, 1, 1, 1, 0.85, 0.7, 1, 0.8]
+        let face = zip(truth, shade).map { colour, dim -> RGBSample in
+            let (red, green, blue) = colour.rgb
+            return RGBSample(red: min(1, red * lamp.red * dim),
+                             green: min(1, green * lamp.green * dim),
+                             blue: min(1, blue * lamp.blue * dim))
+        }
+
+        let relit = ColourClassifier.relit(face: face, expecting: .white)
+        XCTAssertEqual(ColourClassifier.bestGuesses(relit), truth)
+    }
+
+    /// A side with a white sticker on it but no known middle: the palest
+    /// sticker is the light, as long as it is much paler than the strongest.
+    func testAPaleStickerStandsInForTheLight() {
+        let lamp = (red: 1.0, green: 0.77, blue: 0.49)
+        let truth: [CubeColour] = [.green, .white, .green, .orange, .green,
+                                   .green, .yellow, .green, .blue]
+        let face = truth.map { colour -> RGBSample in
+            let (red, green, blue) = colour.rgb
+            return RGBSample(red: min(1, red * lamp.red),
+                             green: min(1, green * lamp.green),
+                             blue: min(1, blue * lamp.blue))
+        }
+
+        let relit = ColourClassifier.relit(face: face, expecting: nil)
+        XCTAssertEqual(ColourClassifier.bestGuesses(relit), truth)
+    }
+
+    /// And a side with no white on it at all is left exactly as it was found:
+    /// the palest of nine strong colours is not evidence of anything.
+    func testASideWithNoWhiteIsLeftAlone() {
+        let truth: [CubeColour] = [.green, .yellow, .green, .orange, .red,
+                                   .green, .yellow, .blue, .blue]
+        let face = truth.map { colour -> RGBSample in
+            let (red, green, blue) = colour.rgb
+            return RGBSample(red: red, green: green, blue: blue)
+        }
+        XCTAssertEqual(ColourClassifier.relit(face: face, expecting: nil), face)
+    }
+
+    /// The whole thing end to end, in the room the screenshots were taken in,
+    /// with the white side already solved — which is exactly when a child comes
+    /// back for another look, and exactly when a white side has nothing on it
+    /// to compare itself against.
+    func testAWholeCubeUnderTheAmberLamp() {
+        var generator = SeededGenerator(seed: 17)
+        let layout = CubeColourScheme.scanningLayout
+
+        var labels = [CubeColour?](repeating: nil, count: 54)
+        for face in Face.allCases { labels[face.centreIndex] = layout[face] }
+        // The white side is done, so it is nine white stickers.
+        for index in Face.D.faceletIndices { labels[index] = .white }
+
+        var pool: [CubeColour] = []
+        for colour in CubeColour.allCases {
+            pool.append(contentsOf: Array(repeating: colour, count: colour == .white ? 0 : 8))
+        }
+        pool.shuffle(using: &generator)
+        var next = 0
+        for index in 0..<54 where labels[index] == nil {
+            labels[index] = pool[next]
+            next += 1
+        }
+        let truth = labels.compactMap { $0 }
+        XCTAssertEqual(truth.count, 54)
+
+        // Measured off the photograph: a lamp about this warm.
+        let lamp = (red: 1.0, green: 0.77, blue: 0.49)
+        var samples: [RGBSample] = []
+        for (index, colour) in truth.enumerated() {
+            let (red, green, blue) = colour.rgb
+            // Each side is caught at its own angle, so each is its own brightness.
+            let dim = 0.65 + 0.35 * Double((index / 9) % 3) / 2
+            samples.append(RGBSample(red: min(1, red * lamp.red * dim),
+                                     green: min(1, green * lamp.green * dim),
+                                     blue: min(1, blue * lamp.blue * dim)))
+        }
+
+        // Without being told which side was which, this comes out wrong about
+        // nineteen times in twenty — which is not something to assert on, but
+        // is the measure of what knowing the middles is worth.
+        XCTAssertEqual(ColourClassifier.resolve(rawSamples: samples, expectedCentres: layout),
+                       truth)
     }
 
     func testResolveAlwaysReturnsNineOfEach() {
