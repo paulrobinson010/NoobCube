@@ -115,7 +115,7 @@ extension SolveStage.Kind {
         case .whiteCross:
             return "Spin each petal until its side colour matches the middle underneath, then turn that side twice to drop it down."
         case .whiteCorners:
-            return "Find a corner with white on it in the top layer, put it above the gap whose three middles match its colours, then do righty until it drops in."
+            return "Find a corner with white on it in the top layer, put it above the gap whose three middles match its colours, then do righty until it drops in. If there's no white corner up top, one righty on a stuck one lifts it out so you can."
         case .middleRow:
             return "Find a top edge with no yellow, line its colour up with the middle, then send it left or right."
         case .yellowCross:

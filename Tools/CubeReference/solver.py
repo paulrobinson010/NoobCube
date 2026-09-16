@@ -470,7 +470,11 @@ def corner_plan(state, name):
     """
     here, _ = slots.find_corner(state, set(name))
     if 'D' in here:
-        return solver_grip(here), [], "R U R'".split(), False
+        # No corner is waiting up top, so one has to be lifted out. A whole
+        # righty does that just as well as the three moves it starts with —
+        # checked on 767 stuck corners — and it keeps the child's whole
+        # vocabulary for this stage down to one thing.
+        return solver_grip(here), [], SEXY, False
 
     grip = solver_grip(name)
     after = cube.apply_regrip(state, grip)
@@ -517,10 +521,20 @@ def solve_first_layer_corners(sv):
         grip, spin, moves, places = choices[target]
 
         if not places:
+            # Which of the two ways it is stuck, so the words match what the
+            # child is looking at.
+            at, _ = slots.find_corner(sv.state, set(target))
+            in_its_own_gap = at == target
             sv.step(piece=set(target), home=target, places=False,
-                    grip='This corner is in the bottom the wrong way round. Turn '
-                         'the cube so it is at the front right.',
-                    outcome='One righty lifts it out into the top.')
+                    grip='This one is down in the bottom already. Turn the cube so '
+                         'it is at the front right.',
+                    outcome=('There is no white corner waiting up top, and this one '
+                             'is in its gap facing the wrong way. One righty lifts '
+                             'it out, and then we can put it back in properly.')
+                            if in_its_own_gap else
+                            ('There is no white corner waiting up top, so we have to '
+                             'bring one up. One righty lifts this one out, and then '
+                             'we can put it in its own gap.'))
             sv.do(grip)
             sv.running()
             sv.do(moves)

@@ -674,9 +674,12 @@ enum BeginnerSolver {
             throw SolverError.stuck("Lost track of a white corner.")
         }
         if here.contains(.D) {
-            // Stuck in the bottom the wrong way round: it has to come out first.
+            // No corner is waiting up top, so one has to be lifted out. A whole
+            // righty does that just as well as the three moves it starts with —
+            // checked on 767 stuck corners — and it keeps the child's whole
+            // vocabulary for this stage down to one thing.
             return CornerPlan(grip: turnToFrontRight(here.sideFaces), spin: [],
-                              moves: Move.parse("R U R'"), places: false)
+                              moves: righty, places: false)
         }
 
         let grip = turnToFrontRight(slot.sideFaces)
@@ -723,10 +726,20 @@ enum BeginnerSolver {
 
             let piece = Set(chosen.slot.faces)
             if !chosen.plan.places {
+                // Which of the two ways it is stuck, so the words match what
+                // the child is looking at.
+                let inItsOwnGap = CubeSlots.slot(holding: piece, in: builder.state)
+                    == chosen.slot
                 builder.step(piece: piece, home: piece, places: false,
-                             grip: "This corner is in the bottom the wrong way round. "
-                                 + "Turn the cube so it's at the front right.",
-                             outcome: "One righty lifts it out into the top.")
+                             grip: "This one is down in the bottom already. Turn the "
+                                 + "cube so it's at the front right.",
+                             outcome: inItsOwnGap
+                                 ? "There's no white corner waiting up top, and this "
+                                 + "one is in its gap facing the wrong way. One righty "
+                                 + "lifts it out, and then we can put it back in properly."
+                                 : "There's no white corner waiting up top, so we have "
+                                 + "to bring one up. One righty lifts this one out, and "
+                                 + "then we can put it in its own gap.")
             } else {
                 builder.step(piece: piece, home: piece,
                              grip: "Look at the three middles around this corner's "
