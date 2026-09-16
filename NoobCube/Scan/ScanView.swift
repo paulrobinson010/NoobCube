@@ -114,7 +114,9 @@ struct ScanView: View {
 
             ZStack {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(Theme.attention, lineWidth: 3)
+                    .strokeBorder(coordinator.camera.isCubeInFrame
+                                  ? Theme.attention : Color.white.opacity(0.35),
+                                  lineWidth: 3)
                     .frame(width: side, height: side)
 
                 ForEach(0..<9, id: \.self) { offset in
@@ -167,6 +169,9 @@ struct ScanView: View {
     /// draws both of them, one on top of the other, and this one changes often
     /// enough that the overlap is what you mostly see.
     private var caption: String {
+        if !coordinator.camera.isCubeInFrame {
+            return "Hold your cube in front of the camera."
+        }
         if coordinator.isStillOnTheSideJustTaken {
             return "Got that one. Turn the cube to the next side."
         }

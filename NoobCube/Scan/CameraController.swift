@@ -64,6 +64,9 @@ final class CameraController: NSObject, ObservableObject {
     /// How much of the steady window has been filled, 0 to 1.
     @Published private(set) var settling: Double = 0
 
+    /// Whether the guide square is looking at a cube rather than the room.
+    @Published private(set) var isCubeInFrame = false
+
     let session = AVCaptureSession()
     private let output = AVCaptureVideoDataOutput()
     private let queue = DispatchQueue(label: "noobcube.camera")
@@ -223,7 +226,30 @@ final class CameraController: NSObject, ObservableObject {
         return (sorted[middle - 1] + sorted[middle]) / 2
     }
 
-    fileprivate nonisolated func readStickers(from buffer: CVPixelBuffer) -> [RGBSample]? {
+    /// One frame's worth of reading: the nine squares, and whether what the
+    /// camera is looking at is a cube at all.
+    struct Reading {
+        var samples: [RGBSample]
+        var looksLikeACube: Bool
+    }
+
+    /// The average brightness of a few pixels, for the gaps between stickers.
+    private nonisolated func brightness(atX x: Double, y: Double, radius: Double,
+                                        width: Int, height: Int, bytesPerRow: Int,
+                                        base: UnsafeMutablePointer<UInt8>) -> Double? {
+        var values: [Double] = []
+        for step in 0..<6 {
+            let angle = 2 * Double.pi * Double(step) / 6
+            let px = Int(x + radius * cos(angle))
+            let py = Int(y + radius * sin(angle))
+            guard px >= 0, px < width, py >= 0, py < height else { continue }
+            let pixel = base.advanced(by: py * bytesPerRow + px * 4)
+            values.append(Double(max(pixel[0], max(pixel[1], pixel[2]))) / 255)
+        }
+        return values.isEmpty ? nil : median(values)
+    }
+
+    fileprivate nonisolated func readStickers(from buffer: CVPixelBuffer) -> Reading? {
         CVPixelBufferLockBaseAddress(buffer, .readOnly)
         defer { CVPixelBufferUnlockBaseAddress(buffer, .readOnly) }
 
@@ -262,13 +288,60 @@ final class CameraController: NSObject, ObservableObject {
                     bytesPerRow: bytesPerRow, base: base))
             }
         }
-        return samples
+
+        // Is this a cube at all?
+        //
+        // A cube's stickers are separated by black plastic, and almost nothing
+        // else the camera gets pointed at has a dark grid ruled across it. A
+        // wall, a carpet or the ceiling is perfectly still, which is exactly
+        // why the app used to settle on one and record a side of nothing.
+        var gaps: [Double] = []
+        for row in 0..<3 {
+            for column in 0..<2 {
+                if let value = brightness(atX: originX + cell * (Double(column) + 1),
+                                          y: originY + cell * (Double(row) + 0.5),
+                                          radius: cell * 0.06,
+                                          width: width, height: height,
+                                          bytesPerRow: bytesPerRow, base: base) {
+                    gaps.append(value)
+                }
+            }
+        }
+        for row in 0..<2 {
+            for column in 0..<3 {
+                if let value = brightness(atX: originX + cell * (Double(column) + 0.5),
+                                          y: originY + cell * (Double(row) + 1),
+                                          radius: cell * 0.06,
+                                          width: width, height: height,
+                                          bytesPerRow: bytesPerRow, base: base) {
+                    gaps.append(value)
+                }
+            }
+        }
+
+        let stickerLight = median(samples.map { $0.hsv.value })
+        let gapLight = gaps.isEmpty ? stickerLight : median(gaps)
+        // Bright enough to be looking at something, and ruled with lines
+        // noticeably darker than the squares between them.
+        let looksLikeACube = stickerLight > 0.12 && gapLight < stickerLight * 0.7
+
+        return Reading(samples: samples, looksLikeACube: looksLikeACube)
     }
 
     // MARK: - Settling
 
     /// Fold a new frame into the running window and re-derive the steady reading.
-    private func accept(_ samples: [RGBSample]) {
+    private func accept(_ reading: Reading) {
+        // An empty table is perfectly still. Nothing settles until there is a
+        // cube to settle on, so the app can no longer take a picture of a wall.
+        isCubeInFrame = reading.looksLikeACube
+        guard reading.looksLikeACube else {
+            liveSamples = reading.samples
+            resetSteadiness()
+            return
+        }
+
+        let samples = reading.samples
         liveSamples = samples
         recentReadings.append(samples)
         if recentReadings.count > steadyWindow { recentReadings.removeFirst() }
@@ -331,9 +404,9 @@ extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate {
                                    didOutput sampleBuffer: CMSampleBuffer,
                                    from connection: AVCaptureConnection) {
         guard let buffer = CMSampleBufferGetImageBuffer(sampleBuffer),
-              let samples = readStickers(from: buffer) else { return }
+              let reading = readStickers(from: buffer) else { return }
         Task { @MainActor in
-            self.accept(samples)
+            self.accept(reading)
         }
     }
 }

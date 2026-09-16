@@ -642,57 +642,79 @@ enum BeginnerSolver {
 
     // MARK: - Stage 3, the white corners
 
+    /// What it would take to put one corner in, from where it is now.
+    private struct CornerPlan {
+        var grip: [Move]
+        var moves: [Move]
+        /// False for a corner that has to come out of the bottom first.
+        var places: Bool
+        var length: Int { grip.count + moves.count }
+    }
+
+    private static func cornerPlan(for slot: CubeSlot,
+                                   in state: CubeState) throws -> CornerPlan {
+        guard let here = CubeSlots.slot(holding: Set(slot.faces), in: state),
+              let frontRight = CubeSlots.slot(with: [.D, .F, .R]) else {
+            throw SolverError.stuck("Lost track of a white corner.")
+        }
+        if here.contains(.D) {
+            // Stuck in the bottom the wrong way round: it has to come out first.
+            return CornerPlan(grip: turnToFrontRight(here.sideFaces),
+                              moves: Move.parse("R U R'"),
+                              places: false)
+        }
+        let grip = turnToFrontRight(slot.sideFaces)
+        let after = state.applying(grip)
+        let moves = try search(from: after, algorithm: shuffle) {
+            frontRight.isSolved(in: $0)
+        }.flatMap(\.moves)
+        return CornerPlan(grip: grip, moves: moves, places: true)
+    }
+
     private static func solveBottomCorners(_ builder: Builder) throws {
         builder.begin(.whiteCorners)
-        guard let frontRight = CubeSlots.slot(with: [.D, .F, .R]) else { return }
 
         for _ in 0..<20 {
             let unsolved = CubeSlots.bottomCorners.filter { !$0.isSolved(in: builder.state) }
             if unsolved.isEmpty { return }
 
-            // Prefer a corner already waiting up top, and the one needing the
-            // least re-gripping, to avoid pointless round trips.
-            let target = unsolved.min { left, right in
-                cost(of: left, in: builder.state) < cost(of: right, in: builder.state)
+            // Count the moves rather than guessing at them. Every corner waiting
+            // in the top can go straight in, but one sitting above its own gap
+            // the right way round takes three moves and another takes fifteen,
+            // and a child watching the long one has no idea why.
+            var plans: [(slot: CubeSlot, plan: CornerPlan)] = []
+            for slot in unsolved {
+                plans.append((slot, try cornerPlan(for: slot, in: builder.state)))
             }
-            guard let target,
-                  let here = CubeSlots.slot(holding: Set(target.faces), in: builder.state) else {
+            // Only pull a corner out of the bottom when nothing can go in: no
+            // amount of arithmetic makes taking a piece out look sensible to
+            // somebody who can see one waiting to go in.
+            let ready = plans.filter(\.plan.places)
+            let choices = ready.isEmpty ? plans : ready
+            guard let chosen = choices.min(by: { $0.plan.length < $1.plan.length }) else {
                 throw SolverError.stuck("Lost track of a white corner.")
             }
 
-            let piece = Set(target.faces)
-
-            if here.contains(.D) {
-                // Stuck in the bottom the wrong way round: lift it out first.
+            let piece = Set(chosen.slot.faces)
+            if !chosen.plan.places {
                 builder.step(piece: piece, home: piece, places: false,
                              grip: "This corner is in the bottom the wrong way round. "
                                  + "Turn the cube so it's at the front right.",
                              outcome: "One shuffle lifts it out into the top.")
-                builder.perform(turnToFrontRight(here.sideFaces))
-                builder.running()
-                builder.perform(Move.parse("R U R'"))
-                continue
+            } else {
+                builder.step(piece: piece, home: piece,
+                             grip: "Turn the cube so this corner's gap is at the front right.",
+                             outcome: chosen.plan.moves.count <= 4
+                                 ? "This one's the easiest — it's already over its gap."
+                                 : "Spin the top to bring the corner over its gap, then "
+                                 + "shuffle until it drops in.",
+                             algorithmName: "the shuffle")
             }
-            builder.step(piece: piece, home: piece,
-                         grip: "Turn the cube so this corner's gap is at the front right.",
-                         outcome: "Spin the top to bring the corner over its gap, then "
-                                + "shuffle until it drops in.",
-                         algorithmName: "the shuffle")
-            builder.perform(turnToFrontRight(target.sideFaces))
+            builder.perform(chosen.plan.grip)
             builder.running()
-            for round in try search(from: builder.state, algorithm: shuffle, goal: {
-                frontRight.isSolved(in: $0)
-            }) {
-                builder.perform(round.moves)
-            }
+            builder.perform(chosen.plan.moves)
         }
         throw SolverError.stuck("Couldn't finish the white corners.")
-    }
-
-    private static func cost(of slot: CubeSlot, in state: CubeState) -> (Int, Int) {
-        let here = CubeSlots.slot(holding: Set(slot.faces), in: state)
-        let stuck = (here?.contains(.D) ?? false) ? 1 : 0
-        return (stuck, turnToFrontRight(slot.sideFaces).count)
     }
 
     // MARK: - Stage 4, the middle row
@@ -705,16 +727,21 @@ enum BeginnerSolver {
             let unsolved = CubeSlots.middleEdges.filter { !$0.isSolved(in: builder.state) }
             if unsolved.isEmpty { return }
 
+            // Count what each one would cost rather than taking the first that
+            // comes to hand. The insert is always the same eight moves, so the
+            // difference is entirely in the lining up, and an edge already
+            // sitting over the middle that matches it needs none of it.
             var candidate: CubeSlot?
+            var cheapest = Int.max
             for slot in CubeSlots.topEdges {
                 let colours = slot.colours(in: builder.state)
                 if colours.contains(.U) { continue }        // belongs in the last layer
                 guard let face = slot.sideFaces.first,
                       let side = slot.sticker(on: face, in: builder.state) else { continue }
-                if candidate == nil { candidate = slot }
-                if topTurn(from: face, to: side).isEmpty && turnToFront(side).isEmpty {
-                    candidate = slot                        // already lined up, no re-grip
-                    break
+                let cost = topTurn(from: face, to: side).count + turnToFront(side).count
+                if cost < cheapest {
+                    cheapest = cost
+                    candidate = slot
                 }
             }
 
@@ -739,7 +766,10 @@ enum BeginnerSolver {
                          spin: "Spin the top until this colour sits on the middle that "
                              + "matches it, making a little T.",
                          grip: "Turn the cube so that side is facing you.",
-                         outcome: "Send the top away from the gap, and the edge drops in.")
+                         outcome: cheapest == 0
+                             ? "This one's already lined up — send the top away from "
+                             + "the gap and it drops in."
+                             : "Send the top away from the gap, and the edge drops in.")
             builder.perform(topTurn(from: face, to: side))
             builder.perform(turnToFront(side))
             // Re-read after the re-grip, every face letter has just moved.

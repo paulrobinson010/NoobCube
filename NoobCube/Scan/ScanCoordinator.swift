@@ -106,7 +106,7 @@ final class ScanCoordinator: ObservableObject {
     /// Relit against the side being asked for, so the squares show what the
     /// app will actually record rather than what the lamp is doing.
     var livePreview: [CubeColour] {
-        guard camera.liveSamples.count == 9 else { return [] }
+        guard camera.isCubeInFrame, camera.liveSamples.count == 9 else { return [] }
         return ColourClassifier.bestGuesses(relit(camera.liveSamples))
     }
 
@@ -167,6 +167,10 @@ final class ScanCoordinator: ObservableObject {
     /// held still long enough for the reading to settle.
     func considerAutoCapture() {
         guard currentStep != nil, !isComplete else { return }
+        guard camera.isCubeInFrame else {
+            holdFrames = 0
+            return
+        }
         guard camera.steadiness > 0.88, camera.settling >= 1 else {
             holdFrames = 0
             return
@@ -207,6 +211,11 @@ final class ScanCoordinator: ObservableObject {
     func captureCurrentFace() {
         let reading = camera.steadyReading.count == 9 ? camera.steadyReading : camera.liveSamples
         guard let step = currentStep, reading.count == 9 else { return }
+
+        guard camera.isCubeInFrame else {
+            narrator.say("I can't see your cube. Hold it in front of the camera.")
+            return
+        }
 
         // The button is there to hurry the app along, not to take the same side
         // a second time. Say what is actually needed instead.

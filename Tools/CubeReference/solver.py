@@ -449,36 +449,64 @@ def d_corner_solved(state, name):
     return all(c == f for f, c in slots.stickers(state, slots.CORNERS[name]))
 
 
+def corner_plan(state, name):
+    """What it would take to put this corner in, from where it is now.
+
+    Returns the lining up, the moves that do it, and whether it actually
+    places the corner — pulling one out of the bottom does not.
+    """
+    here, _ = slots.find_corner(state, set(name))
+    if 'D' in here:
+        # Stuck in the bottom the wrong way round: it has to come out first.
+        return solver_grip(here), "R U R'".split(), False
+    grip = solver_grip(name)
+    after = cube.apply_regrip(state, grip)
+    return grip, bfs_alg(after, SEXY, lambda st: d_corner_solved(st, 'DFR')), True
+
+
+def solver_grip(name):
+    return y_bringing_pair(side_face_of(name))
+
+
 def solve_first_layer_corners(sv):
     sv.stage('corners', 'Fill in the white corners')
     for _ in range(20):
         unsolved = [n for n in slots.D_CORNERS if not d_corner_solved(sv.state, n)]
         if not unsolved:
             return
-        # prefer a corner already waiting in the top layer, and the one
-        # needing the least re-gripping, so we avoid pointless round trips
-        def cost(name):
-            at, _ = slots.find_corner(sv.state, set(name))
-            rot = len(y_bringing_pair(side_face_of(name)))
-            return (1 if 'D' in at else 0, rot)
-        target = min(unsolved, key=cost)
-        here, _ = slots.find_corner(sv.state, set(target))
-        if 'D' in here:
+
+        # Count the moves rather than guessing at them. Every corner waiting in
+        # the top can go straight in, but one sitting above its own gap the
+        # right way round takes three moves and another takes fifteen, and a
+        # child watching the long one has no idea why.
+        plans = {n: corner_plan(sv.state, n) for n in unsolved}
+        ready = {n: p for n, p in plans.items() if p[2]}
+        # Only pull a corner out of the bottom when nothing can go in: no
+        # amount of arithmetic makes taking a piece out look sensible to
+        # someone who can see one waiting to go in.
+        choices = ready or plans
+        target = min(choices, key=lambda n: len(choices[n][0]) + len(choices[n][1]))
+        grip, moves, places = choices[target]
+
+        if not places:
             sv.step(piece=set(target), home=target, places=False,
                     grip='This corner is in the bottom the wrong way round. Turn '
                          'the cube so it is at the front right.',
                     outcome='One shuffle lifts it out into the top.')
-            sv.do(y_bringing_pair(side_face_of(here)))
+            sv.do(grip)
             sv.running()
-            sv.do("R U R'")                   # lift the stuck corner into the top
+            sv.do(moves)
             continue
+
         sv.step(piece=set(target), home=target, alg_name='the shuffle',
                 grip='Turn the cube so this corner\'s gap is at the front right.',
-                outcome='Spin the top to bring the corner over its gap, then shuffle '
-                        'until it drops in.')
-        sv.do(y_bringing_pair(side_face_of(target)))
+                outcome=('This one is the easiest — it is already over its gap.')
+                        if len(moves) <= 4 else
+                        ('Spin the top to bring the corner over its gap, then shuffle '
+                         'until it drops in.'))
+        sv.do(grip)
         sv.running()
-        sv.do(bfs_alg(sv.state, SEXY, lambda st: d_corner_solved(st, 'DFR')))
+        sv.do(moves)
     raise RuntimeError('white corners did not converge')
 
 
@@ -494,19 +522,19 @@ def solve_second_layer(sv):
         unsolved = [n for n in slots.MID_EDGES if not mid_edge_solved(sv.state, n)]
         if not unsolved:
             return
-        candidate = None
+        # Count what each one would cost rather than taking the first that comes
+        # to hand. The insert is always the same eight moves, so the difference
+        # is entirely in the lining up, and an edge already sitting over the
+        # middle that matches it needs none of it.
+        candidate, cheapest = None, None
         for name in slots.U_EDGES:
             s = dict(slots.stickers(sv.state, slots.EDGES[name]))
             if 'U' in s.values():
-                continue
+                continue                      # belongs in the last layer
             face = side_face_of(name)[0]
-            cand = (face, s)
-            if candidate is None:
-                candidate = cand
-            # prefer one that needs no re-grip at all
-            if len(u_turn_moving(face, s[face])) + len(y_to_front(s[face])) == 0:
-                candidate = cand
-                break
+            cost = len(u_turn_moving(face, s[face])) + len(y_to_front(s[face]))
+            if cheapest is None or cost < cheapest:
+                cheapest, candidate = cost, (face, s)
         if candidate is None:
             stuck = dict(slots.stickers(sv.state, slots.EDGES[unsolved[0]]))
             sv.step(piece=set(stuck.values()), home=slot_name(set(stuck.values())),
@@ -525,7 +553,9 @@ def solve_second_layer(sv):
                 spin='Spin the top until this colour sits on the middle that '
                      'matches it, making a little T.',
                 grip='Turn the cube so that side is facing you.',
-                outcome='Send the top away from the gap, and the edge drops in.')
+                outcome=('This one is already lined up — send the top away from the '
+                         'gap and it drops in.') if cheapest == 0 else
+                        'Send the top away from the gap, and the edge drops in.')
         sv.do(u_turn_moving(face, front_colour))
         sv.do(y_to_front(front_colour))
         # re-read after the rotation, the face letters have all moved
