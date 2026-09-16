@@ -29,22 +29,12 @@
 
   header { text-align: center; padding: 44px 0 40px; }
 
-  /* The app icon, kept to about the size a phone's home screen shows one.
-     Small on purpose: the artwork has the name written across its foot, and
-     at hero size that lettering competes with the wordmark right underneath
-     it. At this size it reads as part of the icon, and the stack says icon,
-     then name, the way an App Store listing does.
-
-     The corners are cut into the PNG rather than rounded here, so the shadow
-     follows the rounded shape instead of squaring it off again. */
-  .app-icon {
-    width: min(124px, 30vw);
+  .hero-cube {
+    width: min(232px, 50vw);
     height: auto;
     display: block;
-    margin: 0 auto 16px;
-    filter:
-      drop-shadow(0 18px 34px rgba(0, 0, 0, .55))
-      drop-shadow(0 6px 30px rgba(60, 230, 240, .2));
+    margin: 0 auto 10px;
+    filter: drop-shadow(0 22px 50px rgba(60, 230, 240, 0.22));
   }
   .brand { width: min(430px, 84vw); height: auto; display: block; margin: 0 auto; }
   .visually-hidden {
@@ -175,7 +165,7 @@
   <i style="top:86%; left:45%;  width:26px; height:26px; background:var(--orange); transform:rotate(8deg)"></i>
   <div class="wrap">
     <h1 class="visually-hidden">NoobCube — learn to solve your Rubik's cube, one step at a time</h1>
-    <img class="app-icon bob" src="/assets/appicon.png?v=2" alt="The NoobCube app icon" width="512" height="512" fetchpriority="high">
+    <img class="hero-cube bob" src="/assets/logo.png?v=2" alt="" width="512" height="512" fetchpriority="high">
     <img class="brand" src="/assets/brand.png?v=2" alt="NoobCube">
     <p class="tagline"><span class="sticker">Made for brand-new cubers!</span></p>
     <p><span class="coming">🚧 Coming soon to the App&nbsp;Store</span></p>
