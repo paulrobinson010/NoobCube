@@ -64,6 +64,23 @@ def quote(text):
 
 # ---------------------------------------------------------------- file walking
 
+def resource_files(folder):
+    """Everything under `folder`/Resources, which is copied into the bundle.
+
+    The Baloo 2 font lives there: Info.plist's UIAppFonts can only find a font
+    that has actually been copied in.
+    """
+    found = []
+    base = os.path.join(ROOT, folder, 'Resources')
+    for dirpath, dirnames, filenames in os.walk(base):
+        dirnames.sort()
+        for name in sorted(filenames):
+            if not name.startswith('.'):
+                found.append(os.path.relpath(os.path.join(dirpath, name),
+                                             os.path.join(ROOT, folder)))
+    return found
+
+
 def swift_files(folder):
     """Every .swift file under `folder`, relative to it, in a stable order."""
     found = []
@@ -145,7 +162,23 @@ def build_project():
         'sourceTree': '<group>',
     })
 
-    app_group = b.group_tree(APP, app_sources, extra_children=[assets_ref, plist_ref])
+    # Anything under NoobCube/Resources is copied into the bundle as it is.
+    resource_refs = []
+    resource_build_files = []
+    for rel in resource_files(APP):
+        ref = b.add(f'fileref:resource:{rel}', {
+            'isa': 'PBXFileReference',
+            'path': rel,
+            'sourceTree': '<group>',
+        })
+        resource_refs.append(ref)
+        resource_build_files.append(b.add(f'buildfile:resource:{rel}', {
+            'isa': 'PBXBuildFile',
+            'fileRef': ref,
+        }))
+
+    app_group = b.group_tree(APP, app_sources,
+                             extra_children=[assets_ref, plist_ref] + resource_refs)
     test_group = b.group_tree(TESTS, test_sources)
 
     app_product = b.add('product:app', {
@@ -199,7 +232,7 @@ def build_project():
     app_resources_phase = b.add('phase:app:resources', {
         'isa': 'PBXResourcesBuildPhase',
         'buildActionMask': 2147483647,
-        'files': [assets_build_file],
+        'files': [assets_build_file] + resource_build_files,
         'runOnlyForDeploymentPostprocessing': 0,
     })
     app_frameworks_phase = b.add('phase:app:frameworks', {

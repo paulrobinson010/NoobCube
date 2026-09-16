@@ -74,8 +74,13 @@ final class SolveSession: ObservableObject {
         return Array(stage.moves.dropFirst(moveIndex))
     }
 
-    var stageNumber: Int { (stage?.kind.step) ?? SolveStage.Kind.totalSteps }
-    var totalStages: Int { SolveStage.Kind.totalSteps }
+    var totalStages: Int { SolveStage.Kind.totalNumbered }
+
+    /// "Step 3 of 8", or nothing while the cube is still being lined up.
+    var stageLabel: String? {
+        guard let number = stage?.kind.number else { return nil }
+        return "Step \(number) of \(totalStages)"
+    }
 
     /// How far through the whole solve, for the progress bar.
     var progress: Double {
@@ -100,7 +105,8 @@ final class SolveSession: ObservableObject {
             return
         }
         let kind = stage.kind
-        narrator.say("Step \(kind.step) of \(totalStages). \(kind.title). \(kind.explanation)")
+        let opening = stageLabel.map { "\($0). " } ?? ""
+        narrator.say("\(opening)\(kind.title). \(kind.explanation)")
     }
 
     /// Say the move the child should make now.

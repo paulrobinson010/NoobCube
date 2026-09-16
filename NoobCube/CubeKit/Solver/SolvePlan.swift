@@ -116,10 +116,22 @@ extension SolveStage.Kind {
         }
     }
 
-    /// Order the stages are worked through.
-    var step: Int { (SolveStage.Kind.allCases.firstIndex(of: self) ?? 0) + 1 }
+    /// Where this stage comes in the order of work. Not shown to anyone.
+    var order: Int { (SolveStage.Kind.allCases.firstIndex(of: self) ?? 0) + 1 }
 
-    static var totalSteps: Int { SolveStage.Kind.allCases.count }
+    /// The number the child sees on the checklist and hears spoken aloud.
+    ///
+    /// Holding the cube the right way up is how you start rather than a step
+    /// you tick off, so it has no number, and the eight that follow are the
+    /// eight the website lists. One number, everywhere.
+    var number: Int? {
+        SolveStage.Kind.numbered.firstIndex(of: self).map { $0 + 1 }
+    }
+
+    /// The stages that get a number, in order.
+    static var numbered: [SolveStage.Kind] { allCases.filter { $0 != .hold } }
+
+    static var totalNumbered: Int { numbered.count }
 }
 
 /// A complete route from a scanned cube to a solved one.

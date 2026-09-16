@@ -14,17 +14,22 @@ enum CubeColour: String, CaseIterable, Codable, Hashable, Sendable, Identifiable
 
     var displayName: String { rawValue.capitalized }
 
-    /// Roughly where this sticker sits in sRGB, used for drawing and as the
-    /// starting point for classifying a camera sample.
+    /// What this colour looks like, taken off the app icon's own cube.
+    ///
+    /// Drawing only: reading a cube in from the camera has its own references
+    /// in ``ColourClassifier``, because a sticker under a lamp is nothing like
+    /// a sticker in artwork.
     var rgb: (red: Double, green: Double, blue: Double) {
+        // BEGIN generated from Design/tokens.json
         switch self {
-        case .white:  return (0.96, 0.96, 0.94)
-        case .yellow: return (1.00, 0.84, 0.10)
-        case .green:  return (0.11, 0.70, 0.35)
-        case .blue:   return (0.05, 0.42, 0.85)
-        case .red:    return (0.88, 0.16, 0.18)
-        case .orange: return (0.98, 0.49, 0.09)
+        case .white:   return (0.953, 0.953, 0.953)
+        case .yellow:  return (1.000, 0.847, 0.016)
+        case .green:   return (0.035, 0.839, 0.278)
+        case .blue:    return (0.020, 0.439, 0.992)
+        case .red:     return (0.992, 0.106, 0.082)
+        case .orange:  return (0.996, 0.533, 0.016)
         }
+        // END generated
     }
 
     /// The colour a sticker of this colour is usually opposite, on a cube using

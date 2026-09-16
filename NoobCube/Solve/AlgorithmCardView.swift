@@ -16,8 +16,8 @@ struct AlgorithmCardView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text(name)
-                    .font(.system(size: 20, weight: .heavy, design: .rounded))
-                    .foregroundStyle(Theme.accent)
+                    .font(.brand(size: 20, weight: .heavy))
+                    .foregroundStyle(Theme.attention)
                 Spacer()
                 Button {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
@@ -26,7 +26,7 @@ struct AlgorithmCardView: View {
                 } label: {
                     Label(covered ? "Peek" : "Cover it up",
                           systemImage: covered ? "eye.fill" : "eye.slash.fill")
-                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .font(.brand(size: 14, weight: .bold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 7)
@@ -39,7 +39,7 @@ struct AlgorithmCardView: View {
                 HStack(spacing: 6) {
                     ForEach(Array(moves.enumerated()), id: \.offset) { _, move in
                         Text(move.notation)
-                            .font(.system(size: 17, weight: .heavy, design: .rounded))
+                            .font(.brand(size: 17, weight: .heavy))
                             .foregroundStyle(.white)
                             .frame(minWidth: 34, minHeight: 38)
                             .background(
@@ -52,7 +52,7 @@ struct AlgorithmCardView: View {
 
                 if covered {
                     Text("Can you remember it?")
-                        .font(.system(size: 17, weight: .bold, design: .rounded))
+                        .font(.brand(size: 17, weight: .bold))
                         .foregroundStyle(Theme.muted)
                         .frame(maxWidth: .infinity, minHeight: 38)
                         .background(
@@ -64,8 +64,8 @@ struct AlgorithmCardView: View {
 
             Button(action: onPlay) {
                 Label("Watch it once", systemImage: "play.circle.fill")
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
-                    .foregroundStyle(Theme.accent)
+                    .font(.brand(size: 16, weight: .bold))
+                    .foregroundStyle(Theme.attention)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

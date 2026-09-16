@@ -31,9 +31,9 @@ struct MoveStripView: View {
 
         return VStack(spacing: 2) {
             Text(move.notation)
-                .font(.system(size: isCurrent ? 26 : 20, weight: .heavy, design: .rounded))
+                .font(.brand(size: isCurrent ? 26 : 20, weight: .heavy))
             Text(move.childLabel)
-                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .font(.brand(size: 11, weight: .semibold))
                 .opacity(0.85)
         }
         .foregroundStyle(isCurrent ? .white : (isDone ? Theme.muted : .white.opacity(0.75)))
@@ -41,11 +41,11 @@ struct MoveStripView: View {
         .padding(.horizontal, 10)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(isCurrent ? Theme.accent : (isDone ? Color.white.opacity(0.06) : Theme.card))
+                .fill(isCurrent ? Theme.attention : (isDone ? Color.white.opacity(0.06) : Theme.card))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(move.isWholeCubeTurn ? Theme.success : .clear, lineWidth: 2)
+                .strokeBorder(move.isWholeCubeTurn ? Theme.done : .clear, lineWidth: 2)
         )
         .scaleEffect(isCurrent ? 1.0 : 0.92)
         .animation(.spring(response: 0.3, dampingFraction: 0.75), value: isCurrent)

@@ -1,4 +1,5 @@
 import SceneKit
+import SwiftUI
 import UIKit
 
 /// A curved arrow wrapped around the axis a move turns about.
@@ -32,8 +33,9 @@ extension CubeSceneController {
                                                      clockwise: clockwise),
                              extrusionDepth: 0.07)
         let material = SCNMaterial()
-        material.diffuse.contents = UIColor(red: 1.0, green: 0.48, blue: 0.29, alpha: 1)
-        material.emission.contents = UIColor(red: 0.5, green: 0.2, blue: 0.1, alpha: 1)
+        // The colour the app uses everywhere for "this is the bit to look at".
+        material.diffuse.contents = UIColor(Theme.attention)
+        material.emission.contents = UIColor(Theme.attentionGlow)
         material.lightingModel = .constant
         material.isDoubleSided = true
         shape.firstMaterial = material

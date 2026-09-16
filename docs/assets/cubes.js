@@ -16,15 +16,19 @@
   const still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   // Same space as the app: x right, y down, z towards you.
+  /* BEGIN generated from Design/tokens.json */
   const COLOUR = [
-    [245, 245, 240],   // white
-    [255, 214, 26],    // yellow
-    [224, 42, 46],     // red
-    [250, 125, 23],    // orange
-    [28, 179, 89],     // green
-    [13, 107, 217],    // blue
+    [243, 243, 243],    // white
+    [255, 216, 4],      // yellow
+    [253, 27, 21],      // red
+    [254, 136, 4],      // orange
+    [9, 214, 71],       // green
+    [5, 112, 253],      // blue
   ];
-  const PLASTIC = [10, 14, 26];   // the black body the stickers sit on
+  const PLASTIC = [11, 16, 24];   // the black body the stickers sit on
+  const STICKER = 0.84;   // how much of a face the sticker covers
+  const POSE = { pitch: -0.42, yaw: -0.62 };
+  /* END generated */
   const FACES = [
     { n: [0, -1, 0], c: 0 },   // up     white
     { n: [0, 1, 0], c: 1 },    // down   yellow
@@ -55,7 +59,7 @@
     return [[c, -s, 0], [s, c, 0], [0, 0, 1]];
   };
 
-  const view = mul(partial(0, -0.42), partial(1, -0.62));   // a pleasant three-quarter angle
+  const view = mul(partial(0, POSE.pitch), partial(1, POSE.yaw));   // the pose the app uses too
 
   class Cube {
     constructor() {
@@ -150,8 +154,8 @@
           const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([su, sv]) => {
             const p = [0, 0, 0];
             p[axis] = f.n[axis] * 0.5;
-            p[u] = su * 0.45;
-            p[v] = sv * 0.45;
+            p[u] = su * 0.5 * STICKER;
+            p[v] = sv * 0.5 * STICKER;
             return apply(world, [c.home[0] + p[0], c.home[1] + p[1], c.home[2] + p[2]]);
           });
 

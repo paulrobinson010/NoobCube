@@ -66,7 +66,7 @@ struct WelcomeView: View {
                 .padding(.top, 4)
 
             Text("Let's solve your cube together")
-                .font(.system(size: 19, weight: .semibold, design: .rounded))
+                .font(.brand(size: 19, weight: .semibold))
                 .foregroundStyle(Theme.muted)
 
             CubeSceneView(controller: model.scene)
@@ -89,7 +89,7 @@ struct WelcomeView: View {
                     Label(model.smartCube.isConnected ? "Smart cube connected" : "Use my smart cube",
                           systemImage: "cube.transparent.fill")
                 }
-                .buttonStyle(BigButtonStyle(tint: model.smartCube.isConnected ? Theme.success : Theme.accent,
+                .buttonStyle(BigButtonStyle(tint: model.smartCube.isConnected ? Theme.done : Theme.action,
                                             isProminent: false))
 
                 HStack {

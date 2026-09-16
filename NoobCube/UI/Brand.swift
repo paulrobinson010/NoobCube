@@ -46,11 +46,11 @@ struct ScreenHeader: View {
             VStack(alignment: .leading, spacing: 1) {
                 if let subtitle {
                     Text(subtitle)
-                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .font(.brand(size: 14, weight: .bold))
                         .foregroundStyle(Theme.muted)
                 }
                 Text(title)
-                    .font(.system(size: 25, weight: .heavy, design: .rounded))
+                    .font(.brand(size: 25, weight: .heavy))
                     .foregroundStyle(.white)
                     .minimumScaleFactor(0.7)
                     .lineLimit(2)

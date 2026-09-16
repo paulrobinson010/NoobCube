@@ -89,7 +89,7 @@ struct NarratorControls: View {
                 Label("Say it again", systemImage: "play.circle.fill")
                     .labelStyle(.iconOnly)
                     .font(.system(size: 40))
-                    .foregroundStyle(Theme.accent)
+                    .foregroundStyle(Theme.attention)
             }
             .disabled(narrator.lastPhrase == nil)
             .accessibilityLabel("Say the instruction again")
@@ -99,7 +99,7 @@ struct NarratorControls: View {
             } label: {
                 Image(systemName: narrator.isMuted ? "speaker.slash.circle.fill" : "speaker.wave.2.circle.fill")
                     .font(.system(size: 40))
-                    .foregroundStyle(narrator.isMuted ? Theme.muted : Theme.accent)
+                    .foregroundStyle(narrator.isMuted ? Theme.muted : Theme.attention)
             }
             .accessibilityLabel(narrator.isMuted ? "Turn the voice on" : "Turn the voice off")
         }

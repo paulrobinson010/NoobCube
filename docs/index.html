@@ -55,7 +55,7 @@
   }
 
   /* Not quite opaque, so the cubes keep drifting behind the page. */
-  .band { background: rgba(11, 18, 34, 0.9); }
+  .band { background: var(--band-veil); }
   .band .wrap { padding-top: 8px; padding-bottom: 40px; }
   h2 { font-size: 1.6rem; margin: 28px 0 22px; color: var(--cyan); text-align: center; }
 
@@ -71,18 +71,27 @@
     display: flex; flex-wrap: wrap; justify-content: center;
     gap: 10px; margin: 6px auto 4px; max-width: 700px; padding: 0 24px;
   }
+  /* One chip per step, the same numbered badge the app's checklist uses. */
   .stages span {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
     background: var(--card);
     border-radius: 999px;
-    padding: 5px 16px;
+    padding: 5px 16px 5px 5px;
     font-size: .92rem;
     font-weight: 700;
-    border-left: 4px solid var(--cyan);
   }
-  .stages span:nth-child(1), .stages span:nth-child(2) { border-left-color: var(--chalk); }
-  .stages span:nth-child(3), .stages span:nth-child(4) { border-left-color: var(--blue); }
-  .stages span:nth-child(5), .stages span:nth-child(6) { border-left-color: var(--yellow); }
-  .stages span:nth-child(7), .stages span:nth-child(8) { border-left-color: var(--orange); }
+  .stages b {
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    color: var(--ink);
+    font-size: .85rem;
+    font-weight: 800;
+  }
 
   .magic {
     text-align: center;
@@ -159,7 +168,7 @@
 </header>
 
 <svg class="wave" viewBox="0 0 1440 60" preserveAspectRatio="none" aria-hidden="true">
-  <path d="M0,30 C240,60 480,0 720,20 C960,45 1200,10 1440,32 L1440,60 L0,60 Z" fill="rgba(11, 18, 34, 0.9)"/>
+  <path d="M0,30 C240,60 480,0 720,20 C960,45 1200,10 1440,32 L1440,60 L0,60 Z"/>
 </svg>
 
 <div class="band">
@@ -202,14 +211,16 @@
       There are only seven short sequences to learn in the whole thing, and the
       app never shows a move it hasn't taught you.</p>
       <div class="stages" style="margin-top:14px">
-        <span>1 Make a daisy</span>
-        <span>2 White cross</span>
-        <span>3 White corners</span>
-        <span>4 Middle row</span>
-        <span>5 Yellow cross</span>
-        <span>6 Yellow face</span>
-        <span>7 Corners home</span>
-        <span>8 Last pieces</span>
+      <!-- BEGIN generated from Design/tokens.json -->
+        <span><b style="background: var(--chalk)">1</b>Daisy</span>
+        <span><b style="background: var(--chalk)">2</b>White cross</span>
+        <span><b style="background: var(--blue)">3</b>White bottom</span>
+        <span><b style="background: var(--blue)">4</b>Middle row</span>
+        <span><b style="background: var(--yellow)">5</b>Yellow cross</span>
+        <span><b style="background: var(--yellow)">6</b>Yellow face</span>
+        <span><b style="background: var(--orange)">7</b>Corners home</span>
+        <span><b style="background: var(--green)">8</b>Finished!</span>
+      <!-- END generated -->
       </div>
       <p style="text-align:center; margin-top:14px">Stuck halfway? Show it the cube
       again at any point. Steps you've already finished stay finished.</p>
@@ -235,7 +246,7 @@
 </div>
 
 <svg class="wave" viewBox="0 0 1440 60" preserveAspectRatio="none" style="transform:scaleY(-1)" aria-hidden="true">
-  <path d="M0,30 C240,60 480,0 720,20 C960,45 1200,10 1440,32 L1440,60 L0,60 Z" fill="rgba(11, 18, 34, 0.9)"/>
+  <path d="M0,30 C240,60 480,0 720,20 C960,45 1200,10 1440,32 L1440,60 L0,60 Z"/>
 </svg>
 
 <section class="shots">

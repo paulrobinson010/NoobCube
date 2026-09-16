@@ -20,7 +20,7 @@ struct StageChecklistStrip: View {
                 ForEach(visible) { stage in
                     let state = state(of: stage)
                     Capsule()
-                        .fill(colour(for: state))
+                        .fill(colour(for: state, of: stage.kind))
                         .frame(height: 8)
                         .overlay(
                             Capsule().strokeBorder(.white.opacity(state == .current ? 0.9 : 0),
@@ -40,14 +40,16 @@ struct StageChecklistStrip: View {
     private func state(of stage: SolveStage) -> State {
         guard let currentKind else { return .done }
         if stage.kind == currentKind { return .current }
-        return stage.kind.step < currentKind.step ? .done : .todo
+        return stage.kind.order < currentKind.order ? .done : .todo
     }
 
-    private func colour(for state: State) -> Color {
+    /// Done and current say where you are; a step still to come is shown in
+    /// its own colour, the one the website gives it, only fainter.
+    private func colour(for state: State, of kind: SolveStage.Kind) -> Color {
         switch state {
-        case .done: return Theme.success
-        case .current: return Theme.accent
-        case .todo: return .white.opacity(0.14)
+        case .done: return Theme.done
+        case .current: return Theme.attention
+        case .todo: return kind.tint.opacity(0.3)
         }
     }
 }
@@ -81,30 +83,31 @@ struct StageChecklistSheet: View {
 
     private func row(for stage: SolveStage) -> some View {
         let isCurrent = stage.kind == currentKind
-        let isDone = (currentKind.map { stage.kind.step < $0.step }) ?? true
+        let isDone = (currentKind.map { stage.kind.order < $0.order }) ?? true
 
         return HStack(alignment: .top, spacing: 14) {
             ZStack {
                 Circle()
-                    .fill(isDone ? Theme.success : (isCurrent ? Theme.accent : Color.white.opacity(0.1)))
+                    .fill(isDone ? Theme.done
+                          : (isCurrent ? Theme.attention : stage.kind.tint.opacity(0.35)))
                     .frame(width: 36, height: 36)
                 if isDone {
                     Image(systemName: "checkmark")
                         .font(.system(size: 16, weight: .black))
                         .foregroundStyle(.black.opacity(0.7))
                 } else {
-                    Text("\(stage.kind.step - 1)")
-                        .font(.system(size: 16, weight: .black, design: .rounded))
-                        .foregroundStyle(isCurrent ? .black.opacity(0.75) : .white.opacity(0.65))
+                    Text(stage.kind.number.map(String.init) ?? "")
+                        .font(.brand(size: 16, weight: .black))
+                        .foregroundStyle(isCurrent ? .black.opacity(0.75) : .white.opacity(0.8))
                 }
             }
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(stage.kind.shortName)
-                    .font(.system(size: 19, weight: .heavy, design: .rounded))
-                    .foregroundStyle(isCurrent ? Theme.accent : .white)
+                    .font(.brand(size: 19, weight: .heavy))
+                    .foregroundStyle(isCurrent ? Theme.attention : .white)
                 Text(stage.kind.why)
-                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .font(.brand(size: 14, weight: .medium))
                     .foregroundStyle(Theme.muted)
                     .fixedSize(horizontal: false, vertical: true)
             }

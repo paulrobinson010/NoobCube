@@ -32,7 +32,7 @@ struct ReadyView: View {
             Spacer(minLength: 0)
 
             Button("Let's solve it!") { onStart() }
-                .buttonStyle(BigButtonStyle(tint: Theme.success))
+                .buttonStyle(BigButtonStyle(tint: Theme.done))
                 .padding(.horizontal, 20)
                 .padding(.bottom, 18)
                 .opacity(hasFolded ? 1 : 0.4)
@@ -60,7 +60,7 @@ struct ReadyView: View {
                 .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .strokeBorder(.black.opacity(0.35), lineWidth: 1))
             Text("\(colour.displayName) \(label)")
-                .font(.system(size: 20, weight: .bold, design: .rounded))
+                .font(.brand(size: 20, weight: .bold))
                 .foregroundStyle(.white)
         }
     }

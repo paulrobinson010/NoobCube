@@ -42,15 +42,15 @@ struct SmartCubeView: View {
     private var statusCard: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(statusTitle)
-                .font(.system(size: 22, weight: .heavy, design: .rounded))
+                .font(.brand(size: 22, weight: .heavy))
                 .foregroundStyle(.white)
             Text(statusDetail)
-                .font(.system(size: 16, weight: .medium, design: .rounded))
+                .font(.brand(size: 16, weight: .medium))
                 .foregroundStyle(Theme.muted)
             if let battery = manager.batteryPercent {
                 Label("\(battery)%", systemImage: "battery.100")
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
-                    .foregroundStyle(Theme.success)
+                    .font(.brand(size: 15, weight: .semibold))
+                    .foregroundStyle(Theme.done)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -61,10 +61,10 @@ struct SmartCubeView: View {
         VStack(spacing: 10) {
             if manager.discovered.isEmpty {
                 ProgressView()
-                    .tint(Theme.accent)
+                    .tint(Theme.attention)
                     .padding(.top, 20)
                 Text("Wiggle your cube to wake it up.")
-                    .font(.system(size: 16, weight: .medium, design: .rounded))
+                    .font(.brand(size: 16, weight: .medium))
                     .foregroundStyle(Theme.muted)
             }
             ForEach(manager.discovered) { cube in
@@ -76,7 +76,7 @@ struct SmartCubeView: View {
                         Text(cube.name)
                         Spacer()
                         Text(cube.generation?.rawValue ?? "tap to connect")
-                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                            .font(.brand(size: 13, weight: .semibold))
                             .foregroundStyle(Theme.muted)
                     }
                 }
@@ -89,23 +89,23 @@ struct SmartCubeView: View {
         VStack(spacing: 12) {
             Text("A smart cube knows which way you turned it, but not what "
                  + "colour anything is. So it needs telling where it's starting from.")
-                .font(.system(size: 15, weight: .medium, design: .rounded))
+                .font(.brand(size: 15, weight: .medium))
                 .foregroundStyle(Theme.muted)
                 .multilineTextAlignment(.center)
 
             if manager.isCalibrated {
                 Label("Following your cube", systemImage: "checkmark.circle.fill")
-                    .font(.system(size: 17, weight: .bold, design: .rounded))
-                    .foregroundStyle(Theme.success)
+                    .font(.brand(size: 17, weight: .bold))
+                    .foregroundStyle(Theme.done)
 
                 Button("Solve from here") { onUseCube() }
-                    .buttonStyle(BigButtonStyle(tint: Theme.success))
+                    .buttonStyle(BigButtonStyle(tint: Theme.done))
             } else {
                 Button("My cube is solved right now") { onCalibrateSolved() }
                     .buttonStyle(BigButtonStyle())
 
                 Text("Or show it to the camera — after a scan it'll follow along by itself.")
-                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .font(.brand(size: 14, weight: .medium))
                     .foregroundStyle(Theme.muted)
                     .multilineTextAlignment(.center)
             }
@@ -132,8 +132,8 @@ struct SmartCubeView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.top, 6)
             }
-            .font(.system(size: 15, weight: .semibold, design: .rounded))
-            .tint(Theme.accent)
+            .font(.brand(size: 15, weight: .semibold))
+            .tint(Theme.attention)
             .cardBackground()
         }
     }

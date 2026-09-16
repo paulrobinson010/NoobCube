@@ -8,24 +8,43 @@
 }
 
 :root {
-  --bg: #04070f;
-  --band: #0b1222;
-  --card: #151d34;
-  --text: #e8eef6;
-  --muted: #9fb0c3;
-  --ink: #06121a;
+/* BEGIN generated from Design/tokens.json */
+  /* the cube's own stickers, straight off the icon */
+  --chalk: #f3f3f3;
+  --yellow: #ffd804;
+  --red: #fd1b15;
+  --orange: #fe8804;
+  --green: #09d647;
+  --blue: #0570fd;
 
-  /* the cube's own stickers */
-  --red: #e02a2e;
-  --blue: #0d6bd9;
-  --green: #1cb359;
-  --yellow: #ffd61a;
-  --orange: #fa7d17;
-  --chalk: #f5f5f0;
+  /* the glow either side of the cube in the icon */
+  --cyan: #03ebfe;
+  --magenta: #fc2dfe;
+  --purple: #4a0b86;
 
-  /* the glow either side of the icon */
-  --cyan: #3ce6f0;
-  --magenta: #f45cf0;
+  /* the page itself, starting from the icon's edge colour */
+  --bg: #01091a;
+  --glow: #0d2a5e;
+  --band: #061224;
+  --card: #122038;
+  --plastic: #0b1018;
+  --text: #e9eff7;
+  --muted: #93a7bd;
+  --ink: #04101c;
+
+  /* the band, thinned so the cubes keep drifting behind it */
+  --band-veil: rgba(6, 18, 36, 0.9);
+
+  /* what each colour is for, so the app and the site agree */
+  --action: #0570fd;
+  --action-shadow: #023d8b;
+  --attention: #03ebfe;
+  --done: #09d647;
+
+  --radius: 22px;
+  --drop: 6px;
+  --sticker-radius: 22%;
+/* END generated */
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -34,7 +53,7 @@ html { background: var(--bg); }
 
 body {
   font-family: 'Baloo 2', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  background: radial-gradient(1100px 520px at 50% -10%, #10214a, var(--bg));
+  background: radial-gradient(1100px 520px at 50% -10%, var(--glow), var(--bg));
   color: var(--text);
   line-height: 1.6;
   overflow-x: hidden;
@@ -78,7 +97,7 @@ a { color: var(--cyan); }
 
 .card {
   background: var(--card);
-  border-radius: 22px;
+  border-radius: var(--radius);
   padding: 24px;
   border-top: 5px solid var(--cyan);
 }
@@ -86,7 +105,7 @@ a { color: var(--cyan); }
 /* Chunky toy button with a pressed state */
 .btn {
   display: inline-block;
-  background: var(--blue);
+  background: var(--action);
   color: #fff;
   border: 0;
   border-radius: 999px;
@@ -96,16 +115,16 @@ a { color: var(--cyan); }
   font-weight: 700;
   cursor: pointer;
   text-decoration: none;
-  box-shadow: 0 6px 0 #0a4d9c;
+  box-shadow: 0 var(--drop) 0 var(--action-shadow);
 }
-.btn:active { transform: translateY(4px); box-shadow: 0 2px 0 #0a4d9c; }
+.btn:active { transform: translateY(calc(var(--drop) - 2px)); box-shadow: 0 2px 0 var(--action-shadow); }
 
 /* Scattered background stickers, the cube equivalent of X-Marks' ✕ marks */
 .stickers { position: relative; }
 .stickers > i {
   position: absolute;
   display: block;
-  border-radius: 24%;
+  border-radius: var(--sticker-radius);
   opacity: .16;
   pointer-events: none;
   user-select: none;
@@ -114,6 +133,8 @@ a { color: var(--cyan); }
 .note { color: var(--muted); font-size: .85rem; margin-top: 20px; }
 
 .wave { display: block; width: 100%; height: 60px; }
+/* The wave is the top and bottom edge of the band, so it matches it. */
+.wave path { fill: var(--band-veil); }
 
 @media (prefers-reduced-motion: no-preference) {
   .bob { animation: bob 3.6s ease-in-out infinite; }

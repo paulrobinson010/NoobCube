@@ -28,7 +28,6 @@ final class CubeSceneController {
 
     private static let cubeletSize: CGFloat = 1.0
     private static let gap: CGFloat = 0.06
-    private static let stickerInset: CGFloat = 0.14
 
     init() {
         scene.rootNode.addChildNode(cubeNode)
@@ -49,8 +48,15 @@ final class CubeSceneController {
         camera.wantsHDR = false
         cameraNode.camera = camera
         // Looking down at the cube from the front-right-above, the angle that
-        // shows three faces at once, so a child can see what is going on.
-        cameraNode.position = SCNVector3(6.2, 5.2, 7.6)
+        // shows three faces at once, so a child can see what is going on. The
+        // angle itself is a design token, so the cube on the website and the
+        // one in the app are posed identically and read as the same object.
+        let pitch = -Theme.cubePitch
+        let yaw = -Theme.cubeYaw
+        let distance: Float = 11.1
+        cameraNode.position = SCNVector3(distance * cos(pitch) * sin(yaw),
+                                         distance * sin(pitch),
+                                         distance * cos(pitch) * cos(yaw))
         cameraNode.look(at: SCNVector3(0, 0, 0))
         cameraRestingPosition = cameraNode.position
         cameraRestingEulerAngles = cameraNode.eulerAngles
@@ -118,7 +124,7 @@ final class CubeSceneController {
 
     private static func plasticMaterial() -> SCNMaterial {
         let material = SCNMaterial()
-        material.diffuse.contents = UIColor(white: 0.09, alpha: 1)
+        material.diffuse.contents = UIColor(Theme.plastic)
         material.roughness.contents = 0.85
         material.metalness.contents = 0.0
         material.lightingModel = .physicallyBased
@@ -126,9 +132,9 @@ final class CubeSceneController {
     }
 
     private func makeSticker() -> SCNNode {
-        let side = Self.cubeletSize * (1 - Self.stickerInset)
+        let side = Self.cubeletSize * Theme.stickerFraction
         let plate = SCNPlane(width: side, height: side)
-        plate.cornerRadius = side * 0.16
+        plate.cornerRadius = side * Theme.stickerRadius
         let material = SCNMaterial()
         material.diffuse.contents = UIColor.white
         material.emission.contents = UIColor.black

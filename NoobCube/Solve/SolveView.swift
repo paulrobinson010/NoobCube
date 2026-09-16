@@ -47,7 +47,7 @@ struct SolveView: View {
     private var header: some View {
         VStack(spacing: 10) {
             ScreenHeader(title: session.stage?.kind.title ?? "All done!",
-                         subtitle: "Step \(session.stageNumber) of \(session.totalStages)",
+                         subtitle: session.stageLabel,
                          narrator: narrator)
 
             StageChecklistStrip(stages: session.plan.stages,
@@ -62,26 +62,26 @@ struct SolveView: View {
         VStack(alignment: .leading, spacing: 10) {
             if session.phase == .finished {
                 Text("You solved it! 🎉")
-                    .font(.system(size: 30, weight: .heavy, design: .rounded))
-                    .foregroundStyle(Theme.success)
+                    .font(.brand(size: 30, weight: .heavy))
+                    .foregroundStyle(Theme.done)
             } else if session.help == .moveByMove, let move = session.currentMove {
                 Text(move.childLabel)
-                    .font(.system(size: 30, weight: .heavy, design: .rounded))
+                    .font(.brand(size: 30, weight: .heavy))
                     .foregroundStyle(.white)
                 Text(move.spokenInstruction)
-                    .font(.system(size: 18, weight: .medium, design: .rounded))
+                    .font(.brand(size: 18, weight: .medium))
                     .foregroundStyle(.white.opacity(0.85))
             } else if let stage = session.stage {
                 Text(stage.kind.explanation)
-                    .font(.system(size: 18, weight: .medium, design: .rounded))
+                    .font(.brand(size: 18, weight: .medium))
                     .foregroundStyle(.white.opacity(0.9))
                 Text(stage.kind.why)
-                    .font(.system(size: 15, weight: .medium, design: .rounded))
+                    .font(.brand(size: 15, weight: .medium))
                     .foregroundStyle(Theme.muted)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .cardBackground()
+        .cardBackground(stripe: session.stage?.kind.tint ?? Theme.done)
     }
 
     @ViewBuilder
@@ -90,13 +90,13 @@ struct SolveView: View {
         case .finished:
             VStack(spacing: 12) {
                 Button("Play again") { onFinish() }
-                    .buttonStyle(BigButtonStyle(tint: Theme.success))
+                    .buttonStyle(BigButtonStyle(tint: Theme.done))
             }
 
         case .offerRescan:
             VStack(spacing: 12) {
                 Text("Let me look at your cube again.")
-                    .font(.system(size: 18, weight: .semibold, design: .rounded))
+                    .font(.brand(size: 18, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.9))
                 Button("Look at my cube") { onRescan() }
                     .buttonStyle(BigButtonStyle())
@@ -118,7 +118,7 @@ struct SolveView: View {
                         session.help = .wholeStage
                         session.announceStage()
                     }
-                    .buttonStyle(BigButtonStyle(tint: Theme.success, isProminent: false))
+                    .buttonStyle(BigButtonStyle(tint: Theme.done, isProminent: false))
 
                     rescanButton
                 }
@@ -130,7 +130,7 @@ struct SolveView: View {
                     } label: {
                         Label("I did it!", systemImage: "checkmark.circle.fill")
                     }
-                    .buttonStyle(BigButtonStyle(tint: Theme.success))
+                    .buttonStyle(BigButtonStyle(tint: Theme.done))
                     .disabled(session.isBusy || session.currentMove == nil)
 
                     HStack(spacing: 12) {
@@ -158,7 +158,7 @@ struct SolveView: View {
                             .frame(height: 76)
                     }
                     Button("I've done this bit") { session.declareStageDoneByHand() }
-                        .buttonStyle(BigButtonStyle(tint: Theme.success))
+                        .buttonStyle(BigButtonStyle(tint: Theme.done))
 
                     Button("Actually, show me each move") {
                         session.help = .moveByMove

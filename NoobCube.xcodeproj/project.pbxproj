@@ -48,6 +48,9 @@
 		70BDA317803AFA34F5D07137 = {isa = PBXBuildFile; fileRef = 9599B9215F8DC0FC51A7A95C; };
 		6C2A6A7A38B199E52FFF35B4 = {isa = PBXBuildFile; fileRef = E1C3AD996FD4FF070A61E079; };
 		E34560B5AC9B96ACB4259B9E = {isa = PBXBuildFile; fileRef = B927E8B62A8D208A84979FB6; };
+		EEF9AF9EFB0A7A2EB2F9E954 = {isa = PBXBuildFile; fileRef = 6BEB24798A2D0DEAB288070A; };
+		55BB87842B3FE64420CC6E2A = {isa = PBXBuildFile; fileRef = 2CB8ABBE97ECC7DBA44FEF31; };
+		19A106E97D3AD1DEA3726B55 = {isa = PBXBuildFile; fileRef = 6CF8DFCB545CEF3BE984C198; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -105,6 +108,9 @@
 		9599B9215F8DC0FC51A7A95C = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CubeColourScheme.swift; sourceTree = "<group>"; };
 		E1C3AD996FD4FF070A61E079 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlgorithmCardView.swift; sourceTree = "<group>"; };
 		B927E8B62A8D208A84979FB6 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StageChecklistView.swift; sourceTree = "<group>"; };
+		6BEB24798A2D0DEAB288070A = {isa = PBXFileReference; lastKnownFileType = file.ttf; path = "Resources/Fonts/Baloo2.ttf"; sourceTree = "<group>"; };
+		2CB8ABBE97ECC7DBA44FEF31 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "BrandFont.swift"; sourceTree = "<group>"; };
+		6CF8DFCB545CEF3BE984C198 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StageTint.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -171,6 +177,7 @@
 		839A155436D47587B58E5E0E /* NoobCube */ = {
 			isa = PBXGroup;
 			children = (
+				6BEB24798A2D0DEAB288070A,
 				EE7AB7FF32DB44C2FEC3F1BE /* App */,
 				B8D54DD56E1B215ADA9798FF /* Cube3D */,
 				C98671680B27A11076D6796E /* CubeKit */,
@@ -244,6 +251,8 @@
 		D3C2C254791414A783F9D864 /* UI */ = {
 			isa = PBXGroup;
 			children = (
+				6CF8DFCB545CEF3BE984C198,
+				2CB8ABBE97ECC7DBA44FEF31,
 				F59093F1824788EB7311DCFB /* Brand.swift */,
 				6BB5B45E90AD13861C5F082F /* CubeNetView.swift */,
 				676163BE5B36C8F86A0A9D11 /* MoveNarration.swift */,
@@ -343,6 +352,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				EEF9AF9EFB0A7A2EB2F9E954,
 				0FE0C58EFD59BEA9F814F50A /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -354,6 +364,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				19A106E97D3AD1DEA3726B55,
+				55BB87842B3FE64420CC6E2A,
 				E34560B5AC9B96ACB4259B9E,
 				6C2A6A7A38B199E52FFF35B4,
 				70BDA317803AFA34F5D07137,

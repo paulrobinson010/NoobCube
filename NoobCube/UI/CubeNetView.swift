@@ -62,7 +62,7 @@ struct CubeNetView: View {
                 .fill(Color.black.opacity(0.35))
                 .overlay(
                     RoundedRectangle(cornerRadius: size * 0.09, style: .continuous)
-                        .strokeBorder(isHighlighted ? Theme.accent : Color.white.opacity(0.12),
+                        .strokeBorder(isHighlighted ? Theme.attention : Color.white.opacity(0.12),
                                       lineWidth: isHighlighted ? 3 : 1)
                 )
 

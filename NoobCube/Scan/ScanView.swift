@@ -68,7 +68,7 @@ struct ScanView: View {
                     .fill(colour.swiftUIColor)
                     .frame(width: 26, height: 26)
                     .overlay(
-                        Circle().strokeBorder(done ? Theme.success : .white.opacity(0.25),
+                        Circle().strokeBorder(done ? Theme.done : .white.opacity(0.25),
                                               lineWidth: done ? 3 : 1)
                     )
                     .overlay(
@@ -114,7 +114,7 @@ struct ScanView: View {
 
             ZStack {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(Theme.accent, lineWidth: 3)
+                    .strokeBorder(Theme.attention, lineWidth: 3)
                     .frame(width: side, height: side)
 
                 ForEach(0..<9, id: \.self) { offset in
@@ -133,7 +133,7 @@ struct ScanView: View {
                 // A ring that closes as the cube is held still.
                 Circle()
                     .trim(from: 0, to: coordinator.camera.steadiness)
-                    .stroke(Theme.success, style: StrokeStyle(lineWidth: 5, lineCap: .round))
+                    .stroke(Theme.done, style: StrokeStyle(lineWidth: 5, lineCap: .round))
                     .rotationEffect(.degrees(-90))
                     .frame(width: side + 34, height: side + 34)
                     .animation(.easeOut(duration: 0.2), value: coordinator.camera.steadiness)
@@ -145,11 +145,11 @@ struct ScanView: View {
     private var permissionMessage: some View {
         VStack(spacing: 14) {
             Image(systemName: "camera.fill")
-                .font(.system(size: 44))
+                .font(.brand(size: 44))
                 .foregroundStyle(Theme.muted)
             Text("NoobCube needs the camera to look at your cube.")
                 .multilineTextAlignment(.center)
-                .font(.system(size: 18, weight: .semibold, design: .rounded))
+                .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(.white)
             Button("Open Settings") {
                 if let url = URL(string: UIApplication.openSettingsURLString) {
@@ -166,7 +166,7 @@ struct ScanView: View {
             Text(coordinator.camera.settling < 1
                  ? "Keep it still while I look…"
                  : "Hold it still and I'll take it myself.")
-                .font(.system(size: 16, weight: .medium, design: .rounded))
+                .font(.brand(size: 16, weight: .medium))
                 .foregroundStyle(Theme.muted)
                 .animation(.easeInOut, value: coordinator.camera.settling < 1)
 
@@ -182,13 +182,13 @@ struct ScanView: View {
     private var finishedControls: some View {
         VStack(spacing: 12) {
             Text("Tap any square that's the wrong colour.")
-                .font(.system(size: 16, weight: .medium, design: .rounded))
+                .font(.brand(size: 16, weight: .medium))
                 .foregroundStyle(Theme.muted)
                 .multilineTextAlignment(.center)
 
             if let problem = coordinator.problem {
                 Text(problem)
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .font(.brand(size: 16, weight: .semibold))
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity)
@@ -200,7 +200,7 @@ struct ScanView: View {
                     onReady(result.state, result.whiteFace, coordinator.scan)
                 }
             }
-            .buttonStyle(BigButtonStyle(tint: Theme.success))
+            .buttonStyle(BigButtonStyle(tint: Theme.done))
             .disabled(coordinator.result == nil)
             .opacity(coordinator.result == nil ? 0.5 : 1)
 

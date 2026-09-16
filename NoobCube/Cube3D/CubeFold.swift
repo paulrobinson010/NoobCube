@@ -1,4 +1,5 @@
 import SceneKit
+import SwiftUI
 import UIKit
 
 /// The unfolded net folding up into the cube.
@@ -97,7 +98,7 @@ extension CubeSceneController {
                              height: CGFloat(Self.faceSpan),
                              length: 0.08,
                              chamferRadius: 0.12)
-        backing.firstMaterial?.diffuse.contents = UIColor(white: 0.07, alpha: 1)
+        backing.firstMaterial?.diffuse.contents = UIColor(Theme.plastic)
         backing.firstMaterial?.lightingModel = .physicallyBased
         node.addChildNode(SCNNode(geometry: backing))
 
