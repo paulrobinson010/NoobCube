@@ -30,7 +30,14 @@ The web copies the site uses are in `docs/screenshots/`.
    over work they have done.
 
 A GAN smart cube can replace the camera: the cube reports its own state and
-every turn, so steps tick themselves off as the child turns it.
+every turn, so nothing needs confirming — the child turns their cube, the app
+says whether that was the one, and moves them on.
+
+A cube knows its own faces but not which way up it is being held, so the scan
+is what lines the two up: the same cube under two grips, and only one of the
+twenty-four fits. Whole-cube turns move the child's grip and not the cube's, so
+the plan's own rotations are counted back in. `Tools/CubeReference/alignment.py`
+is the same work written twice, and checks it.
 
 ## The method
 

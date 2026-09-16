@@ -68,13 +68,16 @@ final class AppModel: ObservableObject {
             let plan = try BeginnerSolver.solve(state, whiteFace: whiteFace)
             session = SolveSession(plan: plan, scan: finishedScan,
                                    scene: scene, narrator: narrator)
+            session?.onLost = { [weak self] in self?.replanFromSmartCube() }
 
-            // A smart cube knows which way it has been turned but not what
-            // colour anything is, so the scan is what tells it where it is
-            // starting from. After this it can follow along by itself.
+            // A smart cube knows which way it has been turned but not which
+            // way up it is being held, so the scan is what lines the two up.
+            // After this it can follow along by itself and nothing else in the
+            // solve needs confirming.
             if smartCube.isConnected {
-                smartCube.calibrate(to: state)
+                announceAlignment(smartCube.align(toScan: state))
             }
+            session?.cubeIsFollowing = smartCube.isFollowing
             screen = .ready
         } catch {
             errorMessage = error.localizedDescription
@@ -85,8 +88,29 @@ final class AppModel: ObservableObject {
 
     func beginSolving() {
         scene.clearHighlight()
+        session?.cubeIsFollowing = smartCube.isFollowing
         screen = .solving
+        // The cube may have been turned between the picture and pressing the
+        // button. Better to notice here than to let the first real turn be
+        // called wrong when it was the plan that had gone stale.
+        if smartCube.isFollowing, let session, cubeHasMovedOn(from: session) {
+            replanFromSmartCube()
+        }
         session?.startStage()
+    }
+
+    /// Whether the cube is somewhere other than where the plan expects it.
+    ///
+    /// Compared as colours rather than as solver letters, because that is what
+    /// both sides can be said in without another conversion that could throw.
+    private func cubeHasMovedOn(from session: SolveSession) -> Bool {
+        guard let cubeState = smartCube.cubeState, let alignment = smartCube.alignment else {
+            return false
+        }
+        let asHeld = alignment.regripped(by: session.wholeCubeTurnsSoFar)
+        let onTheCube = asHeld.appState(of: cubeState).facelets
+            .map { CubeColour.defaultColour(for: $0) as CubeColour? }
+        return onTheCube != session.displayCube.colours
     }
 
     /// The child wants the app to look at the cube again, part way through.
@@ -115,47 +139,84 @@ final class AppModel: ObservableObject {
             }
     }
 
-    private func handleSmartCubeTurn(_ move: Move) {
-        guard screen == .solving, let session else { return }
-        if session.handleSmartCubeTurn(move) { return }
-        replanFromSmartCube()
+    private func handleSmartCubeTurn(_ cubeMove: Move) {
+        guard screen == .solving, let session, smartCube.isFollowing else { return }
+        session.cubeIsFollowing = true
+
+        // The cube names its own faces. Whichever of them is on the right is
+        // what it calls R, and that need not be the side the child is being
+        // told is the right. Every whole-cube turn the plan has asked for since
+        // the scan moved the child's frame and left the cube's where it was, so
+        // the grip is caught up from the plan rather than tallied as it goes.
+        guard let base = smartCube.alignment else { return }
+        let here = base.regripped(by: session.wholeCubeTurnsSoFar)
+        guard let move = here.appMove(for: cubeMove) else { return }
+
+        session.handleSmartCubeTurn(move)
     }
 
-    /// Re-plan from the cube's own tracked state.
+    /// Work the plan out afresh from the cube's own position.
     func replanFromSmartCube() {
-        guard let state = smartCube.trackedState, let session else { return }
-        let colours = smartCube.trackedColours ?? ScannedCube.solvedColours
-        let scanned = ScannedCube(colours: colours)
+        guard let session, let cubeState = smartCube.cubeState else { return }
+        // Said the way the child is holding it, not the way the cube thinks of
+        // itself, so the plan talks about the faces they can actually see.
+        let alignment = (smartCube.alignment ?? .identity)
+            .regripped(by: session.wholeCubeTurnsSoFar)
+        let state = alignment.appState(of: cubeState)
+        let scanned = ScannedCube(colours: state.facelets.map { CubeColour.defaultColour(for: $0) })
         let whiteFace = scanned.face(withCentre: .white) ?? .D
         do {
             let plan = try BeginnerSolver.solve(state, whiteFace: whiteFace)
             scan = scanned
+            // The cube is where it is, so the grip the plan starts from is the
+            // one it has now; anything the old plan had turned is history.
+            smartCube.reground(to: alignment)
             session.replacePlan(plan, scan: scanned)
+            session.cubeIsFollowing = smartCube.isFollowing
         } catch {
             errorMessage = error.localizedDescription
         }
     }
 
-    /// The child says the cube is solved right now, so the app can start
-    /// following it without the camera.
-    ///
-    /// This is the one position a smart cube can be told about without looking
-    /// at it: from here every turn it reports keeps the app in step, so the
-    /// child can scramble it and be walked back.
-    func smartCubeIsSolved() {
-        smartCube.calibrate(to: .solved)
+    /// Say out loud how the cube and the scan got on, because a cube that
+    /// cannot be lined up is the one thing the child would otherwise only
+    /// discover by being told they are wrong over and over.
+    private func announceAlignment(_ match: CubeAlignment.Match?) {
+        switch match {
+        case .found, .tooSymmetricToTell:
+            narrator.say("Your cube is connected, so I can feel every turn you make.")
+        case .cubeDisagrees:
+            narrator.say("Your cube and the picture don\u{2019}t agree, so I\u{2019}ll "
+                         + "wait for you to tell me each move.")
+        case nil:
+            narrator.say("Your cube hasn\u{2019}t told me where it is yet, so I\u{2019}ll "
+                         + "wait for you to tell me each move.")
+        }
     }
 
-    /// Begin a solve from wherever the connected cube has been turned to.
+    /// The child says the cube is solved right now: the way back when the
+    /// cube's own idea of itself has drifted from the cube in their hands.
+    func smartCubeIsSolved() {
+        smartCube.startFromSolved()
+    }
+
+    /// Begin a solve from wherever the connected cube says it is.
+    ///
+    /// Nothing is confirmed first. The cube says what it looks like the moment
+    /// it connects, so the app shows that and gets on with it — the frame it
+    /// reports in becomes the frame the child is told about, which is true
+    /// enough to solve from and is put right the moment the camera looks.
     func startFromSmartCube() {
-        guard smartCube.isCalibrated, let state = smartCube.trackedState else { return }
-        let colours = smartCube.trackedColours ?? ScannedCube.solvedColours
-        let scanned = ScannedCube(colours: colours)
+        guard let state = smartCube.cubeState else { return }
+        let scanned = ScannedCube(colours: state.facelets.map { CubeColour.defaultColour(for: $0) })
         let whiteFace = scanned.face(withCentre: .white) ?? .D
         do {
             let plan = try BeginnerSolver.solve(state, whiteFace: whiteFace)
+            smartCube.reground(to: .identity)
             scan = scanned
             session = SolveSession(plan: plan, scan: scanned, scene: scene, narrator: narrator)
+            session?.onLost = { [weak self] in self?.replanFromSmartCube() }
+            session?.cubeIsFollowing = smartCube.isFollowing
             scene.stopIdleSpin()
             screen = .ready
         } catch {

@@ -186,7 +186,11 @@ struct SolveView: View {
             }
 
         case .introducingStep:
-            nextButton { session.beginStepMoves() }
+            if session.cubeIsFollowing {
+                watchingPrompt("Turn your cube when you're ready.")
+            } else {
+                nextButton { session.beginStepMoves() }
+            }
 
         case .coaching:
             switch session.help {
@@ -206,8 +210,14 @@ struct SolveView: View {
                 }
 
             case .moveByMove:
-                nextButton(isEnabled: session.currentMove != nil) {
-                    session.confirmCurrentMove()
+                if let wrong = session.wrongTurn {
+                    putItBack(wrong)
+                } else if session.stillNeedsATap {
+                    nextButton(isEnabled: session.currentMove != nil) {
+                        session.confirmCurrentMove()
+                    }
+                } else {
+                    watchingPrompt("Go on then — I'm watching.")
                 }
 
             case .wholeStage:
@@ -232,6 +242,50 @@ struct SolveView: View {
                 }
             }
         }
+    }
+
+    /// What stands in for the button when a cube is connected.
+    ///
+    /// With the cube reporting every turn there is nothing to confirm, so a
+    /// button would only be a thing to press that changes nothing. The child
+    /// turns their cube and the app keeps up.
+    private func watchingPrompt(_ words: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "dot.radiowaves.left.and.right")
+                .font(.system(size: 18, weight: .black))
+            Text(words)
+                .font(.brand(size: 19, weight: .bold))
+        }
+        .foregroundStyle(Theme.done)
+        .frame(maxWidth: .infinity)
+        .frame(height: 58)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Theme.done.opacity(0.14))
+        )
+    }
+
+    /// A wrong turn, and the one turn that undoes it.
+    ///
+    /// Being told only that it is wrong leaves a five year old stuck with a
+    /// cube they have just made worse. One turn back is always the way out,
+    /// and it is the same kind of instruction as every other one here.
+    private func putItBack(_ wrong: Move) -> some View {
+        VStack(spacing: 8) {
+            Text("That wasn't the one.")
+                .font(.brand(size: 18, weight: .bold))
+                .foregroundStyle(Theme.attention)
+            Text("\(wrong.inverse.childLabel) — \(wrong.inverse.spokenInstruction)")
+                .font(.brand(size: 17, weight: .medium))
+                .foregroundStyle(.white.opacity(0.9))
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Theme.attention.opacity(0.14))
+        )
     }
 
     /// The only button on the screen while a step is being worked through.

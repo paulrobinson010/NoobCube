@@ -1,0 +1,125 @@
+import Foundation
+
+/// Which way round a smart cube is, compared with the way the child is holding it.
+///
+/// A smart cube knows its own faces absolutely — each one has its own sensor —
+/// but it has no idea which way up the child is holding it. So when it says
+/// "R", it means *its* right, which may be the app's front, or its top, or
+/// anything else. Without this the app reads every turn as the wrong face, and
+/// a child doing exactly the right thing is told they are wrong.
+///
+/// The camera settles it. After a scan the app knows what the cube really looks
+/// like, and the cube can be asked what *it* thinks it looks like. The two are
+/// the same cube under two grips, so trying all twenty-four grips and keeping
+/// the one that matches gives the answer outright.
+///
+/// Checked by `Tools/CubeReference/alignment.py`, which is the same thing
+/// written twice: 1,440 grips recovered uniquely, 25,920 turns renamed into the
+/// app's words and checked against the turn actually made, and 12,960 re-grips
+/// composed through a whole-cube turn. A solved cube is caught as too
+/// symmetric to tell, and a cube whose own idea of itself has drifted is caught
+/// rather than guessed at.
+struct CubeAlignment: Equatable, Sendable {
+
+    /// How the cube would have to be turned in your hands to be held the way
+    /// the app is thinking of it.
+    let grip: [Move]
+
+    /// What the app calls each face the cube names. Worked out once, because a
+    /// turn arrives every time the child moves and this is read on each one.
+    let appFace: [Face: Face]
+
+    private init(grip: [Move]) {
+        self.grip = grip
+        self.appFace = Self.faces(after: grip)
+    }
+
+    /// The cube held exactly the way the app thinks of it.
+    static let identity = CubeAlignment(grip: [])
+
+    /// The move the child actually made, said in the app's words.
+    func appMove(for cubeMove: Move) -> Move? {
+        guard let face = cubeMove.base.face, let mapped = appFace[face] else { return nil }
+        guard let base = MoveBase(rawValue: mapped.letter) else { return nil }
+        return Move(base, cubeMove.amount)
+    }
+
+    /// The cube's own position, said the way the app is holding it.
+    func appState(of cubeState: CubeState) -> CubeState {
+        Self.regripping(cubeState, by: grip)
+    }
+
+    /// The child turned the whole cube round: the app's frame moved with them,
+    /// the cube's frame did not.
+    func regripped(by rotations: [Move]) -> CubeAlignment {
+        let spins = rotations.filter(\.isWholeCubeTurn)
+        return spins.isEmpty ? self : CubeAlignment(grip: grip + spins)
+    }
+
+    // MARK: - Working it out
+
+    enum Match: Equatable {
+        /// One grip fits: this is how the cube is being held.
+        case found(CubeAlignment)
+        /// Several grips fit, which happens when the cube looks the same from
+        /// more than one side — in practice, when it is solved. There is
+        /// nothing to solve from there, so nothing is lost by not knowing.
+        case tooSymmetricToTell
+        /// No grip fits. The cube's own idea of itself has drifted from the
+        /// cube in the child's hands, so its turns cannot be trusted.
+        case cubeDisagrees
+    }
+
+    /// Work out how the cube is being held, from what it says it looks like
+    /// against what the camera saw.
+    static func matching(cube: CubeState, scanned: CubeState) -> Match {
+        let hits = allGrips.filter { regripping(cube, by: $0) == scanned }
+        guard let only = hits.first else { return .cubeDisagrees }
+        guard hits.count == 1 else { return .tooSymmetricToTell }
+        return .found(CubeAlignment(grip: only))
+    }
+
+    /// Where each face ends up after these whole-cube turns, read straight off
+    /// the middles: turn a solved cube and whatever letter is sitting in a
+    /// place is the face that moved there.
+    private static func faces(after rotations: [Move]) -> [Face: Face] {
+        let turned = CubeState.solved.applying(rotations)
+        var map: [Face: Face] = [:]
+        for face in Face.allCases {
+            map[turned[face.centreIndex]] = face
+        }
+        return map
+    }
+
+    /// Turning the cube in your hands: the squares move, and then every centre
+    /// is called by its own name again, because the cube itself has not
+    /// changed — only the way you are looking at it.
+    private static func regripping(_ state: CubeState, by rotations: [Move]) -> CubeState {
+        rotations.reduce(state) { $0.applying($1).relabelled() }
+    }
+
+    /// The twenty-four ways a cube can be held: pick a face to put on top, then
+    /// one of four ways to turn it round.
+    static let allGrips: [[Move]] = {
+        let toTop: [[Move]] = [
+            [],
+            [Move(.x)], [Move(.x, .half)], [Move(.x, .counterClockwise)],
+            [Move(.z)], [Move(.z, .counterClockwise)],
+        ]
+        let spin: [[Move]] = [
+            [],
+            [Move(.y)], [Move(.y, .half)], [Move(.y, .counterClockwise)],
+        ]
+        var grips: [[Move]] = []
+        var seen: Set<CubeState> = []
+        for first in toTop {
+            for second in spin {
+                let grip = first + second
+                if seen.insert(CubeState.solved.applying(grip)).inserted {
+                    grips.append(grip)
+                }
+            }
+        }
+        return grips
+    }()
+}

@@ -46,6 +46,21 @@ final class SolveSession: ObservableObject {
     @Published private(set) var stepStartCube: ScannedCube
     @Published private(set) var isBusy = false
 
+    /// A turn the child made that was not the one asked for, in the app's
+    /// words. While this is set the only thing wanted is that turn undone.
+    @Published private(set) var wrongTurn: Move?
+
+    /// Whether a connected cube is doing the confirming, so nothing on screen
+    /// asks to be tapped for a turn the cube can see for itself.
+    @Published var cubeIsFollowing = false
+
+    /// Turns that arrived while the cube on screen was mid-animation.
+    private var waitingTurns: [Move] = []
+
+    /// Called when the cube has been turned somewhere the plan no longer
+    /// covers, so the plan has to be worked out again from what the cube says.
+    var onLost: (() -> Void)?
+
     let scene: CubeSceneController
     private let narrator: Narrator
     /// The scan the current plan was made from, kept so a stage can be
@@ -199,6 +214,7 @@ final class SolveSession: ObservableObject {
             } else {
                 self.presentCurrentMove()
             }
+            self.drainTurnsThatArrivedWhileBusy()
         }
     }
 
@@ -216,6 +232,7 @@ final class SolveSession: ObservableObject {
 
     func startStage() {
         moveIndex = 0
+        wrongTurn = nil
         displayCube = colours(upToStage: stageIndex)
         scene.reset(to: displayCube.colours)
         phase = .coaching
@@ -346,6 +363,8 @@ final class SolveSession: ObservableObject {
     /// Replace the plan after a re-scan, keeping the same session on screen.
     func replacePlan(_ newPlan: SolvePlan, scan newScan: ScannedCube) {
         plan = newPlan
+        wrongTurn = nil
+        waitingTurns.removeAll()
         scan = newScan
         moveIndex = 0
         stageIndex = Self.nextWorkableStage(in: newPlan, from: 0) ?? newPlan.stages.count
@@ -370,18 +389,110 @@ final class SolveSession: ObservableObject {
 
     // MARK: - Smart cube
 
-    /// A turn reported by a connected smart cube.
+    /// A turn reported by a connected smart cube, already said in the app's
+    /// words rather than the cube's.
     ///
-    /// If it is the move we asked for, the child is simply moved along. If it is
-    /// anything else, the cube itself is now the source of truth, so the caller
-    /// re-plans from the cube's own state rather than arguing with it.
-    func handleSmartCubeTurn(_ move: Move) -> Bool {
-        guard let expected = currentMove else { return false }
-        guard move == expected else { return false }
+    /// The point of a connected cube is that nothing needs confirming: the cube
+    /// says what happened, so the app can tell the child whether it was right
+    /// and what to do next without anybody pressing anything.
+    ///
+    /// A child turning a cube is quicker than an animation of one, so turns
+    /// that land mid-animation are kept and dealt with in order rather than
+    /// dropped. Dropping one is the worst thing that could happen here: the
+    /// screen would quietly stop matching the cube in their hands, and every
+    /// instruction after it would be wrong.
+    func handleSmartCubeTurn(_ move: Move) {
+        guard !isBusy else {
+            waitingTurns.append(move)
+            return
+        }
+
+        if let wrong = wrongTurn {
+            guard move == wrong.inverse else { return giveUpAndReplan() }
+            wrongTurn = nil
+            narrator.say("That's it. Carry on.")
+            playTheirTurn(move) { [weak self] in self?.presentCurrentMove() }
+            return
+        }
+
+        guard let expected = currentMove else { return giveUpAndReplan() }
+
+        // A whole-cube turn moves no layer, so the cube cannot feel it happen.
+        // Those still want a tap, and a layer turn arriving instead means the
+        // child has gone on without turning the cube round first.
+        guard !expected.isWholeCubeTurn, move == expected else {
+            wrongTurn = move
+            narrator.say("Not that one. \(move.inverse.spokenInstruction) to put it back.")
+            playTheirTurn(move) { [weak self] in self?.showTheWayBack() }
+            return
+        }
+
         // Turning the cube is the child saying they are ready, so a step being
         // explained gets on with it rather than waiting for a tap as well.
         if phase == .introducingStep { beginStepMoves() }
         confirmCurrentMove()
-        return true
+    }
+
+    /// Turned again while already off the path. The cube is somewhere nobody is
+    /// tracking now, so the plan is worked out afresh from where it actually is
+    /// rather than argued with.
+    private func giveUpAndReplan() {
+        wrongTurn = nil
+        waitingTurns.removeAll()
+        narrator.say("Let me work out where your cube is now.")
+        onLost?()
+    }
+
+    private func drainTurnsThatArrivedWhileBusy() {
+        guard !waitingTurns.isEmpty else { return }
+        let next = waitingTurns.removeFirst()
+        handleSmartCubeTurn(next)
+    }
+
+    /// Put a turn the child made on screen without moving them along, so what
+    /// they are looking at always matches what is in their hands.
+    private func playTheirTurn(_ move: Move, then finish: @MainActor @escaping () -> Void) {
+        isBusy = true
+        scene.hideTurnArrow()
+        scene.hideJourney()
+        scene.animate(move, duration: 0.3) { [weak self] in
+            guard let self else { return }
+            self.displayCube = self.displayCube.applying(move)
+            self.isBusy = false
+            finish()
+            self.drainTurnsThatArrivedWhileBusy()
+        }
+    }
+
+    /// Put the arrow back on the turn that undoes a mistake.
+    func showTheWayBack() {
+        guard let wrong = wrongTurn else { return }
+        scene.hideJourney()
+        scene.highlight(square: nil)
+        scene.showTurnArrow(for: wrong.inverse)
+    }
+
+    /// Whether the child still has to say they have done this one.
+    ///
+    /// Without a cube connected, always: a tap is the only way to know. With
+    /// one, only for a whole-cube turn, which turns no layer and so is the one
+    /// thing no cube can feel. While a wrong turn is waiting to be undone
+    /// there is nothing to confirm at all.
+    var stillNeedsATap: Bool {
+        guard cubeIsFollowing else { return true }
+        guard wrongTurn == nil else { return false }
+        return currentMove?.isWholeCubeTurn ?? false
+    }
+
+    /// Every whole-cube turn the plan has made so far.
+    ///
+    /// Turning the whole cube leaves the cube's own frame where it was and
+    /// moves the app's, so a connected cube has to be lined up again after each
+    /// one. Counted from the plan rather than tallied as they happen, so
+    /// starting a stage over cannot leave the two out of step.
+    var wholeCubeTurnsSoFar: [Move] {
+        let before = plan.stages.prefix(stageIndex).flatMap(\.moves)
+        let during = stage.map { Array($0.moves.prefix(moveIndex)) } ?? []
+        return (before + during).filter(\.isWholeCubeTurn)
     }
 }

@@ -85,27 +85,38 @@ struct SmartCubeView: View {
         }
     }
 
+    /// What the cube says it looks like, and one way on.
+    ///
+    /// It used to ask the child to solve their cube and say so before it would
+    /// show them anything, which is a strange thing to ask of someone who came
+    /// here to have it solved. The cube reports its own position the moment it
+    /// connects, so that is what goes on screen.
     private var connectedControls: some View {
         VStack(spacing: 12) {
-            Text("A smart cube knows which way you turned it, but not what "
-                 + "colour anything is. So it needs telling where it's starting from.")
-                .font(.brand(size: 15, weight: .medium))
-                .foregroundStyle(Theme.muted)
-                .multilineTextAlignment(.center)
+            if let colours = manager.trackedColours {
+                Text("This is what your cube tells me it looks like.")
+                    .font(.brand(size: 15, weight: .medium))
+                    .foregroundStyle(Theme.muted)
+                    .multilineTextAlignment(.center)
 
-            if manager.isCalibrated {
-                Label("Following your cube", systemImage: "checkmark.circle.fill")
-                    .font(.brand(size: 17, weight: .bold))
-                    .foregroundStyle(Theme.done)
+                CubeNetView(colours: colours, width: 260)
 
-                Button("Solve from here") { onUseCube() }
+                Button("Solve this") { onUseCube() }
                     .buttonStyle(BigButtonStyle(tint: Theme.done))
-            } else {
-                Button("My cube is solved right now") { onCalibrateSolved() }
-                    .buttonStyle(BigButtonStyle())
 
-                Text("Or show it to the camera — after a scan it'll follow along by itself.")
+                Text("Not your cube? Solve it, then tell me — or show it to the "
+                     + "camera, which is the surer way.")
                     .font(.brand(size: 14, weight: .medium))
+                    .foregroundStyle(Theme.muted)
+                    .multilineTextAlignment(.center)
+
+                Button("It's solved right now") { onCalibrateSolved() }
+                    .buttonStyle(BigButtonStyle(isProminent: false))
+            } else {
+                ProgressView()
+                    .tint(Theme.attention)
+                Text("Asking your cube where it is. Give it a wiggle.")
+                    .font(.brand(size: 15, weight: .medium))
                     .foregroundStyle(Theme.muted)
                     .multilineTextAlignment(.center)
             }
@@ -158,7 +169,9 @@ struct SmartCubeView: View {
         case .unauthorised:
             return "Let NoobCube use Bluetooth in Settings to connect your cube."
         case .connected:
-            return "Turn your cube and I'll follow along — no camera needed."
+            return manager.hasSaidWhatItLooksLike
+                ? "Turn your cube and I'll follow along."
+                : "Waiting for your cube to say where it is."
         case .unsupported(let detail), .failed(let detail):
             return detail + " You can still use the camera instead."
         default:

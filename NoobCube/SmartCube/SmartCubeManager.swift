@@ -43,13 +43,27 @@ final class SmartCubeManager: NSObject, ObservableObject {
     @Published private(set) var batteryPercent: Int?
     /// The most recent turn, which the app watches to advance a step.
     @Published private(set) var lastTurn: GANProtocol.Turn?
-    /// The cube's own idea of what it looks like, once it has been told where
-    /// it is starting from. A smart cube reports turns, not colours, so this is
-    /// only meaningful after ``calibrate(to:)``.
-    @Published private(set) var trackedState: CubeState?
 
-    /// Whether the tracked state can be trusted yet.
-    @Published private(set) var isCalibrated = false
+    /// What the cube says it looks like, in its own frame.
+    ///
+    /// The cube keeps this itself, from its own last reset, and every turn it
+    /// reports is applied here as it arrives. It is shown as soon as there is
+    /// one: a child who has just connected a cube wants to see their cube, not
+    /// be asked to solve it first.
+    @Published private(set) var cubeState: CubeState?
+
+    /// Which way round the cube is being held, once a scan has settled it.
+    ///
+    /// Until this is known the cube's turns cannot be put into the app's words:
+    /// the cube's "R" is whichever side of it happens to be on the right, and
+    /// nothing says that is the side the child is calling right.
+    @Published private(set) var alignment: CubeAlignment?
+
+    /// Whether turns can be read as the faces the child is being told about.
+    var isFollowing: Bool { isConnected && alignment != nil && cubeState != nil }
+
+    /// Whether the cube has said what it looks like yet.
+    var hasSaidWhatItLooksLike: Bool { cubeState != nil }
 
     /// Newer cubes number their moves relative to a position they send first,
     /// so moves arriving before that has been seen are not yet meaningful.
@@ -64,20 +78,59 @@ final class SmartCubeManager: NSObject, ObservableObject {
         if diagnostics.count > 40 { diagnostics.removeFirst() }
     }
 
-    /// Tell the cube where it is starting from — normally the result of a
-    /// camera scan, or the child confirming it is solved.
-    func calibrate(to state: CubeState) {
-        trackedState = state
-        isCalibrated = true
+    /// Work out which way round the cube is being held, by holding what it
+    /// says it looks like against what the camera saw.
+    /// Returns nil when the cube has not said where it is yet, which is not the
+    /// same as disagreeing and must not be reported as though it were.
+    @discardableResult
+    func align(toScan scanned: CubeState) -> CubeAlignment.Match? {
+        guard let cubeState else {
+            note("No position from the cube yet, so nothing to line up against")
+            alignment = nil
+            return nil
+        }
+        let match = CubeAlignment.matching(cube: cubeState, scanned: scanned)
+        switch match {
+        case .found(let found):
+            alignment = found
+            note("Lined up with the scan: " + found.appFace
+                    .sorted { $0.key.rawValue < $1.key.rawValue }
+                    .map { "\($0.key.letter)->\($0.value.letter)" }
+                    .joined(separator: " "))
+        case .tooSymmetricToTell:
+            alignment = .identity
+            note("Cube looks the same every way round, so any grip will do")
+        case .cubeDisagrees:
+            alignment = nil
+            note("The cube's own position does not match the scan")
+        }
+        return match
+    }
+
+    /// Take this grip as the one everything is now counted from.
+    ///
+    /// Used when the plan is worked out afresh: the new plan starts from the
+    /// cube exactly as it is being held, so the whole-cube turns the old plan
+    /// had already made are spent and must not be counted a second time.
+    func reground(to alignment: CubeAlignment) {
+        self.alignment = alignment
+    }
+
+    /// The child says the cube is solved right now. The only position a cube
+    /// can be told about without looking at it, and the way back when its own
+    /// idea of itself has drifted.
+    func startFromSolved() {
+        cubeState = .solved
+        alignment = .identity
         lastMoveSerial = nil
-        note("Calibrated from a known position")
+        note("Told it is solved right now")
     }
 
     var isConnected: Bool { status.isConnected }
 
-    /// Colours matching `trackedState`, using the cube's standard scheme.
+    /// Colours matching `cubeState`, using the cube's standard scheme.
     var trackedColours: [CubeColour?]? {
-        trackedState.map { state in
+        cubeState.map { state in
             state.facelets.map { CubeColour.defaultColour(for: $0) }
         }
     }
@@ -129,8 +182,8 @@ final class SmartCubeManager: NSObject, ObservableObject {
         peripheral = nil
         cipher = nil
         generation = nil
-        trackedState = nil
-        isCalibrated = false
+        cubeState = nil
+        alignment = nil
         hasSeenPosition = false
         lastMoveSerial = nil
         status = .idle
@@ -180,17 +233,22 @@ final class SmartCubeManager: NSObject, ObservableObject {
             guard hasSeenPosition || generation == .gen2 else { return }
             for turn in turns {
                 lastMoveSerial = turn.serial
-                lastTurn = turn
-                if isCalibrated, let state = trackedState {
-                    trackedState = state.applying(turn.move)
+                // Keep the cube's own position up to date before saying a turn
+                // happened, so anything reacting to the turn sees the cube as
+                // it is now rather than as it was a move ago.
+                if let state = cubeState {
+                    cubeState = state.applying(turn.move)
                 }
+                lastTurn = turn
             }
         case .facelets(_, let state):
             hasSeenPosition = true
-            // The cube counts from its own last reset, not from the colours on
-            // it, so this is only believable once we have told it where it is.
-            if !isCalibrated {
-                trackedState = state
+            // Only before anything has been lined up. Once the app knows which
+            // way round the cube is, the running tally is the thing to trust:
+            // a late position message would otherwise undo turns already
+            // counted.
+            if alignment == nil {
+                cubeState = state
             }
         case .battery(let percent):
             batteryPercent = percent
@@ -285,7 +343,8 @@ extension SmartCubeManager: CBCentralManagerDelegate {
                                     didDisconnectPeripheral peripheral: CBPeripheral,
                                     error: Error?) {
         Task { @MainActor in
-            self.trackedState = nil
+            self.cubeState = nil
+            self.alignment = nil
             self.status = .idle
         }
     }

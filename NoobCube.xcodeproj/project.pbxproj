@@ -54,6 +54,8 @@
 		B86B7592733FD9D7C7686F42 = {isa = PBXBuildFile; fileRef = 371793A352BB06B90F08D827; };
 		DCD88F911A5534E1D24AA251 = {isa = PBXBuildFile; fileRef = 3D7EDCFB0475A1E69EC17AEE; };
 		7BEF05C292647D872D265FDB = {isa = PBXBuildFile; fileRef = 77C1F26B91CF691DB5CB5A1B; };
+		23B58EF9A83AB7473A08F2A8 = {isa = PBXBuildFile; fileRef = 0DC1040F71DD10CA37D9244D; };
+		F2A8C50DEB7497C3CED9E40B = {isa = PBXBuildFile; fileRef = 8C6A370C2C039FE042165B06; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -117,6 +119,8 @@
 		371793A352BB06B90F08D827 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "JourneyArrow.swift"; sourceTree = "<group>"; };
 		3D7EDCFB0475A1E69EC17AEE = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CubePresence.swift"; sourceTree = "<group>"; };
 		77C1F26B91CF691DB5CB5A1B = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StepDemoView.swift"; sourceTree = "<group>"; };
+		0DC1040F71DD10CA37D9244D = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CubeAlignment.swift"; sourceTree = "<group>"; };
+		8C6A370C2C039FE042165B06 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SmartCubeTests.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -153,6 +157,7 @@
 		378DAF2D8D6091BC8133B2DD /* NoobCubeTests */ = {
 			isa = PBXGroup;
 			children = (
+				8C6A370C2C039FE042165B06,
 				F0212F177FA7DCB719AFA6AF /* CubeEngineTests.swift */,
 				A6BF8EA82D22B0FDD53C446C /* ScanTests.swift */,
 				925DB0C87891C6595AB34587 /* SolverTests.swift */,
@@ -220,6 +225,7 @@
 		B0A5E67D7443F0533B33DB7E /* SmartCube */ = {
 			isa = PBXGroup;
 			children = (
+				0DC1040F71DD10CA37D9244D,
 				76CE2838A0927B121B9D3AF1 /* GANMessageDecoder.swift */,
 				84E6B692A62E5ABA18A14CC6 /* GANProtocol.swift */,
 				95E9391C2845E163FEC81558 /* SmartCubeManager.swift */,
@@ -373,6 +379,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				23B58EF9A83AB7473A08F2A8,
 				7BEF05C292647D872D265FDB,
 				DCD88F911A5534E1D24AA251,
 				B86B7592733FD9D7C7686F42,
@@ -422,6 +429,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F2A8C50DEB7497C3CED9E40B,
 				F611560A4F0168608B4E8F2E /* CubeEngineTests.swift in Sources */,
 				FC51A77DFFF24D651AB4DB32 /* ScanTests.swift in Sources */,
 				9CD1C7B937CA888CF8E20949 /* SolverTests.swift in Sources */,
