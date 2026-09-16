@@ -21,6 +21,85 @@ final class SmartCubeBatteryTests: XCTestCase {
     }
 }
 
+/// What the screen asks of the child, which is one rule rather than a predicate
+/// here and an order of checks in the view.
+@MainActor
+final class SolvePromptTests: XCTestCase {
+
+    /// A real plan, so the moves and the whole-cube turns in it are the ones
+    /// the child would actually meet.
+    private func session() throws -> SolveSession {
+        var generator = SeededGenerator(seed: 4)
+        let start = CubeState.solved.applying(randomScramble(using: &generator))
+        let plan = try BeginnerSolver.solve(start)
+        let scan = ScannedCube(colours: start.facelets.map { CubeColour.defaultColour(for: $0) })
+        return SolveSession(plan: plan, scan: scan,
+                            scene: CubeSceneController(), narrator: Narrator())
+    }
+
+    func testWithoutACubeEveryMoveIsConfirmedByHand() throws {
+        let session = try session()
+        session.cubeIsFollowing = false
+        XCTAssertEqual(session.prompt, .tapWhenDone)
+    }
+
+    /// The first stage is the one that turns the whole cube to put white down,
+    /// so a following cube should be asking for exactly that and nothing else.
+    func testAWholeCubeTurnIsTheOneThingStillAskedFor() throws {
+        let session = try session()
+        session.cubeIsFollowing = true
+        session.help = .moveByMove
+        session.startStage()
+        if session.currentMove?.isWholeCubeTurn == true {
+            XCTAssertEqual(session.prompt, .turnTheWholeCube)
+            XCTAssertFalse(session.pendingWholeCubeTurns.isEmpty,
+                           "the turns it is waiting on should be there to be dismissed")
+            XCTAssertNotNil(session.moveAfterWholeCubeTurns,
+                            "and there should be a real move after them")
+        } else {
+            XCTAssertEqual(session.prompt, .watching)
+        }
+    }
+
+    /// The run is only the turns at the front, never a turn further along that
+    /// the child has not reached.
+    func testOnlyTheTurnsBeingWaitedOnCount() throws {
+        let session = try session()
+        session.cubeIsFollowing = true
+        session.help = .moveByMove
+        session.startStage()
+        let spins = session.pendingWholeCubeTurns
+        XCTAssertTrue(spins.allSatisfy(\.isWholeCubeTurn))
+        if let next = session.moveAfterWholeCubeTurns {
+            XCTAssertFalse(next.isWholeCubeTurn,
+                           "the move after the run must not itself be one of them")
+        }
+    }
+
+    /// A turn that was not the one asked for beats everything: whatever else is
+    /// true, the only thing wanted is that turn undone.
+    ///
+    /// The mistake is recorded before the cube on screen starts moving, which
+    /// is what lets this be checked at all — nothing here spins a run loop, so
+    /// an animation's completion would never arrive.
+    func testPuttingItBackComesFirst() throws {
+        let session = try session()
+        session.cubeIsFollowing = true
+        session.help = .moveByMove
+        session.startStage()
+        guard let expected = session.currentMove else {
+            return XCTFail("the plan should have moves to make")
+        }
+        let wrong = Move(expected.base == .U ? .R : .U, .half)
+        XCTAssertNotEqual(wrong, expected)
+
+        session.handleSmartCubeTurn(wrong)
+        XCTAssertEqual(session.wrongTurn, wrong)
+        XCTAssertEqual(session.prompt, .putItBack(wrong),
+                       "a mistake outranks both the watching prompt and the turn-the-cube one")
+    }
+}
+
 /// A connected cube hangs entirely on knowing which way round it is being held.
 ///
 /// Get it wrong and every turn is read as the wrong face, so a child doing

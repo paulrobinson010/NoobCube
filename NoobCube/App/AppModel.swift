@@ -149,10 +149,24 @@ final class AppModel: ObservableObject {
         // the scan moved the child's frame and left the cube's where it was, so
         // the grip is caught up from the plan rather than tallied as it goes.
         guard let base = smartCube.alignment else { return }
-        let here = base.regripped(by: session.wholeCubeTurnsSoFar)
+
+        // A cube cannot feel itself being turned round in your hands, so that
+        // one instruction still offers a tap. But turning a layer at all is the
+        // child saying they have moved on, so it dismisses the instruction
+        // rather than being called a mistake — they plainly did turn it, or
+        // they would not be turning layers.
+        //
+        // Which means the turn has to be read in the frame they are holding it
+        // in *now*, with the rotation counted, not the one before it.
+        let spins = session.pendingWholeCubeTurns
+        let here = base.regripped(by: session.wholeCubeTurnsSoFar + spins)
         guard let move = here.appMove(for: cubeMove) else { return }
 
-        session.handleSmartCubeTurn(move)
+        if spins.isEmpty {
+            session.handleSmartCubeTurn(move)
+        } else {
+            session.takeTheTurnAsDone(andThen: move)
+        }
     }
 
     /// Work the plan out afresh from the cube's own position.

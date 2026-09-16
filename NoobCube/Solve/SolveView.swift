@@ -186,10 +186,16 @@ struct SolveView: View {
             }
 
         case .introducingStep:
-            if session.cubeIsFollowing {
-                watchingPrompt("Turn your cube when you're ready.")
-            } else {
+            // A whole-cube turn is the one thing that still wants a tap, and it
+            // wants it here too — otherwise a step that opens with one leaves
+            // nothing to press and nothing the cube can feel.
+            switch session.prompt {
+            case .turnTheWholeCube:
+                turnTheWholeCube
+            case .tapWhenDone:
                 nextButton { session.beginStepMoves() }
+            case .watching, .putItBack:
+                watchingPrompt("Turn your cube when you're ready.")
             }
 
         case .coaching:
@@ -210,13 +216,16 @@ struct SolveView: View {
                 }
 
             case .moveByMove:
-                if let wrong = session.wrongTurn {
+                switch session.prompt {
+                case .putItBack(let wrong):
                     putItBack(wrong)
-                } else if session.stillNeedsATap {
+                case .turnTheWholeCube:
+                    turnTheWholeCube
+                case .tapWhenDone:
                     nextButton(isEnabled: session.currentMove != nil) {
                         session.confirmCurrentMove()
                     }
-                } else {
+                case .watching:
                     watchingPrompt("Go on then — I'm watching.")
                 }
 
@@ -241,6 +250,29 @@ struct SolveView: View {
                     .buttonStyle(BigButtonStyle(isProminent: false))
                 }
             }
+        }
+    }
+
+    /// The one instruction a connected cube cannot see for itself.
+    ///
+    /// No cube can feel itself being turned round in your hands, so this is the
+    /// only thing left that asks to be confirmed — and it says what it is
+    /// confirming rather than just "Next". It is not a gate, though: turning
+    /// any layer dismisses it, because a child turning layers has plainly
+    /// already turned the cube round.
+    private var turnTheWholeCube: some View {
+        VStack(spacing: 10) {
+            Text("I can\u{2019}t feel the whole cube turning — tell me when you have.")
+                .font(.brand(size: 15, weight: .medium))
+                .foregroundStyle(Theme.muted)
+                .multilineTextAlignment(.center)
+            Button {
+                session.confirmWholeCubeTurn()
+            } label: {
+                Label("I\u{2019}ve turned it", systemImage: "checkmark.circle.fill")
+            }
+            .buttonStyle(BigButtonStyle())
+            .disabled(session.isBusy)
         }
     }
 

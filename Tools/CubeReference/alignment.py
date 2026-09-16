@@ -122,5 +122,54 @@ def check(trials=60):
     print('ALL PASS')
 
 
+def check_through_a_solve(trials=120):
+    """The same thing, but along a real solve rather than in the abstract.
+
+    The plan turns the whole cube as it goes, and a smart cube cannot feel that
+    happen. When the app is waiting on one of those and a layer turn arrives
+    instead, it takes the rotation as done and reads the layer turn with the
+    rotation counted. This checks the move it then believes was made is the move
+    that was made — including, especially, the ones that land straight after a
+    rotation, which is where getting the order wrong would show.
+    """
+    import solver
+    import verify_steps
+
+    rng = random.Random(3)
+    checked = after_a_spin = 0
+
+    for _ in range(trials):
+        start = cube.apply(cube.SOLVED, verify_steps.scramble(rng))
+        moves = solver.solve(start).all_moves()
+
+        # The cube's own frame, fixed by its hardware, taken at random.
+        grip = rng.choice(GRIPS)
+        how, base = matching(regripping(start, grip), start)
+        assert how == 'found'
+
+        done = []
+        for index, move in enumerate(moves):
+            if move[0] in 'xyz':
+                done.append(move)
+                continue
+
+            # The child is holding it however the plan has turned it by now.
+            here = base + [m for m in done if m[0] in 'xyz']
+            faces = faces_after(here)
+            # So the cube reports this turn as whichever of its own faces that is.
+            theirs = next(f for f in cube.FACES if faces[f] == move[0]) + move[1:]
+
+            assert app_move(here, theirs) == move, (index, move)
+            checked += 1
+            if index and moves[index - 1][0] in 'xyz':
+                after_a_spin += 1
+            done.append(move)
+
+    print('turns read back along a solve', checked)
+    print('  of those, straight after a spin', after_a_spin)
+    print('ALL PASS')
+
+
 if __name__ == '__main__':
     check()
+    check_through_a_solve()
