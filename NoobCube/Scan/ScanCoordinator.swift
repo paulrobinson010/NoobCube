@@ -175,8 +175,10 @@ final class ScanCoordinator: ObservableObject {
             holdFrames = 0
             return
         }
-        // Holding the cube still is not a reason to take the same side twice.
-        guard hasMovedOn(to: camera.steadyReading) else {
+        // Holding the cube still is not a reason to take a side we have. Said
+        // nothing about here: the child is simply not moved on, and the side
+        // they are being asked for is still on screen.
+        guard sideAlreadyTaken(camera.steadyReading) == nil else {
             holdFrames = 0
             return
         }
@@ -186,18 +188,46 @@ final class ScanCoordinator: ObservableObject {
         }
     }
 
-    /// Whether the camera is looking at something other than the side already
+    /// Whether the camera is looking at something other than the side just
     /// taken. A cube turned to a new side changes far more than a hand shaking.
     private func hasMovedOn(to reading: [RGBSample]) -> Bool {
-        guard lastCaptured.count == 9, reading.count == 9 else { return true }
+        !Self.looksLikeTheSameSide(reading, lastCaptured)
+    }
+
+    /// The side this reading has already been filed as, if it has.
+    ///
+    /// Checked against every side taken rather than only the last one. Three
+    /// sides of one scan came back as very nearly the same nine readings — the
+    /// camera never had the cube in front of it — and all three were kept, so
+    /// the net drew a cube with three orange middles. The camera cannot always
+    /// tell what it is looking at, but it can tell it is looking at the same
+    /// thing again, and that is enough to stop it.
+    private func sideAlreadyTaken(_ reading: [RGBSample]) -> Face? {
+        Face.allCases.first { face in
+            guard scan.isFaceScanned(face) else { return false }
+            let stored = (0..<9).compactMap { rawSamples[face.rawValue * 9 + $0] }
+            return Self.looksLikeTheSameSide(reading, stored)
+        }
+    }
+
+    /// Two readings of the same nine squares, near enough.
+    ///
+    /// Raw pixels rather than colour names: what colour a square is called is
+    /// the unreliable part, and whether the picture changed is not.
+    static func looksLikeTheSameSide(_ one: [RGBSample], _ other: [RGBSample]) -> Bool {
+        guard one.count == 9, other.count == 9 else { return false }
         var difference = 0.0
         for index in 0..<9 {
-            difference += abs(reading[index].red - lastCaptured[index].red)
-                + abs(reading[index].green - lastCaptured[index].green)
-                + abs(reading[index].blue - lastCaptured[index].blue)
+            difference += abs(one[index].red - other[index].red)
+                + abs(one[index].green - other[index].green)
+                + abs(one[index].blue - other[index].blue)
         }
-        return difference / 27 > 0.07
+        return difference / 27 <= aDifferentSide
     }
+
+    /// How much the nine readings have to change before this is another side.
+    /// A hand shaking moves them a little; turning the cube moves them a lot.
+    static let aDifferentSide = 0.07
 
     /// Record the side the camera is looking at, as the side that was asked for.
     ///
@@ -221,10 +251,12 @@ final class ScanCoordinator: ObservableObject {
             return
         }
 
-        // The button is there to hurry the app along, not to take the same side
-        // a second time. Say what is actually needed instead.
-        guard hasMovedOn(to: reading) else {
-            narrator.say("I've got that side already. Turn the cube to the next one.")
+        // The button is there to hurry the app along, not to take a side twice.
+        // Say what is actually needed instead.
+        if let taken = sideAlreadyTaken(reading) {
+            narrator.say("That looks like the \(Self.colour(for: taken).spokenName) side, "
+                       + "and I've got that one. Turn the cube to show me the "
+                       + "\(Self.colour(for: step.face).spokenName) side.")
             return
         }
 
@@ -255,7 +287,15 @@ final class ScanCoordinator: ObservableObject {
         // the child works. It is settled properly once all six are in.
         let corrected = ColourClassifier.relit(face: samples,
                                                expecting: Self.colour(for: face))
-        scan.setFace(face, to: ColourClassifier.bestGuesses(corrected))
+        var guesses = ColourClassifier.bestGuesses(corrected)
+
+        // The middle is not a guess. The side was asked for by name, and
+        // ``begin`` drew all six middles before the camera saw anything —
+        // painting a read colour over one threw that away, and the net ended
+        // up showing an orange middle on three different sides at once, which
+        // is a cube nobody owns.
+        guesses[4] = Self.colour(for: face)
+        scan.setFace(face, to: guesses)
     }
 
     /// Go back and take one face again.
@@ -286,10 +326,21 @@ final class ScanCoordinator: ObservableObject {
         // sticker is known before a single pixel is looked at.
         var expected: [Face: CubeColour] = [:]
         for step in Self.steps { expected[step.face] = Self.colour(for: step.face) }
-        let candidate = bestReading(of: samples, expecting: expected)
+        let (candidate, fit) = bestReading(of: samples, expecting: expected)
 
         scan = candidate
         isComplete = true
+
+        // Before asking whether this cube can exist, ask whether it is the one
+        // in front of the camera. A reading this poor is not a cube being
+        // misread, it is something else being read.
+        guard fit <= ColourClassifier.tooPoorToBelieve else {
+            problem = "I couldn't see your cube clearly enough. Let's go round again."
+            result = nil
+            narrator.say("Hmm, I couldn't see that clearly enough. "
+                       + "Let's try again somewhere brighter.")
+            return
+        }
 
         do {
             let converted = try candidate.cubeState()
@@ -332,25 +383,26 @@ final class ScanCoordinator: ObservableObject {
     /// colours better than the truth does. The straight reading is kept as the
     /// tie-break, because the child was probably holding it as asked.
     private func bestReading(of samples: [RGBSample],
-                             expecting expected: [Face: CubeColour]) -> ScannedCube {
-        var straight: ScannedCube?
+                             expecting expected: [Face: CubeColour])
+    -> (cube: ScannedCube, fit: Double) {
+        var straight: (cube: ScannedCube, fit: Double)?
         var best: (cube: ScannedCube, fit: Double)?
         for topTurns in 0..<4 {
             for bottomTurns in 0..<4 {
                 let settled = ColourClassifier.settle(
                     rawSamples: Self.rotating(samples, top: topTurns, bottom: bottomTurns),
                     expectedCentres: expected)
-                let trial = ScannedCube(colours: settled.colours.map { Optional($0) })
+                let trial = (cube: ScannedCube(colours: settled.colours.map { Optional($0) }),
+                             fit: settled.averageFit)
                 // Kept so there is something to show, and something to complain
                 // about, when no turn makes a real cube.
                 if topTurns == 0 && bottomTurns == 0 { straight = trial }
-                guard let converted = try? trial.cubeState(), converted.state.isValid else { continue }
-                if settled.fit < (best?.fit ?? .greatestFiniteMagnitude) {
-                    best = (trial, settled.fit)
-                }
+                guard let converted = try? trial.cube.cubeState(),
+                      converted.state.isValid else { continue }
+                if trial.fit < (best?.fit ?? .greatestFiniteMagnitude) { best = trial }
             }
         }
-        return best?.cube ?? straight ?? ScannedCube()
+        return best ?? straight ?? (cube: ScannedCube(), fit: .greatestFiniteMagnitude)
     }
 
     /// The same readings with the top and bottom faces turned on the spot.

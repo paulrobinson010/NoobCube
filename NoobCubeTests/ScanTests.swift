@@ -312,6 +312,99 @@ final class ScanTests: XCTestCase {
         }
     }
 
+    // MARK: - Knowing when not to believe it
+
+    func testSomethingThatIsNotACubeIsNotBelieved() {
+        var generator = SeededGenerator(seed: 71)
+        let layout = CubeColourScheme.scanningLayout
+
+        // A real cube under the amber lamp is read badly but is still a cube,
+        // and settling says so.
+        let cube = ColourClassifier.settle(
+            rawSamples: underTheAmberLamp(scrambledColours(using: &generator)),
+            expectedCentres: layout)
+        XCTAssertLessThan(cube.averageFit, ColourClassifier.tooPoorToBelieve)
+
+        // The table the cube is sitting on is not. Settling hands out whole
+        // pieces, so it will happily produce nine of each colour from this —
+        // which is exactly why it has to be asked how much it believes itself.
+        let table = (0..<54).map { _ in
+            RGBSample(red: 0.62 + Double.random(in: -0.05...0.05, using: &generator),
+                      green: 0.48 + Double.random(in: -0.05...0.05, using: &generator),
+                      blue: 0.33 + Double.random(in: -0.05...0.05, using: &generator))
+        }
+        let notACube = ColourClassifier.settle(rawSamples: table, expectedCentres: layout)
+        XCTAssertGreaterThan(notACube.averageFit, ColourClassifier.tooPoorToBelieve)
+        for colour in CubeColour.allCases {
+            XCTAssertEqual(notACube.colours.filter { $0 == colour }.count, 9)
+        }
+
+        // Uniform random pixels are the hardest thing to tell from a cube —
+        // 54 different colours, which is what a cube is — and about one in a
+        // hundred squeaks under the line. A camera does not produce them.
+        var refused = 0
+        for _ in 0..<20 {
+            let noise = (0..<54).map { _ in
+                RGBSample(red: Double.random(in: 0...1, using: &generator),
+                          green: Double.random(in: 0...1, using: &generator),
+                          blue: Double.random(in: 0...1, using: &generator))
+            }
+            if ColourClassifier.settle(rawSamples: noise, expectedCentres: layout)
+                .averageFit > ColourClassifier.tooPoorToBelieve {
+                refused += 1
+            }
+        }
+        XCTAssertGreaterThanOrEqual(refused, 18)
+    }
+
+    // MARK: - Taking the same side twice
+
+    private func readings(of colours: [CubeColour], face: Face) -> [RGBSample] {
+        (0..<9).map { offset in
+            let (red, green, blue) = colours[face.rawValue * 9 + offset].rgb
+            return RGBSample(red: red, green: green, blue: blue)
+        }
+    }
+
+    @MainActor
+    func testTheSamePictureAgainIsTheSameSide() {
+        var generator = SeededGenerator(seed: 61)
+        let truth = scrambledColours(using: &generator)
+        let side = readings(of: truth, face: .F)
+        // The same side a moment later: a hand shaking, not a cube turning.
+        let again = side.map {
+            RGBSample(red: min(1, $0.red + 0.012),
+                      green: min(1, $0.green - 0.008),
+                      blue: min(1, $0.blue + 0.015))
+        }
+        XCTAssertTrue(ScanCoordinator.looksLikeTheSameSide(side, again))
+    }
+
+    @MainActor
+    func testTwoSidesOfTheSameCubeAreNotConfused() {
+        var generator = SeededGenerator(seed: 67)
+        var confusions = 0
+        var pairs = 0
+        for _ in 0..<200 {
+            let truth = scrambledColours(using: &generator)
+            let sides = Face.allCases.map { readings(of: truth, face: $0) }
+            for first in 0..<6 {
+                for second in (first + 1)..<6 {
+                    pairs += 1
+                    if ScanCoordinator.looksLikeTheSameSide(sides[first], sides[second]) {
+                        confusions += 1
+                    }
+                }
+            }
+        }
+        // Measured over 30,000 pairs of sides: one of them was close enough to
+        // be called the same, and the two closest colours a cube has are
+        // yellow and orange. Refusing a side is recoverable — the child turns
+        // the cube and shows it again — and taking one twice is not.
+        XCTAssertEqual(pairs, 3000)
+        XCTAssertLessThanOrEqual(confusions, 2)
+    }
+
     func testResolveAlwaysReturnsNineOfEach() {
         var generator = SeededGenerator(seed: 8)
         let samples = (0..<54).map { _ in

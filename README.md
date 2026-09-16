@@ -133,6 +133,20 @@ orange. Three things fix it, all leaning on facts about cubes:
 Against simulated scrambles that takes a dim warm room from 11% of cubes read
 perfectly to 65%, and an amber lamp from none to 10%.
 
+Fitting whole pieces has a cost: the answer is always a cube that could exist,
+so counting stickers no longer catches a scan of the kitchen table. What the
+settling does know is how well its answer explains the pixels, and that does
+catch it — a real cube comes in at 0.07 per sticker in good light and 0.35 in a
+dim amber room, while a table top, a keyboard or a wall never came in under
+1.0. Above 0.62 the app says it could not see well enough rather than handing
+the solver a confident wrong cube.
+
+Two smaller things the app knows and used to throw away: a side is filed as the
+side that was asked for and its middle drawn as the colour that was asked for,
+never a read one; and a reading that is the same picture as a side already
+taken is refused, because the camera cannot always tell what it is looking at
+but it can tell it is looking at the same thing again.
+
 What survives is caught before it reaches the solver: a scan is checked for the
 three ways a cube becomes impossible — a flipped edge, a twisted corner, a
 swapped pair — and any square can be tapped to correct it.
