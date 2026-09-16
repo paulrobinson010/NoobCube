@@ -214,15 +214,40 @@ final class SolverTests: XCTestCase {
             for stage in plan.stages {
                 for step in stage.steps {
                     XCTAssertFalse(step.moves.isEmpty, "an empty step survived")
-                    XCTAssertTrue(step.lineUpText != nil || step.outcome != nil,
-                                  "\(stage.kind) has a step with nothing to say")
+                    XCTAssertNotNil(step.text, "\(stage.kind) has a step with nothing to say")
                     if step.places {
+                        XCTAssertEqual(step.purpose, .move)
                         XCTAssertFalse(step.piece.isEmpty)
                         XCTAssertEqual(step.from.count, step.piece.count)
                     }
                 }
             }
         }
+    }
+
+    /// Every step points at one square and says where it is going. If the
+    /// arrow lied, a child would follow it and watch something else happen.
+    func testEveryStepPointsAtASquareThatMoves() throws {
+        var generator = SeededGenerator(seed: 77)
+        var checked = 0
+        for _ in 0..<40 {
+            let plan = try BeginnerSolver.solve(
+                CubeState.solved.applying(randomScramble(using: &generator)))
+            for stage in plan.stages {
+                for step in stage.steps {
+                    guard let marker = step.marker, let target = step.target else {
+                        return XCTFail("\(stage.kind) has a step with no square to watch")
+                    }
+                    XCTAssertNotEqual(marker, target,
+                                      "\(stage.kind) points at a square that stays still")
+                    XCTAssertEqual(CubeGeometry.follow(sticker: marker, through: step.moves),
+                                   target,
+                                   "\(stage.kind) points its arrow at the wrong place")
+                    checked += 1
+                }
+            }
+        }
+        XCTAssertGreaterThan(checked, 1000)
     }
 
     /// The steps are the stage: no move belongs to one and not the other.

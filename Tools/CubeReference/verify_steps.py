@@ -55,7 +55,8 @@ def scramble(rng, length=25):
 
 def check(trials=600, seed=11):
     rng = random.Random(seed)
-    counts = {'steps': 0, 'with piece': 0, 'progressed': 0, 'no progress': 0}
+    counts = {'steps': 0, 'with piece': 0, 'progressed': 0, 'no progress': 0,
+              'arrows': 0}
     for trial in range(trials):
         start = cube.apply(cube.SOLVED, scramble(rng))
         sv = solver.solve(start)
@@ -79,6 +80,16 @@ def check(trials=600, seed=11):
                     if step['home']:
                         assert [i for _, i in table[step['home_slot']]] == step['home'], \
                             (trial, stage['key'], 'the gap is not where the step says')
+
+                # One square to watch, and it really does travel to the place
+                # the arrow points at.
+                assert step['marker'] is not None, \
+                    (trial, stage['key'], 'a step has no square to watch')
+                assert step['marker'] != step['target'], \
+                    (trial, stage['key'], 'the square to watch does not move')
+                assert solver.follow(step['marker'], step['moves']) == step['target'], \
+                    (trial, stage['key'], 'the arrow points at the wrong place')
+                counts['arrows'] += 1
 
                 state = cube.apply_regrip(state, step['moves'])
 
@@ -104,3 +115,4 @@ if __name__ == '__main__':
     print('  naming a piece             %d' % counts['with piece'])
     print('  that put a piece right     %d' % counts['progressed'])
     print('  that did not (setup steps) %d' % counts['no progress'])
+    print('  arrows checked             %d' % counts['arrows'])

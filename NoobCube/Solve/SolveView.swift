@@ -28,11 +28,14 @@ struct SolveView: View {
                                   ? -1 : session.moveIndexWithinStep)
             }
 
-            instructionCard
-                .padding(.horizontal, 20)
-                .padding(.top, 8)
-
-            Spacer(minLength: 8)
+            // Scrolls rather than squeezing: a long sentence used to be cut
+            // off at the bottom of the screen with no way to read the rest.
+            ScrollView {
+                instructionCard
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+            }
+            .frame(maxHeight: 190)
 
             controls
                 .padding(.horizontal, 20)
@@ -62,54 +65,43 @@ struct SolveView: View {
         .padding(.top, 12)
     }
 
-    /// What is about to happen, before it happens: which piece, going where.
-    @ViewBuilder
+    /// What is about to happen, before it happens.
+    ///
+    /// One line, because it is one thing: either getting a square where we can
+    /// work on it, or the move that puts it home. Two jobs in one paragraph is
+    /// what made this unreadable, and too long for the screen besides.
     private func stepCard(_ step: SolveStep) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: step.purpose == .positioning
+                      ? "arrow.up.and.down.and.arrow.left.and.right"
+                      : "hand.point.up.left.fill")
+                    .font(.system(size: 14, weight: .black))
+                    .foregroundStyle(step.purpose == .positioning ? Theme.attention : Theme.done)
+                Text(session.heading(of: step))
+                    .font(.brand(size: 20, weight: .heavy))
+                    .foregroundStyle(.white)
+                Spacer(minLength: 0)
                 ForEach(Array(session.colours(of: step).enumerated()), id: \.offset) { _, colour in
-                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
                         .fill(colour.swiftUIColor)
-                        .frame(width: 26, height: 26)
+                        .frame(width: 22, height: 22)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
                                 .strokeBorder(.black.opacity(0.35), lineWidth: 1)
                         )
                 }
-                if !step.piece.isEmpty {
-                    Image(systemName: "arrow.right")
-                        .font(.system(size: 15, weight: .black))
-                        .foregroundStyle(Theme.done)
-                    Text(step.places ? "goes home" : "needs moving first")
-                        .font(.brand(size: 16, weight: .bold))
-                        .foregroundStyle(Theme.done)
-                }
             }
 
-            if !step.piece.isEmpty {
-                Text(session.name(of: step).sentenceCased)
-                    .font(.brand(size: 24, weight: .heavy))
-                    .foregroundStyle(.white)
-            }
-
-            if let lineUp = step.lineUpText {
-                Label(lineUp, systemImage: "scope")
-                    .font(.brand(size: 16, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.9))
-            }
-            if let outcome = step.outcome {
-                Text(outcome)
-                    .font(.brand(size: 15, weight: .medium))
-                    .foregroundStyle(Theme.muted)
-            }
-            if let name = step.algorithmName {
-                Text("Then \(name): \(step.algorithm.map(\.notation).joined(separator: " "))")
-                    .font(.brand(size: 15, weight: .bold))
-                    .foregroundStyle(Theme.attention)
+            if let text = step.text {
+                Text(text)
+                    .font(.brand(size: 17, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.92))
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .cardBackground(stripe: Theme.attention)
+        .cardBackground(stripe: step.purpose == .positioning ? Theme.attention : Theme.done)
     }
 
     @ViewBuilder

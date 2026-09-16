@@ -83,6 +83,21 @@ enum CubeGeometry {
     }
 
     /// Cached full permutations for every move, so turning is a single lookup.
+    /// Where the sticker at `index` ends up after these moves.
+    ///
+    /// A permutation reads `old[perm[i]]` into position i, so the sticker at
+    /// `perm[i]` lands on `i`: following one forwards is a lookup the other
+    /// way round. Used to point an arrow at where a square is about to go.
+    static func follow(sticker index: Int, through moves: [Move]) -> Int {
+        var index = index
+        for move in moves {
+            guard let permutation = allPermutations[move],
+                  let landing = permutation.firstIndex(of: index) else { continue }
+            index = landing
+        }
+        return index
+    }
+
     static let allPermutations: [Move: [Int]] = {
         var table: [Move: [Int]] = [:]
         for base in MoveBase.allCases {

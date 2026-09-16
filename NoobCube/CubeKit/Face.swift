@@ -77,4 +77,10 @@ enum Face: Int, CaseIterable, Codable, Hashable, Sendable {
     static func face(withNormal normal: Vec3) -> Face? {
         Face.allCases.first { $0.normal == normal }
     }
+
+    /// The face a facelet index belongs to. Indices run U, R, F, D, L, B, nine
+    /// at a time, so this is simply which block of nine it falls in.
+    static func of(facelet index: Int) -> Face {
+        Face(rawValue: index / 9) ?? .U
+    }
 }

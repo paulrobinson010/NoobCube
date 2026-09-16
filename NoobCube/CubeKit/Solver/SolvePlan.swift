@@ -9,37 +9,44 @@ import Foundation
 /// about to do before it does it.
 struct SolveStep: Identifiable, Hashable, Sendable {
 
-    /// The colours of the piece being put right, in solver space. Empty for a
-    /// step that is not about one piece, like the first turn of the whole cube.
+    /// Getting something where you can work on it, or doing the move itself.
+    /// They are different jobs and a child needs them kept apart.
+    enum Purpose: String, Hashable, Sendable {
+        /// Spinning the top, turning the whole cube, or freeing a piece.
+        case positioning
+        /// The moves that put the piece where it belongs.
+        case move
+    }
+
+    var purpose: Purpose = .move
+
+    /// The colours of the piece this is about, in solver space. Empty for the
+    /// last-layer moves, which are about the whole top rather than one piece.
     var piece: [Face] = []
 
-    /// Where that piece is now, and the gap it is going into, as sticker
-    /// positions. Both are read before any of the step's moves run, so they
-    /// are the positions on screen while the child is being told about it.
+    /// Where that piece is now, and the gap it is going into.
     var from: [Int] = []
     var to: [Int] = []
 
-    /// Getting it lined up. Leaving this out is how the method gets taught
-    /// badly: the moves look like magic because the setting up was invisible.
-    var lineUp: [Move] = []
+    /// The one square to watch, and where these moves put it. Always a square
+    /// that really moves: pointing at something that stays still while the
+    /// cube changes around it teaches nothing.
+    var marker: Int?
+    var target: Int?
 
-    /// The moves that do the work — the same ones every time, which is the
-    /// whole point of learning them.
-    var algorithm: [Move] = []
+    var moves: [Move] = []
     var algorithmName: String?
 
-    /// What the lining up is for, and what happens when the moves run.
-    var lineUpText: String?
-    var outcome: String?
+    /// One sentence. Kept short enough to read at a glance, which is why
+    /// positioning and the move are separate steps rather than one paragraph.
+    var text: String?
 
-    /// False for a step that only gets something out of the way, so nothing
-    /// claims to have finished a piece it has not.
+    /// False for a step that only gets something out of the way.
     var places = false
 
     var index = 0
     var id: Int { index }
 
-    var moves: [Move] { lineUp + algorithm }
     var isEmpty: Bool { moves.isEmpty }
 }
 

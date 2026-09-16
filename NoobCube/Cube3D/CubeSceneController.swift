@@ -20,11 +20,15 @@ final class CubeSceneController {
     /// Each cubelet with the lattice position it currently occupies.
     private var cubelets: [(node: SCNNode, position: Vec3)] = []
 
-    /// Sticker plates by facelet index, so a step can light up the pieces it moves.
-    private var stickerNodes: [Int: SCNNode] = [:]
+    /// Sticker plates by facelet index, so a step can light up the one square
+    /// it is about and point an arrow at where that square is going.
+    private(set) var stickerNodes: [Int: SCNNode] = [:]
 
     /// The curved arrow showing which way the next move goes, if one is showing.
     var arrowNode: SCNNode?
+
+    /// The arrow arcing from a square to where it is about to end up.
+    var journeyNode: SCNNode?
 
     private static let cubeletSize: CGFloat = 1.0
     private static let gap: CGFloat = 0.06
@@ -191,23 +195,18 @@ final class CubeSceneController {
         pulse(faceletIndices)
     }
 
-    /// Point at a piece and at the gap it is going into, in the two colours the
-    /// app uses everywhere for "look here" and "done", so that "this one goes
-    /// there" is a single picture rather than two separate instructions.
-    func highlight(piece: Set<Int>, destination: Set<Int>) {
-        let lookHere = UIColor(Theme.attention.dimmed(to: 0.5))
-        let going = UIColor(Theme.done.dimmed(to: 0.4))
-        for (index, node) in stickerNodes {
+    /// Light up the one square this step is about, and nothing else.
+    ///
+    /// One square at a time on purpose. Lighting up a whole piece, or a piece
+    /// and a gap in two colours, gives a child two things to look at and no
+    /// idea which one is about to move; the arrow says where it is going.
+    func highlight(square index: Int?) {
+        let lookHere = UIColor(Theme.attention.dimmed(to: 0.55))
+        for (facelet, node) in stickerNodes {
             guard let material = node.geometry?.firstMaterial else { continue }
-            if piece.contains(index) {
-                material.emission.contents = lookHere
-            } else if destination.contains(index) {
-                material.emission.contents = going
-            } else {
-                material.emission.contents = UIColor.black
-            }
+            material.emission.contents = facelet == index ? lookHere : UIColor.black
         }
-        pulse(piece)
+        pulse(index.map { [$0] } ?? [])
     }
 
     private func pulse(_ indices: Set<Int>) {
@@ -227,7 +226,8 @@ final class CubeSceneController {
     }
 
     func clearHighlight() {
-        highlight(faceletIndices: [])
+        highlight(square: nil)
+        hideJourney()
     }
 
     /// Light up the three centres that fix how the cube should be held.

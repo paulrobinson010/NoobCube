@@ -47,8 +47,8 @@ class Solve:
         self.stages.append(self._current)
         self._step = None
 
-    def step(self, piece=None, home=None, line_up=None, outcome=None, alg_name=None,
-             places=True):
+    def step(self, piece=None, home=None, spin=None, grip=None, turn=None,
+             outcome=None, alg_name=None, places=True):
         """Open a new step: which piece, where it is going, and why.
 
         `piece` is the set of colours (face letters) that names the piece;
@@ -60,7 +60,8 @@ class Solve:
             'piece': set(piece) if piece else None,
             'from': [], 'home': [], 'home_slot': home, 'moves': [],
             'setup': [], 'algorithm': [],
-            'line_up': line_up, 'outcome': outcome, 'alg_name': alg_name,
+            'spin': spin, 'grip': grip, 'turn': turn,
+            'outcome': outcome, 'alg_name': alg_name,
             # False for a step that only gets a piece out of the way, so that
             # nothing claims to have finished something it has not.
             'places': places and piece is not None,
@@ -136,16 +137,80 @@ def y_bringing_pair(face_pair, target=('F', 'R')):
 SLOT_ORDER = {'U': 0, 'D': 1, 'F': 2, 'B': 3, 'R': 4, 'L': 5}
 
 
-def line_up_text(moves, spin='', grip='', ready='This one is already lined up.'):
-    """Describe the lining up in terms of what it actually turned out to be.
+CENTRES = {f: i * 9 + 4 for i, f in enumerate(cube.FACES)}
+FACE_OF = [cube.FACES[i // 9] for i in range(54)]     # which face each sticker belongs to
 
-    A step that needed no spinning should not be told to spin. Mirrors
-    BeginnerSolver.lineUpText in the app.
+
+def follow(index, moves):
+    """Where the sticker at `index` ends up after these moves.
+
+    apply_perm reads `state[perm[i]]` into position i, so the sticker at
+    perm[i] lands on i: following one forwards is an inverse lookup.
     """
-    spun = any(m[0] == 'U' for m in moves)
-    gripped = any(m[0] in 'xyz' for m in moves)
-    parts = [p for p, on in ((spin, spun), (grip, gripped)) if on and p]
-    return ' '.join(parts) if parts else ready
+    for m in moves:
+        index = cube.MOVES[m].index(index)
+    return index
+
+
+def key_sticker(state, piece):
+    """The square on a piece worth watching: its white one if it has one."""
+    table = slots.EDGES if len(piece) == 2 else slots.CORNERS
+    find = slots.find_edge if len(piece) == 2 else slots.find_corner
+    name, stickers = find(state, piece)
+    entry = table[name]
+    for wanted in ('D', 'U'):
+        for (face, colour), (_, index) in zip(stickers, entry):
+            if colour == wanted:
+                return index
+    return entry[0][1]
+
+
+def marks(state, step, moves):
+    """One square to watch, and where these moves put it.
+
+    Always a square that actually moves. A child told to watch something that
+    stays still while the cube changes around it learns nothing, which is what
+    made the old lining-up steps so baffling.
+    """
+    if step['piece']:
+        start = key_sticker(state, step['piece'])
+        end = follow(start, moves)
+        if end != start:
+            return start, end
+
+    if any(m[0] in 'xyz' for m in moves):
+        # The cube itself is turning: watch the middle that ends up facing you.
+        front = CENTRES['F']
+        for index in CENTRES.values():
+            if follow(index, moves) == front and index != front:
+                return index, front
+
+    if step['home']:
+        # Making room: the square to watch is the one that is in the way.
+        start = step['home'][0]
+        end = follow(start, moves)
+        if end != start:
+            return start, end
+
+    # A last-layer algorithm moves several pieces at once. Watch one square
+    # that the move actually puts right — the top face first, since that is
+    # where the child is looking.
+    after = cube.apply_regrip(state, moves)
+    order = list(range(9)) + list(range(9, 54))
+    for index in order:
+        landing = follow(index, moves)
+        if (landing != index and state[index] != FACE_OF[index]
+                and after[landing] == FACE_OF[landing]):
+            return index, landing
+
+    # Nothing is put right by this one — it is setting up the shape for the
+    # next go. Watch a square that at least travels somewhere.
+    for index in order:
+        landing = follow(index, moves)
+        if landing != index:
+            return index, landing
+
+    return None, None
 
 
 def slot_name(colours):
@@ -321,33 +386,32 @@ def solve_daisy(sv):
     for _ in range(8):
         if settled_count(sv.state) == 4:
             return
-        target = None
+
+        # Every white edge still to do, with what it would cost. The cheapest
+        # one is taken, which is what anybody does by eye: an edge already
+        # sitting beside a middle needs one turn and nothing else.
+        candidates = []
         for name, entry in slots.EDGES.items():
-            s = dict(slots.stickers(sv.state, entry))
-            if 'D' not in s.values():
+            s_ = dict(slots.stickers(sv.state, entry))
+            if 'D' not in s_.values():
                 continue
-            if 'U' in name and s['U'] == 'D':
+            if 'U' in name and s_['U'] == 'D':
                 continue                      # already a petal
             if 'D' in name and d_edge_solved(sv.state, name):
                 continue                      # already home, leave it alone
-            target = set(s.values())
-            break
-        if target is None:
+            piece = set(s_.values())
+            candidates.append((petal_plan(sv.state, piece), piece))
+        if not candidates:
             return
 
-        moves, petal, setup, _ = petal_plan(sv.state, target)
-        # The wording follows the moves: a step that spun nothing must not say
-        # it did.
-        lining_up = moves[:setup]
-        parts = []
-        if any(m[0] != 'U' for m in lining_up):
-            parts.append("This one is lying on its side, so first it is turned out "
-                         "where we can reach it.")
-        if any(m[0] == 'U' for m in lining_up):
-            parts.append("Spin the top so the space next to the yellow middle is empty.")
+        (moves, petal, setup, _), target = min(candidates, key=lambda c: len(c[0][0]))
+        easiest = len(moves) == 1
         sv.step(piece=target, home=petal,
-                line_up=' '.join(parts) or None,
-                outcome='Then one turn lifts it up into the daisy, white facing the sky.')
+                spin='Spin the top to move this out of the space we need.',
+                turn='Turn this side to bring the white square out where we can lift it.',
+                outcome=('This one is the easiest — one turn lifts it straight into '
+                         'the daisy.') if easiest else
+                       'Now one turn lifts it into the daisy, white facing the sky.')
         sv.do(moves[:setup])
         sv.running()
         sv.do(moves[setup:])
@@ -371,10 +435,9 @@ def solve_white_cross(sv):
             return
         from_face, colour, piece = chosen
         sv.step(piece=piece, home=slot_name(piece),
-                line_up='Spin the top until this petal\'s side colour is right '
-                        'above the middle that matches it.',
-                outcome='Then turn that whole side over twice, and the white '
-                        'drops down into the cross with its side colour already right.')
+                spin='Spin the top until this colour is above the middle that '
+                     'matches it.',
+                outcome='Turn this side over twice and the white drops into the cross.')
         sv.do(u_turn_moving(from_face, colour))
         sv.running()
         sv.do([colour + '2'])
@@ -402,20 +465,17 @@ def solve_first_layer_corners(sv):
         here, _ = slots.find_corner(sv.state, set(target))
         if 'D' in here:
             sv.step(piece=set(target), home=target, places=False,
-                    line_up='This corner is already in the bottom, but the wrong '
-                            'way round. Turn the cube so it is at the front right.',
-                    outcome='One shuffle lifts it out into the top, and then we '
-                            'can put it in properly.')
+                    grip='This corner is in the bottom the wrong way round. Turn '
+                         'the cube so it is at the front right.',
+                    outcome='One shuffle lifts it out into the top.')
             sv.do(y_bringing_pair(side_face_of(here)))
             sv.running()
             sv.do("R U R'")                   # lift the stuck corner into the top
             continue
         sv.step(piece=set(target), home=target, alg_name='the shuffle',
-                line_up='Turn the cube so this corner\'s gap is at the front '
-                        'right, then spin the top until the corner is sitting '
-                        'directly above it.',
-                outcome='Then shuffle until it drops in. It only goes in when it '
-                        'is the right way round, so keep going and it sorts itself out.')
+                grip='Turn the cube so this corner\'s gap is at the front right.',
+                outcome='Spin the top to bring the corner over its gap, then shuffle '
+                        'until it drops in.')
         sv.do(y_bringing_pair(side_face_of(target)))
         sv.running()
         sv.do(bfs_alg(sv.state, SEXY, lambda st: d_corner_solved(st, 'DFR')))
@@ -451,11 +511,9 @@ def solve_second_layer(sv):
             stuck = dict(slots.stickers(sv.state, slots.EDGES[unsolved[0]]))
             sv.step(piece=set(stuck.values()), home=slot_name(set(stuck.values())),
                     places=False,
-                    line_up='Every edge we still need is stuck in the middle row '
-                            'already, in the wrong place. Turn the cube so one of '
-                            'them is at the front right.',
-                    outcome='Sending another edge in pushes this one out into the '
-                            'top, where we can aim it properly.')
+                    grip='This edge is in the middle row but in the wrong place. '
+                         'Turn the cube so it is at the front right.',
+                    outcome='Sending another edge in pushes this one out to the top.')
             sv.do(y_bringing_pair(list(unsolved[0])))
             sv.running()
             sv.do(INSERTR)                    # pop a wrong piece out of the middle
@@ -464,19 +522,12 @@ def solve_second_layer(sv):
         front_colour = s[face]
         piece = set(s.values())
         sv.step(piece=piece, home=slot_name(piece),
-                outcome='Now send the top away from the gap it needs to go into. '
-                        'That opens the gap, drops the edge in, and puts everything '
-                        'else back where it was.')
-        spin = u_turn_moving(face, front_colour)
-        grip = y_to_front(front_colour)
-        sv.do(spin)
-        sv.do(grip)
-        sv._step['line_up'] = line_up_text(
-            spin + grip,
-            spin='Spin the top until this edge\'s front colour sits right on top of '
-                 'the middle that matches it, making a little T.',
-            grip='Turn the cube so that side is facing you.',
-            ready='This one is already lined up and facing you.')
+                spin='Spin the top until this colour sits on the middle that '
+                     'matches it, making a little T.',
+                grip='Turn the cube so that side is facing you.',
+                outcome='Send the top away from the gap, and the edge drops in.')
+        sv.do(u_turn_moving(face, front_colour))
+        sv.do(y_to_front(front_colour))
         # re-read after the rotation, the face letters have all moved
         top = dict(slots.stickers(sv.state, slots.EDGES['UF']))['U']
         sv.running()
@@ -517,16 +568,117 @@ def solved_up_to_u(state):
 def run_rounds(sv, alg, goal, alg_name, line_up, outcome):
     """One step per round of 'line the top up, then run the one you know'."""
     for turn, moves in bfs_alg_rounds(sv.state, alg, goal):
-        sv.step(alg_name=alg_name, line_up=line_up if turn else None, outcome=outcome)
+        sv.step(alg_name=alg_name, spin=line_up, outcome=outcome)
         sv.do(turn)
         sv.running()
         sv.do(moves)
 
 
+def runs_of(step):
+    """A step, broken into the things it actually asks the child to do.
+
+    Spinning the top and turning the whole cube are different actions with
+    different things to look at, so they get a card each. The words for each
+    one only exist if its moves do, which is why nothing can claim a turn that
+    never happened.
+    """
+    out = []
+    run, kind = [], None
+    for move in step['setup']:
+        if move[0] in 'xyz':
+            this = 'grip'                     # turning the whole cube round
+        elif move[0] == 'U':
+            this = 'spin'                     # spinning the top layer
+        else:
+            this = 'turn'                     # turning a side to free a piece
+        if kind is not None and this != kind:
+            out.append(('position', run, step[kind]))
+            run = []
+        kind = this
+        run.append(move)
+    if run:
+        out.append(('position', run, step[kind]))
+    if step['algorithm']:
+        out.append(('move', step['algorithm'], step['outcome']))
+    return out
+
+
+def rename_after(moves):
+    """What each face is called after these moves, if any of them turn the cube."""
+    spins = [m for m in moves if m[0] in 'xyz']
+    if not spins:
+        return {f: f for f in cube.FACES}
+    rotated = cube.apply(cube.SOLVED, spins)
+    return {rotated[index]: face for face, index in CENTRES.items()}
+
+
+def split_steps(sv, start):
+    """Separate getting a piece into position from the move that places it.
+
+    They are two different things and a child needs them kept apart: one is
+    spinning the cube or the top until something is where you can work on it,
+    the other is the set of moves you have learned. Run together in one
+    instruction they read as magic, and the explanation is too long to fit on
+    the screen besides.
+    """
+    state = start
+    for stage in sv.stages:
+        split = []
+        for step in stage['steps']:
+            # A step's piece is named in the labels of the moment it was
+            # written down, so the renaming only runs from there — not from the
+            # start of the solve.
+            naming = {f: f for f in cube.FACES}
+            for purpose, moves, text in runs_of(step):
+                if not moves:
+                    continue
+
+                # Everything is read in the labels of the moment, because a
+                # re-grip earlier in the same step will have renamed the faces.
+                piece = {naming[c] for c in step['piece']} if step['piece'] else None
+                here = {'piece': piece, 'home': []}
+                if piece:
+                    table = slots.EDGES if len(piece) == 2 else slots.CORNERS
+                    find = slots.find_edge if len(piece) == 2 else slots.find_corner
+                    at, _ = find(state, piece)
+                    here['from'] = [i for _, i in table[at]]
+                    home_slot = (slot_name(piece)
+                                 if step['home_slot'] == slot_name(step['piece'])
+                                 else step['home_slot'])
+                    here['home_slot'] = home_slot
+                    here['home'] = [i for _, i in table[home_slot]]
+                else:
+                    here['from'] = []
+                    here['home_slot'] = None
+
+                marker, target = marks(state, here, moves)
+                split.append({
+                    'purpose': purpose,
+                    'piece': piece,
+                    'from': here['from'],
+                    'home': here['home'],
+                    'home_slot': here['home_slot'],
+                    'moves': moves,
+                    'setup': moves if purpose == 'position' else [],
+                    'algorithm': [] if purpose == 'position' else moves,
+                    'line_up': text if purpose == 'position' else None,
+                    'outcome': text if purpose == 'move' else None,
+                    'text': text,
+                    'alg_name': step['alg_name'] if purpose == 'move' else None,
+                    'places': step['places'] and purpose == 'move',
+                    'marker': marker,
+                    'target': target,
+                })
+                state = cube.apply_regrip(state, moves)
+                rename = rename_after(moves)
+                naming = {k: rename[v] for k, v in naming.items()}
+        stage['steps'] = split
+
+
 def solve(state, white_face='D'):
     sv = Solve(state)
     sv.stage('hold', 'Hold your cube with white on the bottom')
-    sv.step(line_up='Turn the whole cube so white is underneath and yellow is on top.',
+    sv.step(grip='Turn the whole cube so white is underneath and yellow is on top.',
             outcome='Now left and right mean the same thing to both of us.')
     sv.do(WHITE_DOWN_ROTATION[white_face])
     if not white_cross_done(sv.state):
@@ -558,7 +710,7 @@ def solve(state, white_face='D'):
     run_rounds(sv, UPERM, solved_up_to_u, 'the edge swap',
                'Turn the top so the edge that is already right is at the back.',
                'The edge swap slides the other three round in a circle.')
-    sv.step(line_up='One last spin of the top.',
+    sv.step(spin='One last spin of the top.',
             outcome='And that is the whole cube.')
     sv.do(auf(sv.state))
     # Tidy each step on its own: collapsing turns across a step boundary would
@@ -570,6 +722,7 @@ def solve(state, white_face='D'):
             step['moves'] = step['setup'] + step['algorithm']
         st['steps'] = [step for step in st['steps'] if step['moves']]
         st['moves'] = [m for step in st['steps'] for m in step['moves']]
+    split_steps(sv, state)
     if sv.state != cube.SOLVED:
         raise RuntimeError('solver finished but the cube is not solved')
     return sv

@@ -63,7 +63,7 @@ enum BeginnerSolver {
         let builder = Builder(state: state)
 
         builder.begin(.hold)
-        builder.step(lineUp: "Turn the whole cube so white is underneath and yellow is on top.",
+        builder.step(grip: "Turn the whole cube so white is underneath and yellow is on top.",
                      outcome: "Now left and right mean the same thing to both of us.")
         builder.perform(rotationBringingWhiteDown(from: whiteFace))
 
@@ -79,14 +79,14 @@ enum BeginnerSolver {
 
         builder.begin(.yellowCross)
         try rounds(builder, algorithm: crossMove, goal: topCrossDone, named: "the cross move",
-                   lineUp: "Turn the top until the yellow shape is pointing the right "
+                   spin:   "Turn the top until the yellow shape is pointing the right "
                          + "way: the two yellow edges at the back and on the left.",
                    outcome: "Then the cross move turns a dot into an L, an L into a "
                           + "line, and a line into the whole cross.")
 
         builder.begin(.yellowFace)
         try rounds(builder, algorithm: fish, goal: topFaceDone, named: "the fish",
-                   lineUp: "Turn the top until the fish is looking the right way — "
+                   spin:   "Turn the top until the fish is looking the right way — "
                          + "yellow on the left of the side facing you.",
                    outcome: "Then the fish spins three corners at once. Do it again "
                           + "from the new shape until the whole top is yellow.")
@@ -94,7 +94,7 @@ enum BeginnerSolver {
         builder.begin(.lastCorners)
         try rounds(builder, algorithm: cornerSwap, goal: topCornersHome,
                    named: "the corner swap",
-                   lineUp: "Find the two corners that want to swap and turn the top so "
+                   spin:   "Find the two corners that want to swap and turn the top so "
                          + "they're where the swap picks them up.",
                    outcome: "The corner swap trades two corners over and leaves the "
                           + "rest alone.")
@@ -102,11 +102,11 @@ enum BeginnerSolver {
         builder.begin(.lastEdges)
         try rounds(builder, algorithm: edgeSwap, goal: solvedIgnoringTopTurn,
                    named: "the edge swap",
-                   lineUp: "Turn the top so the edge that's already right is at the back.",
+                   spin:   "Turn the top so the edge that's already right is at the back.",
                    outcome: "The edge swap slides the other three round in a circle.")
         let last = finalTopTurn(builder.state)
         if !last.isEmpty {
-            builder.step(lineUp: "One last spin of the top.",
+            builder.step(spin: "One last spin of the top.",
                          outcome: "And that's the whole cube.")
             builder.perform(last)
         }
@@ -115,103 +115,282 @@ enum BeginnerSolver {
             throw SolverError.stuck("Something went wrong working that one out. Let's scan again.")
         }
 
-        var stages = builder.stages
-        for stage in stages.indices {
-            // Tidy each step on its own. Collapsing turns across a step
-            // boundary would blur the very thing the steps are there to show.
-            for step in stages[stage].steps.indices {
-                stages[stage].steps[step].lineUp = simplify(stages[stage].steps[step].lineUp)
-                stages[stage].steps[step].algorithm = simplify(stages[stage].steps[step].algorithm)
-            }
-            stages[stage].steps.removeAll(where: \.isEmpty)
-            for number in stages[stage].steps.indices {
-                stages[stage].steps[number].index = number
-            }
-        }
-        return SolvePlan(start: state, stages: stages)
+        return SolvePlan(start: state, stages: assemble(builder, from: state))
     }
 
     // MARK: - Bookkeeping
 
-    /// Builds the plan as stages made of steps.
+    /// One piece's worth of work, as written down by the stage solvers.
     ///
-    /// A step is opened by saying which piece it is about and where that piece
-    /// is going; the moves that follow are filed under it. `running()` marks
-    /// where the lining up stops and the algorithm begins, which is the line
-    /// the child most needs to see.
+    /// It is split into the steps the child actually sees at the end, because
+    /// only then is it known what the lining up turned out to consist of.
+    private struct Draft {
+        var piece: Set<Face>?
+        var home: Set<Face>?
+        /// The words for each kind of positioning. Each one is only ever shown
+        /// when its own moves happened, so nothing can claim a turn that was
+        /// never made.
+        var spin: String?
+        var grip: String?
+        var turn: String?
+        var outcome: String?
+        var algorithmName: String?
+        var places = true
+        var liningUp: [Move] = []
+        var algorithm: [Move] = []
+    }
+
+    /// Builds the plan: stages, each a list of drafts.
     private final class Builder {
         var state: CubeState
-        var stages: [SolveStage] = []
+        private(set) var kinds: [SolveStage.Kind] = []
+        private(set) var drafts: [[Draft]] = []
 
         init(state: CubeState) {
             self.state = state
         }
 
         func begin(_ kind: SolveStage.Kind) {
-            stages.append(SolveStage(kind: kind, steps: []))
+            kinds.append(kind)
+            drafts.append([])
         }
 
-        /// Open a step. The piece's position is read now, before anything moves.
         func step(piece: Set<Face>? = nil,
                   home: Set<Face>? = nil,
                   places: Bool = true,
-                  lineUp: String? = nil,
+                  spin: String? = nil,
+                  grip: String? = nil,
+                  turn: String? = nil,
                   outcome: String? = nil,
                   algorithmName: String? = nil) {
-            var step = SolveStep()
-            step.lineUpText = lineUp
-            step.outcome = outcome
-            step.algorithmName = algorithmName
-            if let piece {
-                // In slot order, so it is always "the white and blue edge"
-                // rather than whichever way round the set came out.
-                step.piece = CubeSlots.slot(with: piece)?.faces ?? Array(piece)
-                step.from = CubeSlots.slot(holding: piece, in: state)?.indices ?? []
-                step.to = home.flatMap { CubeSlots.slot(with: $0)?.indices } ?? []
-                step.places = places
-            }
-            stages[stages.count - 1].steps.append(step)
+            var draft = Draft()
+            draft.piece = piece
+            draft.home = home
+            draft.places = piece == nil ? false : places
+            draft.spin = spin
+            draft.grip = grip
+            draft.turn = turn
+            draft.outcome = outcome
+            draft.algorithmName = algorithmName
+            drafts[drafts.count - 1].append(draft)
             isRunning = false
         }
 
         /// From here on the moves are the algorithm, not the lining up.
         func running() { isRunning = true }
 
-        /// Say what the lining up turned out to involve. Called after it is
-        /// done, because until then we do not know whether there was any.
-        func explaining(lineUp: String?) {
-            withLastStep { $0.lineUpText = lineUp }
-        }
-
         /// Name the algorithm, for the stages that only know which one it is
         /// after the cube has been turned round.
         func naming(_ name: String) {
-            withLastStep { $0.algorithmName = name }
+            withLastDraft { $0.algorithmName = name }
         }
 
         private var isRunning = false
 
-        private func withLastStep(_ change: (inout SolveStep) -> Void) {
-            guard let stage = stages.indices.last,
-                  let step = stages[stage].steps.indices.last else { return }
-            change(&stages[stage].steps[step])
+        private func withLastDraft(_ change: (inout Draft) -> Void) {
+            guard let stage = drafts.indices.last,
+                  let draft = drafts[stage].indices.last else { return }
+            change(&drafts[stage][draft])
         }
 
         func perform(_ moves: [Move]) {
             guard !moves.isEmpty else { return }
             state = state.applying(moves)
-            if stages[stages.count - 1].steps.isEmpty {
-                step()
-            }
+            if drafts[drafts.count - 1].isEmpty { step() }
             let running = isRunning
-            withLastStep { step in
+            withLastDraft { draft in
                 if running {
-                    step.algorithm.append(contentsOf: moves)
+                    draft.algorithm.append(contentsOf: moves)
                 } else {
-                    step.lineUp.append(contentsOf: moves)
+                    draft.liningUp.append(contentsOf: moves)
                 }
             }
         }
+    }
+
+    // MARK: - Turning a draft into steps
+
+    /// What each face is called after these moves.
+    ///
+    /// Turning the whole cube renames the faces so a solved cube still reads as
+    /// solved, so a piece cannot be followed across one by its colours alone.
+    private static func renaming(after moves: [Move]) -> [Face: Face] {
+        var map: [Face: Face] = [:]
+        for face in Face.allCases {
+            let landing = CubeGeometry.follow(sticker: face.centreIndex, through: moves)
+            map[face] = Face.allCases.first { $0.centreIndex == landing } ?? face
+        }
+        return map
+    }
+
+    /// The square on a piece worth watching: its white one if it has one.
+    private static func keySticker(of piece: Set<Face>, in state: CubeState) -> Int? {
+        guard let slot = CubeSlots.slot(holding: piece, in: state) else { return nil }
+        for wanted in [Face.D, .U] {
+            if let position = slot.indices.firstIndex(where: { state[$0] == wanted }) {
+                return slot.indices[position]
+            }
+        }
+        return slot.indices.first
+    }
+
+    /// One square to watch, and where these moves put it.
+    ///
+    /// Always a square that really moves. A child told to watch something that
+    /// stays still while the cube changes around it learns nothing, which is
+    /// what made the old lining-up instructions so baffling.
+    private static func marks(for piece: Set<Face>?,
+                              home: [Int],
+                              moves: [Move],
+                              in state: CubeState) -> (marker: Int, target: Int)? {
+        func travelled(_ index: Int) -> (Int, Int)? {
+            let landing = CubeGeometry.follow(sticker: index, through: moves)
+            return landing == index ? nil : (index, landing)
+        }
+
+        if let piece, let key = keySticker(of: piece, in: state), let found = travelled(key) {
+            return found
+        }
+
+        if moves.contains(where: \.isWholeCubeTurn) {
+            // The cube itself is turning: watch the middle that ends up facing you.
+            for face in Face.allCases where face != .F {
+                if CubeGeometry.follow(sticker: face.centreIndex, through: moves)
+                    == Face.F.centreIndex {
+                    return (face.centreIndex, Face.F.centreIndex)
+                }
+            }
+        }
+
+        // Making room: the square to watch is the one that is in the way.
+        if let first = home.first, let found = travelled(first) { return found }
+
+        // A last-layer algorithm moves several pieces at once. Watch a square
+        // it puts right, looking at the top face first because that is where
+        // the child is looking.
+        let after = state.applying(moves)
+        let order = Array(Face.U.faceletIndices) + (0..<54).filter { !Face.U.faceletIndices.contains($0) }
+        for index in order {
+            let landing = CubeGeometry.follow(sticker: index, through: moves)
+            guard landing != index else { continue }
+            if state[index] != Face.of(facelet: index),
+               after[landing] == Face.of(facelet: landing) {
+                return (index, landing)
+            }
+        }
+
+        // Nothing is put right by this one — it is setting the shape up for the
+        // next go. Watch a square that at least travels somewhere.
+        for index in order {
+            if let found = travelled(index) { return found }
+        }
+        return nil
+    }
+
+    /// Break one draft into the things it actually asks the child to do.
+    ///
+    /// Spinning the top, turning the whole cube and freeing a piece are
+    /// different actions with different things to look at, so each gets its own
+    /// step. The words for each only exist when its moves do.
+    private static func runs(of draft: Draft) -> [(purpose: SolveStep.Purpose,
+                                                   moves: [Move],
+                                                   text: String?)] {
+        enum Kind { case spin, grip, turn }
+        func kind(of move: Move) -> Kind {
+            if move.isWholeCubeTurn { return .grip }
+            return move.base == .U ? .spin : .turn
+        }
+        func words(_ kind: Kind) -> String? {
+            switch kind {
+            case .spin: return draft.spin
+            case .grip: return draft.grip
+            case .turn: return draft.turn
+            }
+        }
+
+        var out: [(SolveStep.Purpose, [Move], String?)] = []
+        var run: [Move] = []
+        var current: Kind?
+        for move in draft.liningUp {
+            let this = kind(of: move)
+            if let current, this != current {
+                out.append((.positioning, run, words(current)))
+                run = []
+            }
+            current = this
+            run.append(move)
+        }
+        if let current, !run.isEmpty {
+            out.append((.positioning, run, words(current)))
+        }
+        if !draft.algorithm.isEmpty {
+            out.append((.move, draft.algorithm, draft.outcome))
+        }
+        return out
+    }
+
+    /// Turn the drafts into the steps the child is shown.
+    ///
+    /// Everything is worked out by replaying the solve from the beginning,
+    /// because a square's position, the name of a face, and what is sitting in
+    /// the way are all facts about a particular moment.
+    private static func assemble(_ builder: Builder, from start: CubeState) -> [SolveStage] {
+        var stages: [SolveStage] = []
+        var state = start
+
+        for (stageIndex, kind) in builder.kinds.enumerated() {
+            var steps: [SolveStep] = []
+
+            for var draft in builder.drafts[stageIndex] {
+                // Tidy each part on its own: collapsing turns across the line
+                // between lining up and the move would blur the very thing the
+                // steps are there to show.
+                draft.liningUp = simplify(draft.liningUp)
+                draft.algorithm = simplify(draft.algorithm)
+
+                // A draft's piece is named in the labels of the moment it was
+                // written down, so renaming runs from there rather than from
+                // the start of the solve.
+                var naming: [Face: Face] = [:]
+                for face in Face.allCases { naming[face] = face }
+
+                for run in runs(of: draft) where !run.moves.isEmpty {
+                    var step = SolveStep()
+                    step.purpose = run.purpose
+                    step.moves = run.moves
+                    step.text = run.text
+                    step.algorithmName = run.purpose == .move ? draft.algorithmName : nil
+                    step.places = draft.places && run.purpose == .move
+
+                    var piece: Set<Face>?
+                    if let authored = draft.piece {
+                        let now = Set(authored.compactMap { naming[$0] })
+                        piece = now
+                        step.piece = CubeSlots.slot(with: now)?.faces ?? Array(now)
+                        step.from = CubeSlots.slot(holding: now, in: state)?.indices ?? []
+                        // The gap it is going into: its own slot, unless the
+                        // draft named another one — the daisy aims at a petal.
+                        let home = draft.home == draft.piece ? now : (draft.home ?? now)
+                        step.to = CubeSlots.slot(with: home)?.indices ?? []
+                    }
+
+                    if let found = marks(for: piece, home: step.to,
+                                         moves: run.moves, in: state) {
+                        step.marker = found.marker
+                        step.target = found.target
+                    }
+
+                    step.index = steps.count
+                    steps.append(step)
+
+                    state = state.applying(run.moves)
+                    let renamed = renaming(after: run.moves)
+                    naming = naming.mapValues { renamed[$0] ?? $0 }
+                }
+            }
+            stages.append(SolveStage(kind: kind, steps: steps))
+        }
+        return stages
     }
 
     // MARK: - Turning helpers
@@ -398,38 +577,35 @@ enum BeginnerSolver {
         for _ in 0..<8 {
             if settledCount(builder.state) == 4 { return }
 
-            let target = CubeSlots.edges.first { slot in
-                guard slot.colours(in: builder.state).contains(.D) else { return false }
+            // Every white edge still to do, with what each would cost. The
+            // cheapest is taken, which is what anybody does by eye: an edge
+            // already sitting beside a middle needs one turn and nothing else.
+            var cheapest: (piece: Set<Face>, plan: PetalPlan)?
+            for slot in CubeSlots.edges {
+                guard slot.colours(in: builder.state).contains(.D) else { continue }
                 if slot.contains(.U), slot.sticker(on: .U, in: builder.state) == .D {
-                    return false                       // already a petal
+                    continue                           // already a petal
                 }
                 if slot.contains(.D), slot.isSolved(in: builder.state) {
-                    return false                       // already home, leave it alone
+                    continue                           // already home, leave it alone
                 }
-                return true
+                let piece = Set(slot.colours(in: builder.state))
+                let plan = try petalPlan(for: piece, in: builder.state)
+                if cheapest == nil || plan.moves.count < cheapest!.plan.moves.count {
+                    cheapest = (piece, plan)
+                }
             }
-            guard let slot = target else { return }
-
-            let piece = Set(slot.colours(in: builder.state))
-            let plan = try petalPlan(for: piece, in: builder.state)
-            let liningUp = Array(plan.moves.prefix(plan.liningUp))
-
-            // The wording follows the moves: a step that spun nothing must not
-            // say that it did.
-            var parts: [String] = []
-            if liningUp.contains(where: { $0.base != .U }) {
-                parts.append("This one is lying on its side, so first it's turned out "
-                           + "where we can reach it.")
-            }
-            if liningUp.contains(where: { $0.base == .U }) {
-                parts.append("Spin the top so the space next to the yellow middle is empty.")
-            }
+            guard let (piece, plan) = cheapest else { return }
 
             builder.step(piece: piece, home: plan.petal,
-                         lineUp: parts.isEmpty ? nil : parts.joined(separator: " "),
-                         outcome: "Then one turn lifts it up into the daisy, white "
-                                + "facing the sky.")
-            builder.perform(liningUp)
+                         spin: "Spin the top to move this out of the space we need.",
+                         turn: "Turn this side to bring the white square out where we "
+                             + "can lift it.",
+                         outcome: plan.moves.count == 1
+                             ? "This one's the easiest — one turn lifts it straight "
+                             + "into the daisy."
+                             : "Now one turn lifts it into the daisy, white facing the sky.")
+            builder.perform(Array(plan.moves.prefix(plan.liningUp)))
             builder.running()
             builder.perform(Array(plan.moves.dropFirst(plan.liningUp)))
         }
@@ -454,17 +630,11 @@ enum BeginnerSolver {
             }
             let piece = Set(slot.colours(in: builder.state))
             builder.step(piece: piece, home: piece,
-                         outcome: "Then turn that whole side over twice, and the white "
-                                + "drops down into the cross with its side colour "
-                                + "already right.")
-            let spin = topTurn(from: from, to: colour)
-            builder.perform(spin)
-            builder.explaining(lineUp: lineUpText(
-                spin,
-                spin: "Spin the top until this petal's side colour is right above the "
-                    + "middle that matches it.",
-                grip: "",
-                ready: "This petal is already above the middle that matches it."))
+                         spin: "Spin the top until this colour is above the middle "
+                             + "that matches it.",
+                         outcome: "Turn this side over twice and the white drops into "
+                                + "the cross.")
+            builder.perform(topTurn(from: from, to: colour))
             builder.running()
             builder.perform([Move(MoveBase(colour), .half)])
         }
@@ -495,28 +665,20 @@ enum BeginnerSolver {
             if here.contains(.D) {
                 // Stuck in the bottom the wrong way round: lift it out first.
                 builder.step(piece: piece, home: piece, places: false,
-                             lineUp: "This corner is already in the bottom, but the "
-                                   + "wrong way round. Turn the cube so it's at the "
-                                   + "front right.",
-                             outcome: "One shuffle lifts it out into the top, and then "
-                                    + "we can put it in properly.")
+                             grip: "This corner is in the bottom the wrong way round. "
+                                 + "Turn the cube so it's at the front right.",
+                             outcome: "One shuffle lifts it out into the top.")
                 builder.perform(turnToFrontRight(here.sideFaces))
                 builder.running()
                 builder.perform(Move.parse("R U R'"))
                 continue
             }
             builder.step(piece: piece, home: piece,
-                         outcome: "Then spin the top to bring the corner over its gap "
-                                + "and shuffle until it drops in. It only goes in the "
-                                + "right way round, so keep going and it sorts itself out.",
+                         grip: "Turn the cube so this corner's gap is at the front right.",
+                         outcome: "Spin the top to bring the corner over its gap, then "
+                                + "shuffle until it drops in.",
                          algorithmName: "the shuffle")
-            let grip = turnToFrontRight(target.sideFaces)
-            builder.perform(grip)
-            builder.explaining(lineUp: lineUpText(
-                grip,
-                spin: "",
-                grip: "Turn the cube so this corner's gap is at the front right.",
-                ready: "The gap for this corner is already at the front right."))
+            builder.perform(turnToFrontRight(target.sideFaces))
             builder.running()
             for round in try search(from: builder.state, algorithm: shuffle, goal: {
                 frontRight.isSolved(in: $0)
@@ -562,11 +724,10 @@ enum BeginnerSolver {
                 // Everything left is trapped in the middle row: pop one out.
                 let stuck = Set(unsolved[0].colours(in: builder.state))
                 builder.step(piece: stuck, home: stuck, places: false,
-                             lineUp: "Every edge we still need is already stuck in the "
-                                   + "middle row, in the wrong place. Turn the cube so "
-                                   + "one of them is at the front right.",
-                             outcome: "Sending another edge in pushes this one out into "
-                                    + "the top, where we can aim it properly.")
+                             grip: "This edge is in the middle row but in the wrong "
+                                 + "place. Turn the cube so it's at the front right.",
+                             outcome: "Sending another edge in pushes this one out to "
+                                    + "the top.")
                 builder.perform(turnToFrontRight(unsolved[0].faces))
                 builder.running()
                 builder.perform(insertRight)
@@ -575,19 +736,12 @@ enum BeginnerSolver {
 
             let piece = Set(slot.colours(in: builder.state))
             builder.step(piece: piece, home: piece,
-                         outcome: "Now send the top away from the gap it needs to go "
-                                + "into. That opens the gap, drops the edge in, and puts "
-                                + "everything else back where it was.")
-            let spin = topTurn(from: face, to: side)
-            let grip = turnToFront(side)
-            builder.perform(spin)
-            builder.perform(grip)
-            builder.explaining(lineUp: lineUpText(
-                spin + grip,
-                spin: "Spin the top until this edge's front colour sits right on top of "
-                    + "the middle that matches it, making a little T.",
-                grip: "Turn the cube so that side is facing you.",
-                ready: "This one is already lined up and facing you."))
+                         spin: "Spin the top until this colour sits on the middle that "
+                             + "matches it, making a little T.",
+                         grip: "Turn the cube so that side is facing you.",
+                         outcome: "Send the top away from the gap, and the edge drops in.")
+            builder.perform(topTurn(from: face, to: side))
+            builder.perform(turnToFront(side))
             // Re-read after the re-grip, every face letter has just moved.
             guard let top = frontTop.sticker(on: .U, in: builder.state) else {
                 throw SolverError.stuck("Lost track of a middle edge.")
@@ -662,33 +816,15 @@ enum BeginnerSolver {
         throw SolverError.stuck("Couldn't work out that step. Let's scan the cube again.")
     }
 
-    /// Describe the lining up in terms of what it actually turned out to be.
-    ///
-    /// A step that needed no spinning should not be told to spin, and a step
-    /// that only re-grips should not be told about matching middles. Getting
-    /// this wrong is worse than saying nothing: a child who follows an
-    /// instruction that does not match what they are seeing stops trusting it.
-    private static func lineUpText(_ moves: [Move],
-                                   spin: String,
-                                   grip: String,
-                                   ready: String = "This one is already lined up.") -> String {
-        let spun = moves.contains { $0.base == .U }
-        let gripped = moves.contains(where: \.isWholeCubeTurn)
-        let parts = [spun ? spin : "", gripped ? grip : ""].filter { !$0.isEmpty }
-        return parts.isEmpty ? ready : parts.joined(separator: " ")
-    }
-
     /// Run a stage as a series of rounds, one step each.
     private static func rounds(_ builder: Builder,
                                algorithm: [Move],
                                goal: (CubeState) -> Bool,
                                named: String,
-                               lineUp: String,
+                               spin: String,
                                outcome: String) throws {
         for round in try search(from: builder.state, algorithm: algorithm, goal: goal) {
-            builder.step(lineUp: round.turn.isEmpty ? nil : lineUp,
-                         outcome: outcome,
-                         algorithmName: named)
+            builder.step(spin: spin, outcome: outcome, algorithmName: named)
             builder.perform(round.turn)
             builder.running()
             builder.perform(round.algorithm)

@@ -98,17 +98,21 @@ final class SolveSession: ObservableObject {
         }
     }
 
-    /// The whole of what a step is about, in one paragraph, for saying aloud.
+    /// What a step is about, for saying aloud: the piece, then the one line.
     func explanation(of step: SolveStep) -> String {
         var parts: [String] = []
-        if !step.piece.isEmpty {
-            parts.append(step.places
-                         ? "Now \(name(of: step)) goes where it belongs."
-                         : "\(name(of: step).sentenceCased) needs moving first.")
+        if !step.piece.isEmpty, step.purpose == .move, step.places {
+            parts.append("Now \(name(of: step)) goes where it belongs.")
         }
-        if let lineUp = step.lineUpText { parts.append(lineUp) }
-        if let outcome = step.outcome { parts.append(outcome) }
+        if let text = step.text { parts.append(text) }
         return parts.joined(separator: " ")
+    }
+
+    /// A few words for the top of the card.
+    func heading(of step: SolveStep) -> String {
+        if step.purpose == .positioning { return "Get it in place" }
+        if let name = step.algorithmName { return name.sentenceCased }
+        return step.piece.isEmpty ? "The move" : name(of: step).sentenceCased
     }
 
     var remainingMoves: [Move] {
@@ -212,6 +216,7 @@ final class SolveSession: ObservableObject {
             scene.hideTurnArrow()
             return
         }
+        scene.hideJourney()
         scene.showTurnArrow(for: move)
         announceCurrentMove()
     }
@@ -247,10 +252,16 @@ final class SolveSession: ObservableObject {
         narrator.say(explanation(of: step))
     }
 
-    /// Light up the piece and the gap it is going into.
+    /// Light up the one square this step is about, and arc an arrow from it to
+    /// the place it is going.
     func showStepMarks() {
         guard let step = currentStep else { return }
-        scene.highlight(piece: Set(step.from), destination: Set(step.to))
+        scene.highlight(square: step.marker)
+        if let marker = step.marker, let target = step.target {
+            scene.showJourney(from: marker, to: target)
+        } else {
+            scene.hideJourney()
+        }
     }
 
     /// Get on with the moves for the step just explained.
