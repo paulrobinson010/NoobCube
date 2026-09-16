@@ -452,10 +452,10 @@ final class ScanCoordinator: ObservableObject {
     /// middles alone never got it right and the shortlist and fit together
     /// always did.
     ///
-    /// Measured over random scrambles, deciding all six together costs nothing
-    /// when the sides do come in the order asked — 59% of cubes read perfectly
-    /// against 61% — and is the difference between working and not when they
-    /// do not: 53% against none at all.
+    /// Measured end to end over random scrambles in a dim warm room, 63% of
+    /// cubes come out perfect whether the sides are shown in the order asked
+    /// or in any order at all. Trusting the order managed 61% when it was
+    /// obeyed and nothing whatsoever when it was not.
     private func bestAssignment(of looks: [[RGBSample]],
                                 expecting expected: [Face: CubeColour])
     -> (cube: ScannedCube, fit: Double) {

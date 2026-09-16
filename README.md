@@ -158,10 +158,11 @@ those is settled properly and judged on all 54 stickers. On cubes with one
 middle painted the wrong colour, the middles alone got it right none of the
 time and the shortlist and fit together got it right every time.
 
-Deciding all six together costs nothing when the sides do come in the order
-asked — 59% of cubes read perfectly against 61% — and is the difference between
-working and not when they do not: 53% against none at all. A side that came out
-wrong is put right by showing it again, which replaces that look.
+Measured end to end in a dim warm room, 63% of cubes come out perfect whether
+the sides are shown in the order asked or in any order at all; trusting the
+order managed 61% when it was obeyed and nothing whatsoever when it was not. A
+side that came out wrong is put right by showing it again, which replaces that
+look.
 
 What survives is caught before it reaches the solver: a scan is checked for the
 three ways a cube becomes impossible — a flipped edge, a twisted corner, a
