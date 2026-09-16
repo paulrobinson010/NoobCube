@@ -19,9 +19,16 @@ struct ScanView: View {
             CubeNetView(colours: coordinator.scan.colours,
                         highlightedFace: coordinator.currentStep?.face,
                         pulsingFace: coordinator.currentStep?.face,
-                        onTapSticker: coordinator.isComplete
-                            ? { coordinator.cycleSticker(at: $0) }
-                            : nil)
+                        // While scanning, tapping a side that is already in
+                        // means "that one came out wrong" and asks for it
+                        // again. Afterwards a tap steps one square's colour on.
+                        onTapSticker: { index in
+                            if coordinator.isComplete {
+                                coordinator.cycleSticker(at: index)
+                            } else {
+                                coordinator.retakeFace(containing: index)
+                            }
+                        })
                 .frame(height: 150)
                 .padding(.horizontal, 20)
 
@@ -180,7 +187,7 @@ struct ScanView: View {
             return "Hold your cube in front of the camera."
         }
         if coordinator.isStillOnTheSideJustTaken {
-            return "Got that one. Turn the cube to the next side."
+            return "Got that one. Turn the cube, or take it again if it looks wrong."
         }
         return coordinator.camera.settling < 1
             ? "Keep it still while I look…"
@@ -201,8 +208,17 @@ struct ScanView: View {
             Button("Take this side now") { coordinator.captureCurrentFace() }
                 .buttonStyle(BigButtonStyle())
 
+            if coordinator.hasTakenASide {
+                Button("Take that one again") { coordinator.takeThatSideAgain() }
+                    .buttonStyle(BigButtonStyle(tint: Theme.attention, isProminent: false))
+            }
+
             Button("Start again") { onCancel() }
-                .buttonStyle(BigButtonStyle(tint: Theme.muted, isProminent: false))
+                .buttonStyle(.plain)
+                .font(.brand(size: 15, weight: .semibold))
+                .foregroundStyle(Theme.muted)
+                .frame(maxWidth: .infinity, minHeight: 40)
+                .contentShape(Rectangle())
         }
         .padding(.horizontal, 20)
     }

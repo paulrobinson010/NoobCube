@@ -82,7 +82,18 @@ final class ScanCoordinator: ObservableObject {
 
     /// Which side each look is currently taken to be, best guess so far.
     private var sideOfLook: [Int] = []
-    private var holdFrames = 0
+    /// When the cube first went still, so a side is taken after a length of
+    /// time rather than after a number of frames.
+    ///
+    /// It used to count frames, which stood in for time well enough while the
+    /// counting was driven by the steadiness changing — and became far too
+    /// quick the moment it was driven by the frames themselves. Eight frames is
+    /// an eighth of a second, which is not long enough to tell a cube being
+    /// held up from a cube on its way past.
+    private var steadySince: Date?
+
+    /// How long the cube has to be held still before a side is taken by itself.
+    private static let holdBeforeTaking = 0.8
 
     /// What the camera was looking at when a side was last taken.
     ///
@@ -166,7 +177,7 @@ final class ScanCoordinator: ObservableObject {
         isComplete = false
         problem = nil
         result = nil
-        holdFrames = 0
+        steadySince = nil
         lastCaptured = []
         announcedFace = nil
         // Every frame gets a chance to be the one that takes the side, rather
@@ -197,25 +208,57 @@ final class ScanCoordinator: ObservableObject {
     /// held still long enough for the reading to settle.
     func considerAutoCapture() {
         guard currentStep != nil, !isComplete else { return }
-        guard camera.isCubeInFrame else {
-            holdFrames = 0
-            return
-        }
-        guard camera.steadiness > 0.88, camera.settling >= 1 else {
-            holdFrames = 0
-            return
-        }
         // Holding the cube still is not a reason to take the same picture
-        // twice. Showing a side again later is fine — that is how a bad one is
-        // put right — but it has to be a new look at it.
-        guard hasMovedOn(to: camera.steadyReading) else {
-            holdFrames = 0
+        // twice — a camera that does that is the stutter this app started
+        // with. Taking a side again is what ``takeThatSideAgain`` is for.
+        guard camera.isCubeInFrame,
+              camera.steadiness > 0.88,
+              camera.settling >= 1,
+              hasMovedOn(to: camera.steadyReading) else {
+            steadySince = nil
             return
         }
-        holdFrames += 1
-        if holdFrames >= 8 {
+        let since = steadySince ?? Date()
+        steadySince = since
+        if Date().timeIntervalSince(since) >= Self.holdBeforeTaking {
             captureCurrentFace()
         }
+    }
+
+    /// Whether there is a look to throw away.
+    var hasTakenASide: Bool { !looks.isEmpty }
+
+    /// Throw the last look away and ask for that side again.
+    ///
+    /// Holding the same side up will not do it by itself, and should not: the
+    /// picture has not changed, so there is nothing to tell the app apart from
+    /// the frame before. A bad look happens in a moment and the child needs a
+    /// way back from it that is one tap and always works, rather than starting
+    /// the whole scan again.
+    func takeThatSideAgain() {
+        guard !looks.isEmpty else { return }
+        looks.removeLast()
+        readyForAnotherLook()
+        redraw()
+        stepIndex = min(looks.count, Self.steps.count - 1)
+        isComplete = false
+        problem = nil
+        result = nil
+        announceStep(force: true)
+    }
+
+    /// Tapping a side in the flat net means "that one came out wrong".
+    func retakeFace(containing index: Int) {
+        guard let face = Face(rawValue: index / 9), scan.isFaceScanned(face) else { return }
+        retake(face)
+    }
+
+    /// Ready to look at the same thing again: forget what was last taken, so
+    /// the very same picture is allowed to be taken a second time.
+    private func readyForAnotherLook() {
+        lastCaptured = []
+        steadySince = nil
+        camera.resetSteadiness()
     }
 
     /// Whether the camera is looking at something other than the side just
@@ -299,7 +342,7 @@ final class ScanCoordinator: ObservableObject {
         }
         redraw()
         lastCaptured = reading
-        holdFrames = 0
+        steadySince = nil
         camera.resetSteadiness()
 
         advanceToNextUnseenFace()
@@ -384,13 +427,13 @@ final class ScanCoordinator: ObservableObject {
         if let index = sideOfLook.firstIndex(of: face.rawValue) {
             looks.remove(at: index)
         }
+        readyForAnotherLook()
         redraw()
         if let index = Self.steps.firstIndex(where: { $0.face == face }) {
             stepIndex = index
             isComplete = false
             result = nil
             problem = nil
-            lastCaptured = []
             announceStep(force: true)
         }
     }
