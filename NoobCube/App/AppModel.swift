@@ -54,6 +54,13 @@ final class AppModel: ObservableObject {
     func scanFinished(state: CubeState, whiteFace: Face, scan finishedScan: ScannedCube) {
         scan = finishedScan
         camera.stop()
+
+        // The one line that makes a crash reproducible. A solve depends only on
+        // the cube it started from, so with this in the console any failure can
+        // be replayed exactly — in a test, or through the Python reference with
+        // `Tools/replay.py`.
+        print("NoobCube cube: \(state.facelets.map(\.letter).joined())")
+
         do {
             // A re-scan part way through is just a fresh plan from where the
             // cube actually is. Stages already finished come back empty, so the

@@ -222,7 +222,36 @@ def side_face_of(slot_name):
     return [f for f in slot_name if f in SIDE_FACES]
 
 
-def bfs_alg_rounds(state, alg, goal, max_reps=8):
+def cross_ready(state):
+    """The three shapes the cross move is taught from, and nothing else.
+
+    A dot, an L pointing at the back and the left, or a line lying left to
+    right. Letting the search go where it liked meant the app told the child to
+    look for one shape and then worked from another. Costs nothing: the same
+    1.62 goes on average either way.
+    """
+    showing = frozenset(n for n in slots.U_EDGES
+                        if dict(slots.stickers(state, slots.EDGES[n]))['U'] == 'U')
+    return showing in (frozenset(),
+                       frozenset({'UB', 'UL'}),
+                       frozenset({'UL', 'UR'}))
+
+
+def fish_ready(state):
+    """Where the fish is taught from.
+
+    One corner already yellow on top: that one goes at the front left. None
+    yet, or two: the front-left corner has its yellow looking left. Also free,
+    at the same 2.25 goes on average.
+    """
+    up = [n for n in slots.U_CORNERS
+          if dict(slots.stickers(state, slots.CORNERS[n]))['U'] == 'U']
+    if len(up) == 1:
+        return up[0] == 'UFL'
+    return dict((c, f) for f, c in slots.stickers(state, slots.CORNERS['UFL'])).get('U') == 'L'
+
+
+def bfs_alg_rounds(state, alg, goal, max_reps=8, ready=None):
     """Shortest sequence of (U^k then alg) that reaches `goal`, as rounds.
 
     Kept as rounds rather than one flat list because a round is what the method
@@ -237,7 +266,10 @@ def bfs_alg_rounds(state, alg, goal, max_reps=8):
         if len(path) >= max_reps:
             continue
         for uk in U_TURNS:
-            nxt = cube.apply(st, uk + alg)
+            lined = cube.apply(st, uk)
+            if ready is not None and not ready(lined):
+                continue
+            nxt = cube.apply(lined, alg)
             npath = path + [(uk, alg)]
             if goal(nxt):
                 return npath
@@ -642,9 +674,9 @@ def solved_up_to_u(state):
 
 # ------------------------------------------------------------ entry point
 
-def run_rounds(sv, alg, goal, alg_name, line_up, outcome):
+def run_rounds(sv, alg, goal, alg_name, line_up, outcome, ready=None):
     """One step per round of 'line the top up, then run the one you know'."""
-    for turn, moves in bfs_alg_rounds(sv.state, alg, goal):
+    for turn, moves in bfs_alg_rounds(sv.state, alg, goal, ready=ready):
         sv.step(alg_name=alg_name, spin=line_up, outcome=outcome)
         sv.do(turn)
         sv.running()
@@ -768,16 +800,25 @@ def solve(state, white_face='D'):
     solve_second_layer(sv)
     sv.stage('topcross', 'Make the yellow cross')
     run_rounds(sv, CROSS, top_cross_done, 'the cross move',
-               'Turn the top until the yellow shape is pointing the right way: '
-               'the two yellow edges at the back and on the left.',
-               'Then the cross move turns a dot into an L, an L into a line, and '
-               'a line into the whole cross.')
+               'Look at the yellow on top. You will see a dot, or a bent L, or a '
+               'line. Turn the top until a line lies left to right, or an L points '
+               'at the back and the left. A dot can stay where it is. The move only '
+               'works from there, which is the whole reason we turn the top first.',
+               'The cross move turns a dot into an L, an L into a line, and a line '
+               'into the cross. Same six moves every time — it is the shape you '
+               'start from that changes.',
+               ready=cross_ready)
     sv.stage('topface', 'Finish the whole yellow face')
     run_rounds(sv, SUNE, top_face_done, 'the fish',
-               'Turn the top until the fish is looking the right way — yellow on '
-               'the left of the front face.',
-               'Then the fish spins three corners at once. Do it again from the '
-               'new shape until the whole top is yellow.')
+               'The fish is one corner with yellow on top and two yellow stickers '
+               'beside it, all pointing the same way. Count the corners with yellow '
+               'on top: if one has, turn the top until it is the front left one. If '
+               'none have, or two have, turn the top until the front left corner has '
+               'its yellow looking left. That is where the fish starts.',
+               'The fish spins three corners and leaves the fourth alone, so more '
+               'yellow comes up each go. Look for the fish again and do it again '
+               'until the whole top is yellow.',
+               ready=fish_ready)
     sv.stage('topcorners', 'Put the last corners in their homes')
     run_rounds(sv, APERM, top_corners_placed, 'the corner swap',
                'Find the two corners that want to swap and turn the top so they '

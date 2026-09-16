@@ -119,9 +119,9 @@ extension SolveStage.Kind {
         case .middleRow:
             return "Find a top edge with no yellow, line its colour up with the middle, then send it left or right."
         case .yellowCross:
-            return "Make a yellow plus sign on the top. A dot becomes an L, an L becomes a line, a line becomes a cross."
+            return "Make a yellow plus sign on top. One move does it all: a dot becomes an L, an L becomes a line, a line becomes the cross. Turning the top first is how you point the shape the right way."
         case .yellowFace:
-            return "Keep doing the fish until the whole top is yellow."
+            return "The fish is one yellow corner with two yellow stickers beside it. Line it up at the front left and the fish move spins three corners at once — again and again until the top is all yellow."
         case .lastCorners:
             return "Move the top corners around until each one is in the right place."
         case .lastEdges:
@@ -158,9 +158,9 @@ extension SolveStage.Kind {
         case .middleRow:
             return "Two layers finished. From here on you only touch the top."
         case .yellowCross:
-            return "Getting the yellow edges facing up is the first half of the last layer."
+            return "Getting the yellow edges facing up is the first half of the last layer. The move is always the same — lining the shape up is the thinking part."
         case .yellowFace:
-            return "Now the whole top is yellow, even though the sides are still muddled."
+            return "Now the whole top is yellow, even though the sides are still muddled. Only the corners moved, so the cross you just made is still there."
         case .lastCorners:
             return "The corners go to their proper homes, ready for the very last move."
         case .lastEdges:
