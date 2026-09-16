@@ -154,10 +154,10 @@ enum BeginnerSolver {
         /// Open a step. The piece's position is read now, before anything moves.
         func step(piece: Set<Face>? = nil,
                   home: Set<Face>? = nil,
+                  places: Bool = true,
                   lineUp: String? = nil,
                   outcome: String? = nil,
-                  algorithmName: String? = nil,
-                  places: Bool = true) {
+                  algorithmName: String? = nil) {
             var step = SolveStep()
             step.lineUpText = lineUp
             step.outcome = outcome
@@ -445,10 +445,11 @@ enum BeginnerSolver {
                 builder.perform(Move.parse("R U R'"))
                 continue
             }
-            builder.step(piece: piece, home: piece, algorithmName: "the shuffle",
+            builder.step(piece: piece, home: piece,
                          outcome: "Then spin the top to bring the corner over its gap "
                                 + "and shuffle until it drops in. It only goes in the "
-                                + "right way round, so keep going and it sorts itself out.")
+                                + "right way round, so keep going and it sorts itself out.",
+                         algorithmName: "the shuffle")
             let grip = turnToFrontRight(target.sideFaces)
             builder.perform(grip)
             builder.explaining(lineUp: lineUpText(
