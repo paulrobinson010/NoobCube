@@ -141,35 +141,18 @@ dim amber room, while a table top, a keyboard or a wall never came in under
 1.0. Above 0.62 the app says it could not see well enough rather than handing
 the solver a confident wrong cube.
 
-**Which look is which side** is decided the same way, one level up. The app
-guides the child — yellow on top, white underneath, top first, then the bottom,
-then spin round the four sides — but nothing depends on them following it. The
-six looks are kept as a list, never filed into a side as they arrive: filing on
-arrival loses sides, because a middle read wrongly puts a look in the wrong
-place, the side it should have filled still looks empty, the child shows that
-side again, and now two looks are of one side and another was never seen.
-Measured, that halved how often a dim room read a cube correctly.
+**Which look is which side** comes from its middle sticker, and that is final.
+A cube's middles never move relative to each other, so a face with a white
+middle is the white side — there is no arrangement of a real cube where it is
+anything else. The app still guides the child round — yellow on top, white
+underneath, the top first, then the bottom, then spin round the four sides —
+but a look that turns up out of order goes where its middle says, and a look at
+a side already seen replaces it. Holding a side up again is the whole repair,
+and there is nothing a scan can get into that it cannot get out of.
 
-So the six looks go onto six different sides, decided together at the end.
-The middles alone are not enough — when two middles are read as each other,
-swapping the pair costs exactly what getting them right costs, a tie the
-middles never win — so they only narrow it to a shortlist of eight, and each of
-those is settled properly and judged on all 54 stickers. On cubes with one
-middle painted the wrong colour, the middles alone got it right none of the
-time and the shortlist and fit together got it right every time.
-
-Measured end to end in a dim warm room, 63% of cubes come out perfect whether
-the sides are shown in the order asked or in any order at all; trusting the
-order managed 61% when it was obeyed and nothing whatsoever when it was not. A
-side that came out wrong is put right by showing it again, which replaces that
-look.
-
-The camera is asked to judge the room every time the scan comes back to it,
-and is only told to hold that judgement once it has had a second and a half to
-make it. Exposure and white balance used to be locked once, the first time the
-session was ever built, and never let go — so a second scan was measured under
-a judgement made about the room during the first one, and the picture could not
-adapt to a different lamp or a different distance however long you waited.
+The middles are drawn from the grip rather than read, so the net can never show
+the same colour in the middle of two sides, and they are not editable by hand:
+one stray tap on a middle used to make a cube that cannot exist.
 
 What survives is caught before it reaches the solver: a scan is checked for the
 three ways a cube becomes impossible — a flipped edge, a twisted corner, a
