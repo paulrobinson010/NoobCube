@@ -104,7 +104,7 @@ final class SolveSession: ObservableObject {
         if !step.piece.isEmpty {
             parts.append(step.places
                          ? "Now \(name(of: step)) goes where it belongs."
-                         : "First, \(name(of: step)) is in the way.")
+                         : "\(name(of: step).sentenceCased) needs moving first.")
         }
         if let lineUp = step.lineUpText { parts.append(lineUp) }
         if let outcome = step.outcome { parts.append(outcome) }
@@ -272,21 +272,6 @@ final class SolveSession: ObservableObject {
                 self.scene.hideTurnArrow()
                 self.showStepMarks()
             }
-        }
-    }
-
-    /// Play the whole stage through, for a child who just wants to watch.
-    func playWholeStage() {
-        guard !isBusy, let stage else { return }
-        let moves = Array(stage.moves.dropFirst(moveIndex))
-        guard !moves.isEmpty else { return }
-        isBusy = true
-        narrator.say("Watch what we need to do.")
-        playSequence(moves) { [weak self] in
-            guard let self else { return }
-            self.isBusy = false
-            self.moveIndex = stage.moves.count
-            self.finishStage()
         }
     }
 

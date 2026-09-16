@@ -235,9 +235,90 @@ def make_free(sv, face):
     raise RuntimeError(f'cannot free the petal slot above {face}')
 
 
+def room_above(state, face):
+    """U turns that empty the petal slot above `face`, so a turn of that face
+    cannot knock an existing petal out. Turning the top never costs a petal."""
+    for uk in U_TURNS:
+        if face not in petal_faces(cube.apply(state, uk)):
+            return uk
+    raise RuntimeError(f'cannot free the petal slot above {face}')
+
+
+def petal_plan(state, piece):
+    """Everything it takes to bring one white edge up into the daisy.
+
+    One edge, one plan, however awkwardly it happens to be sitting. It used to
+    take two goes for an edge lying on its side — one to knock it out of the
+    way and another to lift it — which meant the app announced a piece, moved
+    something else, and announced the same piece again. A child cannot follow
+    that, and it isn't how anybody teaches the daisy.
+
+    Returns the moves, the petal slot it ends up in, and how many moves at the
+    front are lining up rather than lifting.
+    """
+    moves = []
+    working = state
+
+    def look():
+        name, stickers = slots.find_edge(working, piece)
+        s = dict(stickers)
+        return name, s, [f for f, c in s.items() if c == 'D'][0]
+
+    name, s, white_face = look()
+    prepared = False
+
+    if 'U' in name and s['U'] != 'D':
+        # Lying on its side up top. Knock it down into the middle row, where it
+        # can be lifted back up the right way round. Nothing else is up there
+        # to disturb: this slot is the one it is in.
+        turn = [side_face_of(name)[0]]
+        moves += turn
+        working = cube.apply(working, turn)
+        name, s, white_face = look()
+        prepared = True
+
+    if 'D' in name and white_face != 'D':
+        # In the bottom but lying on its side, so it cannot come straight up.
+        face = side_face_of(name)[0]
+        turn = room_above(working, face) + [face]
+        moves += turn
+        working = cube.apply(working, turn)
+        name, s, white_face = look()
+        prepared = True
+
+    # Where it is going, and how it gets there.
+    if 'D' in name:
+        face = side_face_of(name)[0]
+        lift = [face + '2']
+    else:
+        face = [f for f in side_face_of(name) if f != white_face][0]
+        lift = None
+    petal = slot_name({'U', face})
+
+    clear = room_above(working, face)
+    moves += clear
+    working = cube.apply(working, clear)
+
+    if lift is None:
+        # It has to be *this* edge that arrives white-side-up. Asking only
+        # whether the slot shows white lets another white edge answer for it,
+        # and then the turn is the wrong way round.
+        for turn in [face, face + "'"]:
+            probe = cube.apply(working, [turn])
+            where, stickers = slots.find_edge(probe, piece)
+            if where == petal and dict(stickers)['U'] == 'D':
+                lift = [turn]
+                break
+        else:
+            raise RuntimeError(f'cannot lift {piece} into the daisy')
+
+    moves += lift
+    return moves, petal, len(moves) - len(lift), prepared
+
+
 def solve_daisy(sv):
     sv.stage('daisy', 'Make the daisy')
-    for _ in range(60):
+    for _ in range(8):
         if settled_count(sv.state) == 4:
             return
         target = None
@@ -249,65 +330,27 @@ def solve_daisy(sv):
                 continue                      # already a petal
             if 'D' in name and d_edge_solved(sv.state, name):
                 continue                      # already home, leave it alone
-            target = (name, s)
+            target = set(s.values())
             break
         if target is None:
             return
-        name, s = target
-        white_face = [f for f, c in s.items() if c == 'D'][0]
-        piece = set(s.values())
 
-        if 'U' in name:
-            # lying on its side in the top layer: knock it into the middle
-            sv.step(piece=piece, places=False,
-                    line_up=None,
-                    outcome='This white edge is up top but lying on its side. '
-                            'Knock it down out of the way, and we will bring it '
-                            'back up the right way round.')
-            sv.running()
-            sv.do([side_face_of(name)[0]])
-        elif 'D' in name:
-            face = side_face_of(name)[0]
-            if white_face == 'D':
-                # White is pointing down: half a turn brings it straight up,
-                # still facing us, and that is a petal.
-                sv.step(piece=piece, home=slot_name({'U', face}),
-                        line_up='Spin the top so the space next to the yellow '
-                                'middle is empty.',
-                        outcome='Then turn this side over twice and the white edge '
-                                'comes straight up, white facing the sky.')
-            else:
-                # White is on the side: one turn only gets it as far as the
-                # middle row, and it is lifted properly next time round.
-                sv.step(piece=piece, places=False,
-                        line_up='This white edge is in the bottom but lying on its '
-                                'side, so it cannot go straight up.',
-                        outcome='Turn it out into the middle row first, and then we '
-                                'can lift it up the right way round.')
-            make_free(sv, face)
-            sv.running()
-            sv.do([face + '2'] if white_face == 'D' else [face])
-        else:
-            # middle layer: turn the face NOT carrying white so white lands on top
-            other = [f for f in side_face_of(name) if f != white_face][0]
-            sv.step(piece=piece, home=slot_name({'U', other}),
-                    line_up='Spin the top so the space next to the yellow middle is empty.',
-                    outcome='Then lift this white edge up by the side that is '
-                            'not showing white, so it arrives white-side-up.')
-            make_free(sv, other)
-            sv.running()
-            up_slot = [n for n in slots.U_EDGES if other in n][0]
-            for turn in [other, other + "'"]:
-                probe = cube.apply(sv.state, [turn])
-                # It has to be *this* edge that arrives white-side-up. Asking
-                # only whether the slot shows white lets another white edge
-                # answer for it, and then the turn is the wrong way round.
-                where, stuck = slots.find_edge(probe, piece)
-                if where == up_slot and dict(stuck)['U'] == 'D':
-                    sv.do([turn])
-                    break
-            else:
-                raise RuntimeError(f'stuck on middle edge {name}')
+        moves, petal, setup, _ = petal_plan(sv.state, target)
+        # The wording follows the moves: a step that spun nothing must not say
+        # it did.
+        lining_up = moves[:setup]
+        parts = []
+        if any(m[0] != 'U' for m in lining_up):
+            parts.append("This one is lying on its side, so first it is turned out "
+                         "where we can reach it.")
+        if any(m[0] == 'U' for m in lining_up):
+            parts.append("Spin the top so the space next to the yellow middle is empty.")
+        sv.step(piece=target, home=petal,
+                line_up=' '.join(parts) or None,
+                outcome='Then one turn lifts it up into the daisy, white facing the sky.')
+        sv.do(moves[:setup])
+        sv.running()
+        sv.do(moves[setup:])
     raise RuntimeError('daisy did not converge')
 
 

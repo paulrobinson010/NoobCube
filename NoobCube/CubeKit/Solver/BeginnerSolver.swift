@@ -282,19 +282,120 @@ enum BeginnerSolver {
             + CubeSlots.bottomEdges.filter { $0.isSolved(in: state) }.count
     }
 
-    /// Turn the top until the petal slot above `face` is empty, so bringing a
-    /// new white edge up cannot knock an existing petal out.
-    private static func clearPetalSlot(_ builder: Builder, above face: Face) throws {
-        for turn in topTurns where !petalFaces(builder.state.applying(turn)).contains(face) {
-            builder.perform(turn)
-            return
+    /// Turns of the top that empty the petal slot above `face`, so that turning
+    /// that face cannot knock an existing petal out. Turning the top only moves
+    /// petals around the top, so it never costs one.
+    private static func roomAbove(_ face: Face, in state: CubeState) throws -> [Move] {
+        for turn in topTurns where !petalFaces(state.applying(turn)).contains(face) {
+            return turn
         }
         throw SolverError.stuck("Couldn't make room for another petal.")
     }
 
+    /// One white edge's whole journey into the daisy.
+    private struct PetalPlan {
+        var moves: [Move]
+        /// The petal slot it ends up in, for pointing at.
+        var petal: Set<Face>
+        /// How many moves at the front are lining up rather than lifting.
+        var liningUp: Int
+    }
+
+    /// Everything it takes to bring one white edge up into the daisy.
+    ///
+    /// One edge, one plan, however awkwardly it happens to be sitting. This
+    /// used to take two goes for an edge lying on its side — one to knock it
+    /// out of the way and another to lift it — which meant the app named a
+    /// piece, moved something else, and then named the same piece again. No
+    /// child can follow that, and it is not how anybody teaches the daisy.
+    private static func petalPlan(for piece: Set<Face>,
+                                  in start: CubeState) throws -> PetalPlan {
+        var moves: [Move] = []
+        var state = start
+
+        func look() throws -> (slot: CubeSlot, white: Face) {
+            guard let slot = CubeSlots.slot(holding: piece, in: state),
+                  let white = slot.face(showing: .D, in: state) else {
+                throw SolverError.stuck("Lost track of a white edge.")
+            }
+            return (slot, white)
+        }
+
+        var (slot, white) = try look()
+
+        if slot.contains(.U), slot.sticker(on: .U, in: state) != .D {
+            // Lying on its side up top. Knock it down into the middle row,
+            // where it can be lifted back up the right way round. Nothing else
+            // is up there to disturb: this is the slot it is sitting in.
+            guard let side = slot.sideFaces.first else {
+                throw SolverError.stuck("Lost track of a white edge.")
+            }
+            let turn = [Move(MoveBase(side))]
+            moves += turn
+            state = state.applying(turn)
+            (slot, white) = try look()
+        }
+
+        if slot.contains(.D), white != .D {
+            // In the bottom but lying on its side, so it cannot come straight
+            // up. One turn puts it in the middle row, where it can be aimed.
+            guard let side = slot.sideFaces.first else {
+                throw SolverError.stuck("Lost track of a white edge.")
+            }
+            let turn = try roomAbove(side, in: state) + [Move(MoveBase(side))]
+            moves += turn
+            state = state.applying(turn)
+            (slot, white) = try look()
+        }
+
+        // Where it is going, and the turn that takes it there.
+        let face: Face
+        var lift: [Move]?
+        if slot.contains(.D) {
+            guard let side = slot.sideFaces.first else {
+                throw SolverError.stuck("Lost track of a white edge.")
+            }
+            face = side
+            lift = [Move(MoveBase(side), .half)]
+        } else {
+            guard let other = slot.sideFaces.first(where: { $0 != white }) else {
+                throw SolverError.stuck("Lost track of a white edge.")
+            }
+            face = other
+            lift = nil
+        }
+        guard let petalSlot = CubeSlots.topEdges.first(where: { $0.contains(face) }) else {
+            throw SolverError.stuck("Lost track of a white edge.")
+        }
+
+        let clear = try roomAbove(face, in: state)
+        moves += clear
+        state = state.applying(clear)
+
+        if lift == nil {
+            // It has to be *this* edge that arrives white-side-up. Asking only
+            // whether the slot shows white lets another white edge answer for
+            // it, and then the turn is the wrong way round.
+            let candidates = [Move(MoveBase(face), .clockwise),
+                              Move(MoveBase(face), .counterClockwise)]
+            lift = candidates.first { candidate in
+                let next = state.applying(candidate)
+                guard let landed = CubeSlots.slot(holding: piece, in: next) else { return false }
+                return landed == petalSlot && landed.sticker(on: .U, in: next) == .D
+            }.map { [$0] }
+        }
+        guard let lift else {
+            throw SolverError.stuck("Couldn't lift a white edge into the daisy.")
+        }
+
+        return PetalPlan(moves: moves + lift,
+                         petal: Set(petalSlot.faces),
+                         liningUp: moves.count)
+    }
+
     private static func solveDaisy(_ builder: Builder) throws {
         builder.begin(.daisy)
-        for _ in 0..<60 {
+        for _ in 0..<8 {
             if settledCount(builder.state) == 4 { return }
 
             let target = CubeSlots.edges.first { slot in
@@ -308,70 +409,29 @@ enum BeginnerSolver {
                 return true
             }
             guard let slot = target else { return }
-            guard let whiteFace = slot.face(showing: .D, in: builder.state),
-                  let sideFace = slot.sideFaces.first else {
-                throw SolverError.stuck("Lost track of a white edge.")
-            }
 
             let piece = Set(slot.colours(in: builder.state))
+            let plan = try petalPlan(for: piece, in: builder.state)
+            let liningUp = Array(plan.moves.prefix(plan.liningUp))
 
-            if slot.contains(.U) {
-                // Lying on its side up top: knock it down into the middle row.
-                builder.step(piece: piece, places: false,
-                             outcome: "This white edge is up top but lying on its side. "
-                                    + "Knock it down out of the way, and we'll bring it "
-                                    + "back up the right way round.")
-                builder.running()
-                builder.perform([Move(MoveBase(sideFace))])
-            } else if slot.contains(.D) {
-                if whiteFace == .D {
-                    // White is pointing down, so half a turn brings it straight
-                    // up, still facing outwards, and that is a petal.
-                    builder.step(piece: piece, home: [.U, sideFace],
-                                 lineUp: "Spin the top so the space next to the yellow "
-                                       + "middle is empty.",
-                                 outcome: "Then turn this side over twice and the white "
-                                        + "edge comes straight up, white facing the sky.")
-                } else {
-                    // White is on the side, so one turn only gets it as far as
-                    // the middle row; it is lifted properly next time round.
-                    builder.step(piece: piece, places: false,
-                                 lineUp: "This white edge is in the bottom but lying on "
-                                       + "its side, so it can't go straight up.",
-                                 outcome: "Turn it out into the middle row first, and then "
-                                        + "we can lift it up the right way round.")
-                }
-                try clearPetalSlot(builder, above: sideFace)
-                builder.running()
-                builder.perform([Move(MoveBase(sideFace), whiteFace == .D ? .half : .clockwise)])
-            } else {
-                // In the middle row. Turning the face that does *not* carry the
-                // white sticker leaves white pointing up when it arrives.
-                guard let other = slot.sideFaces.first(where: { $0 != whiteFace }),
-                      let upSlot = CubeSlots.topEdges.first(where: { $0.contains(other) }) else {
-                    throw SolverError.stuck("Lost track of a white edge.")
-                }
-                builder.step(piece: piece, home: Set(upSlot.faces),
-                             lineUp: "Spin the top so the space next to the yellow "
-                                   + "middle is empty.",
-                             outcome: "Then lift this white edge up by the side that "
-                                    + "isn't showing white, so it arrives white-side-up.")
-                try clearPetalSlot(builder, above: other)
-                builder.running()
-                let candidates = [Move(MoveBase(other), .clockwise),
-                                  Move(MoveBase(other), .counterClockwise)]
-                // It has to be *this* edge that arrives white-side-up. Asking
-                // only whether the slot shows white lets another white edge
-                // answer for it, and then the turn is the wrong way round.
-                guard let move = candidates.first(where: { candidate in
-                    let next = builder.state.applying(candidate)
-                    guard let landed = CubeSlots.slot(holding: piece, in: next) else { return false }
-                    return landed == upSlot && landed.sticker(on: .U, in: next) == .D
-                }) else {
-                    throw SolverError.stuck("Couldn't lift a white edge to the top.")
-                }
-                builder.perform([move])
+            // The wording follows the moves: a step that spun nothing must not
+            // say that it did.
+            var parts: [String] = []
+            if liningUp.contains(where: { $0.base != .U }) {
+                parts.append("This one is lying on its side, so first it's turned out "
+                           + "where we can reach it.")
             }
+            if liningUp.contains(where: { $0.base == .U }) {
+                parts.append("Spin the top so the space next to the yellow middle is empty.")
+            }
+
+            builder.step(piece: piece, home: plan.petal,
+                         lineUp: parts.isEmpty ? nil : parts.joined(separator: " "),
+                         outcome: "Then one turn lifts it up into the daisy, white "
+                                + "facing the sky.")
+            builder.perform(liningUp)
+            builder.running()
+            builder.perform(Array(plan.moves.dropFirst(plan.liningUp)))
         }
         throw SolverError.stuck("Couldn't finish the daisy.")
     }

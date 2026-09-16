@@ -80,7 +80,7 @@ struct SolveView: View {
                     Image(systemName: "arrow.right")
                         .font(.system(size: 15, weight: .black))
                         .foregroundStyle(Theme.done)
-                    Text(step.places ? "goes home" : "out of the way")
+                    Text(step.places ? "goes home" : "needs moving first")
                         .font(.brand(size: 16, weight: .bold))
                         .foregroundStyle(Theme.done)
                 }
@@ -170,16 +170,20 @@ struct SolveView: View {
         case .introducingStep:
             VStack(spacing: 12) {
                 Button {
-                    session.beginStepMoves()
+                    session.demonstrateStep()
                 } label: {
-                    Label("Show me how", systemImage: "arrow.turn.up.right")
+                    Label("Watch it first", systemImage: "play.circle.fill")
                 }
-                .buttonStyle(BigButtonStyle())
+                .buttonStyle(BigButtonStyle(tint: Theme.attention))
                 .disabled(session.isBusy)
 
-                Button("Watch it happen first") { session.demonstrateStep() }
-                    .buttonStyle(BigButtonStyle(tint: Theme.attention, isProminent: false))
-                    .disabled(session.isBusy)
+                Button {
+                    session.beginStepMoves()
+                } label: {
+                    Label("Step through it", systemImage: "arrow.turn.up.right")
+                }
+                .buttonStyle(BigButtonStyle(isProminent: false))
+                .disabled(session.isBusy)
 
                 rescanButton
             }
@@ -213,15 +217,9 @@ struct SolveView: View {
                     .buttonStyle(BigButtonStyle(tint: Theme.done))
                     .disabled(session.isBusy || session.currentMove == nil)
 
-                    HStack(spacing: 12) {
-                        Button("Show me again") { session.previewCurrentMove() }
-                            .buttonStyle(BigButtonStyle(isProminent: false))
-                            .disabled(session.isBusy)
-
-                        Button("Do the rest") { session.playWholeStage() }
-                            .buttonStyle(BigButtonStyle(tint: Theme.muted, isProminent: false))
-                            .disabled(session.isBusy)
-                    }
+                    Button("Show me that move again") { session.previewCurrentMove() }
+                        .buttonStyle(BigButtonStyle(isProminent: false))
+                        .disabled(session.isBusy)
 
                     rescanButton
                 }
