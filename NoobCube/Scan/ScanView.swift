@@ -13,58 +13,39 @@ struct ScanView: View {
     var onCancel: () -> Void
 
     var body: some View {
-        // The header stays at the top and the buttons stay at the bottom; the
-        // map and the camera take what is left and scroll if there is not
-        // enough of it. Putting the whole screen in a scroll view pushed the
-        // buttons off the end, and not scrolling at all cut the map in half.
-        VStack(spacing: 12) {
+        VStack(spacing: 10) {
             header
 
-            ScrollView {
-                VStack(spacing: 12) {
+            // The map, then the camera, then what to press. Nothing scrolls and
+            // nothing is cut off: the map is drawn at a size it is told, so the
+            // camera gets whatever is left over and always gets all of it.
+            CubeNetView(colours: coordinator.scan.colours,
+                        width: coordinator.isComplete ? 320 : 232,
+                        highlightedFace: coordinator.currentStep?.face,
+                        pulsingFace: coordinator.currentStep?.face,
+                        // While scanning, tapping a side that is already in
+                        // means "that one came out wrong" and asks for it
+                        // again. Afterwards a tap steps one square's colour on.
+                        onTapSticker: { index in
+                            if coordinator.isComplete {
+                                coordinator.cycleSticker(at: index)
+                            } else {
+                                coordinator.retakeFace(containing: index)
+                            }
+                        })
 
-                    CubeNetView(colours: coordinator.scan.colours,
-                                highlightedFace: coordinator.currentStep?.face,
-                                pulsingFace: coordinator.currentStep?.face,
-                                // While scanning, tapping a side that is already in
-                                // means "that one came out wrong" and asks for it
-                                // again. Afterwards a tap steps one square's colour on.
-                                onTapSticker: { index in
-                                    if coordinator.isComplete {
-                                        coordinator.cycleSticker(at: index)
-                                    } else {
-                                        coordinator.retakeFace(containing: index)
-                                    }
-                                })
-                        // Sized by its width, with the height following from the
-                        // four-by-three shape of the net. Fixing the height instead
-                        // left the net letterboxed inside its own box — small, with
-                        // a gap above it — and at the taller setting it ran past
-                        // the edges, which is why two sides were missing.
-                        //
-                        // The full width once the scan is in: that is the screen
-                        // where the map is the thing being checked.
-                        .frame(maxWidth: coordinator.isComplete ? .infinity : 264)
-                        .padding(.horizontal, 20)
-
-                    if !coordinator.isComplete { sideChips }
-
-                    // One viewfinder, in one place, whether the scan is finished or
-                    // not. Having it inside both halves of an if meant SwiftUI counted
-                    // them as two different views and pulled the camera preview layer
-                    // down and built a new one the moment the last side went in — at
-                    // exactly the point the picture was reported going black.
-                    //
-                    // It stays on afterwards on purpose: a side that came out wrong is
-                    // put right by showing it again, which beats hunting for the
-                    // squares that are wrong and tapping them one at a time.
-                    viewfinder
-                }
-            }
-            .scrollBounceBehavior(.basedOnSize)
+            // One viewfinder, in one place, whether the scan is finished or
+            // not. Having it inside both halves of an if meant SwiftUI counted
+            // them as two different views and pulled the camera preview layer
+            // down and built a new one the moment the last side went in.
+            //
+            // It stays on afterwards on purpose: a side that came out wrong is
+            // put right by showing it again.
+            viewfinder
 
             if coordinator.isComplete { finishedControls } else { liveControls }
         }
+        .frame(maxHeight: .infinity, alignment: .top)
         .background(Theme.background.ignoresSafeArea())
         .onAppear { coordinator.begin() }
         .onDisappear { coordinator.stop() }
@@ -83,34 +64,6 @@ struct ScanView: View {
         .padding(.top, 10)
     }
 
-    /// A dot per side, filling in as each one is seen. Order does not matter —
-    /// a side is recognised by the colour of its middle sticker — so this is a
-    /// checklist rather than a queue.
-    private var sideChips: some View {
-        HStack(spacing: 10) {
-            ForEach(ScanCoordinator.steps, id: \.face) { step in
-                let colour = ScanCoordinator.colour(for: step.face)
-                let done = coordinator.scan.isFaceScanned(step.face)
-                Circle()
-                    .fill(colour.swiftUIColor)
-                    .frame(width: 26, height: 26)
-                    .overlay(
-                        Circle().strokeBorder(done ? Theme.done : .white.opacity(0.25),
-                                              lineWidth: done ? 3 : 1)
-                    )
-                    .overlay(
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 12, weight: .black))
-                            .foregroundStyle(.black.opacity(0.65))
-                            .opacity(done ? 1 : 0)
-                    )
-                    .opacity(done ? 1 : 0.35)
-                    .accessibilityLabel("\(colour.displayName) side \(done ? "done" : "still to do")")
-            }
-        }
-        .padding(.vertical, 2)
-    }
-
     private var viewfinder: some View {
         ZStack {
             if coordinator.camera.permissionDenied {
@@ -127,11 +80,11 @@ struct ScanView: View {
                 guideOverlay
             }
         }
-        // Smaller once the scan is in: the same screen then also carries the
-        // net, whatever went wrong, and the way on, and at full height none of
-        // it fitted — the bottom button was off the screen and the top of the
-        // header was pushed up under the clock.
-        .frame(height: coordinator.isComplete ? 150 : 300)
+        // Takes whatever the map and the buttons have not, so it is as big as
+        // it can be and always whole.
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .overlay(alignment: .bottom) { cameraCaption }
+        .clipShape(RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous))
         .padding(.horizontal, 20)
     }
 
@@ -194,6 +147,24 @@ struct ScanView: View {
         .padding(24)
     }
 
+    /// The line of help, written on the picture.
+    ///
+    /// It had a row of its own under the camera, which is a row the camera
+    /// could have had. There is plenty of dark sky in a viewfinder.
+    private var cameraCaption: some View {
+        Text(caption)
+            .font(.brand(size: 16, weight: .semibold))
+            .foregroundStyle(.white)
+            .multilineTextAlignment(.center)
+            .lineLimit(2)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity)
+            .background(.black.opacity(0.55))
+            .contentTransition(.identity)
+            .animation(nil, value: caption)
+    }
+
     /// One line of help under the viewfinder.
     ///
     /// Swapped outright rather than faded: a cross-fade between two sentences
@@ -215,52 +186,31 @@ struct ScanView: View {
     }
 
     private var liveControls: some View {
-        VStack(spacing: 12) {
-            Text(caption)
-                .font(.brand(size: 16, weight: .medium))
-                .foregroundStyle(Theme.muted)
-                .multilineTextAlignment(.center)
-                .lineLimit(2)
-                .frame(height: 44)
-                .contentTransition(.identity)
-                .animation(nil, value: caption)
-
+        VStack(spacing: 10) {
             Button("Take this side now") { coordinator.captureCurrentFace() }
                 .buttonStyle(BigButtonStyle())
 
-            if coordinator.hasTakenASide {
-                Button("Take that one again") { coordinator.takeThatSideAgain() }
-                    .buttonStyle(BigButtonStyle(tint: Theme.attention, isProminent: false))
+            HStack(spacing: 0) {
+                if coordinator.hasTakenASide {
+                    smallButton("Take that one again") { coordinator.takeThatSideAgain() }
+                }
+                smallButton("Start again") { onCancel() }
             }
-
-            Button("Start again") { onCancel() }
-                .buttonStyle(.plain)
-                .font(.brand(size: 15, weight: .semibold))
-                .foregroundStyle(Theme.muted)
-                .frame(maxWidth: .infinity, minHeight: 40)
-                .contentShape(Rectangle())
         }
         .padding(.horizontal, 20)
+        .padding(.bottom, 4)
     }
 
     private var finishedControls: some View {
-        VStack(spacing: 12) {
-            if coordinator.problem == nil {
-                Text("Not right? Hold that side up and take it again.")
-                    .font(.brand(size: 16, weight: .medium))
-                    .foregroundStyle(Theme.muted)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
+        VStack(spacing: 10) {
             if let problem = coordinator.problem {
                 Text(problem)
-                    .font(.brand(size: 16, weight: .semibold))
+                    .font(.brand(size: 15, weight: .semibold))
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity)
-                    .padding(12)
+                    .padding(10)
                     .background(
                         RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
                             .fill(Theme.card))
@@ -275,16 +225,24 @@ struct ScanView: View {
             .disabled(coordinator.result == nil)
             .opacity(coordinator.result == nil ? 0.5 : 1)
 
-            Button("Take that side again") { coordinator.captureCurrentFace() }
-                .buttonStyle(BigButtonStyle(isProminent: false))
-
-            Button("Start the whole thing again") { coordinator.begin() }
-                .buttonStyle(.plain)
-                .font(.brand(size: 15, weight: .semibold))
-                .foregroundStyle(Theme.muted)
-                .frame(maxWidth: .infinity, minHeight: 40)
-                .contentShape(Rectangle())
+            HStack(spacing: 0) {
+                smallButton("Take that side again") { coordinator.captureCurrentFace() }
+                smallButton("Start over") { coordinator.begin() }
+            }
         }
         .padding(.horizontal, 20)
+        .padding(.bottom, 4)
     }
+
+    /// The ways out, small and side by side, so they take one row between them
+    /// rather than one each.
+    private func smallButton(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(title, action: action)
+            .buttonStyle(.plain)
+            .font(.brand(size: 15, weight: .semibold))
+            .foregroundStyle(Theme.muted)
+            .frame(maxWidth: .infinity, minHeight: 40)
+            .contentShape(Rectangle())
+    }
+
 }

@@ -16,6 +16,15 @@ import SwiftUI
 struct CubeNetView: View {
 
     var colours: [CubeColour?]
+    /// How wide the whole net is drawn. The height follows: four cells across,
+    /// three down.
+    ///
+    /// Given rather than worked out. This used to read the space it was handed
+    /// and fit itself to it, which works everywhere except inside something
+    /// that scrolls — there the height on offer is unbounded, nothing can be
+    /// fitted to it, and the net ended up a small picture floating in a tall
+    /// box with a great gap above it.
+    var width: CGFloat
     var highlightedFace: Face? = nil
     var pulsingFace: Face? = nil
     /// Set to allow tapping a square to correct a misread colour.
@@ -28,27 +37,16 @@ struct CubeNetView: View {
         (.D, 1, 2),
     ]
 
-    private static let columns = 4
-    private static let rows = 3
-
     var body: some View {
-        GeometryReader { geometry in
-            let cell = min(geometry.size.width / CGFloat(Self.columns),
-                           geometry.size.height / CGFloat(Self.rows))
-            let width = cell * CGFloat(Self.columns)
-            let height = cell * CGFloat(Self.rows)
-
-            ZStack(alignment: .topLeading) {
-                ForEach(Self.layout, id: \.face) { entry in
-                    face(entry.face, size: cell)
-                        .offset(x: CGFloat(entry.column) * cell,
-                                y: CGFloat(entry.row) * cell)
-                }
+        let cell = width / 4
+        ZStack(alignment: .topLeading) {
+            ForEach(Self.layout, id: \.face) { entry in
+                face(entry.face, size: cell)
+                    .offset(x: CGFloat(entry.column) * cell,
+                            y: CGFloat(entry.row) * cell)
             }
-            .frame(width: width, height: height)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .aspectRatio(CGFloat(Self.columns) / CGFloat(Self.rows), contentMode: .fit)
+        .frame(width: width, height: cell * 3, alignment: .topLeading)
     }
 
     private func face(_ face: Face, size: CGFloat) -> some View {
@@ -105,7 +103,7 @@ struct CubeNetView: View {
 }
 
 #Preview {
-    CubeNetView(colours: ScannedCube.previewPartialScan.colours, highlightedFace: .F)
+    CubeNetView(colours: ScannedCube.previewPartialScan.colours, width: 300, highlightedFace: .F)
         .padding()
         .background(Theme.background)
 }
