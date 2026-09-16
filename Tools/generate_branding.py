@@ -287,6 +287,11 @@ def build_web_assets(source):
     source.convert('RGB').resize((256, 256), Image.LANCZOS).save(
         os.path.join(DOCS, 'favicon.png'))
 
+    # The app icon as it actually appears on a phone: the whole artwork,
+    # corners rounded off. The page's hero used to be the cube cut out of this
+    # same picture, which looks like the app without being the thing you tap.
+    _rounded_tile(source, 512).save(os.path.join(DOCS, 'appicon.png'))
+
     # The cube on its own, edges faded, for the hero and the social card.
     width, height = source.size
     centre_x, centre_y = int(CUBE_CENTRE[0] * width), int(CUBE_CENTRE[1] * height)
@@ -309,7 +314,31 @@ def build_web_assets(source):
         os.path.join(DOCS, 'brand.png'))
 
     _build_social_card(cube, word)
-    print('  docs/assets       favicon, logo, brand, og')
+    print('  docs/assets       favicon, appicon, logo, brand, og')
+
+
+# How round an iOS icon's corners are, as a fraction of its width. Apple's
+# shape is a squircle rather than a rounded rectangle, but at the sizes a web
+# page shows an icon the two are a pixel or two apart, and a rounded rectangle
+# needs no curve fitting to get right.
+ICON_CORNER = 0.2237
+
+
+def _rounded_tile(source, size):
+    """The whole artwork as a square tile with the corners taken off.
+
+    The mask is drawn four times too big and shrunk, which is what keeps the
+    curve from going ragged — a rounded rectangle drawn straight at the final
+    size has hard stair-steps all the way round.
+    """
+    tile = source.convert('RGBA').resize((size, size), Image.LANCZOS)
+    scale = 4
+    mask = Image.new('L', (size * scale, size * scale), 0)
+    ImageDraw.Draw(mask).rounded_rectangle(
+        (0, 0, size * scale - 1, size * scale - 1),
+        radius=int(size * scale * ICON_CORNER), fill=255)
+    tile.putalpha(mask.resize((size, size), Image.LANCZOS))
+    return tile
 
 
 def _build_social_card(cube, word):
