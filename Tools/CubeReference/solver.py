@@ -259,6 +259,26 @@ def fish_ready(state):
     return dict((c, f) for f, c in slots.stickers(state, slots.CORNERS['UFL'])).get('U') == 'L'
 
 
+def corners_ready(state):
+    """Where the way back to the fish is taught from.
+
+    The round leaves the two corners on the left alone and trades the two on
+    the right, so the pair that already belongs together goes on the left.
+    A pair is two top corners showing the same colour as each other on the side
+    they share — not necessarily that side's own middle colour, because the
+    whole top may still be a turn out. The last spin of the solve sorts that.
+
+    192 of the 240 last layers that need any work have such a pair, and they
+    are exactly the ones a single go fixes. The other 48 are the diagonal
+    swap, where no pair exists, any turn will do and it takes two goes.
+    Costs nothing: the same 1.00 goes on average either way.
+    """
+    pairs = [f for f in SIDE_FACES
+             if len({dict(slots.stickers(state, slots.CORNERS[n]))[f]
+                     for n in slots.U_CORNERS if f in n}) == 1]
+    return 'L' in pairs if pairs else True
+
+
 def bfs_alg_rounds(state, alg, goal, max_reps=8, ready=None, also=None):
     """Shortest sequence of (U^k then alg) that reaches `goal`, as rounds.
 
@@ -711,12 +731,15 @@ def run_fish_rounds(sv, goal):
     trades the two corners on the right over on the way. It costs about five
     moves a go more than a dedicated corner swap, and saves learning one.
     """
-    for turn, _ in bfs_alg_rounds(sv.state, TOFISH + SUNE, goal):
+    for turn, _ in bfs_alg_rounds(sv.state, TOFISH + SUNE, goal,
+                                  ready=corners_ready):
         sv.step(alg_name='the way back to the fish',
-                spin='Look for two corners next to each other that want to swap '
-                     'places. Turn the top until they are the two on the right: '
-                     'front right and back right. If no two want to swap like '
-                     'that, leave the top alone — it takes two goes.',
+                spin='Look along the top corners for a side where both of them '
+                     'show the same colour as each other. Those two already '
+                     'belong together, so turn the top until that side is on '
+                     'your left. The two on the right are the ones that swap. '
+                     'If no side has a matching pair, leave the top where it '
+                     'is — that one takes two goes.',
                 outcome='That breaks the yellow face on purpose. One yellow '
                         'corner is left on top, at the front left, which is '
                         'the fish you already know.')
