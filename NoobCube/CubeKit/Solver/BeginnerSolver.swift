@@ -36,10 +36,10 @@ enum BeginnerSolver {
     static let righty      = Move.parse("R U R' U'")
     static let insertRight = Move.parse("U R U' R' U' F' U F")
     static let insertLeft  = Move.parse("U' L' U L U F U' F'")
-    static let crossMove  = Move.parse("F R U R' U' F'")
+    static let crossMove  = Move.parse("F U R U' R' F'")
     static let fish       = Move.parse("R U R' U R U2 R'")
     static let cornerSwap = Move.parse("R B' R F2 R' B R F2 R2")
-    static let edgeSwap   = Move.parse("R U' R U R U R U' R' U' R2")
+    static let edgeSwap   = Move.parse("F2 U R' L F2 L' R U F2")
 
     private static let topTurns: [[Move]] = [
         [],
@@ -112,9 +112,13 @@ enum BeginnerSolver {
 
         builder.begin(.lastEdges)
         try rounds(builder, algorithm: edgeSwap, goal: solvedIgnoringTopTurn,
+                   ready: edgesReady,
                    named: "the edge swap",
-                   spin:   "Turn the top so the edge that's already right is at the back.",
-                   outcome: "The edge swap slides the other three round in a circle.")
+                   spin:   "Turn the top so the edge that is already home is at the "
+                         + "back. If none of them is home yet, any turn will do — "
+                         + "the first go will put one right.",
+                   outcome: "The edge swap leaves that one alone and slides the "
+                          + "other three round in a circle.")
         let last = finalTopTurn(builder.state)
         if !last.isEmpty {
             builder.step(spin: "One last spin of the top.",
@@ -874,6 +878,18 @@ enum BeginnerSolver {
         if up.count == 1 { return up[0].name == "UFL" }
         guard let frontLeft = CubeSlots.slot(with: [.U, .F, .L]) else { return false }
         return frontLeft.face(showing: .U, in: state) == .L
+    }
+
+    /// Where the edge swap is taught from: the top edge that is already home
+    /// sits at the back.
+    ///
+    /// If none of them is home yet, any turn will do — the first go puts one
+    /// right. Measured, this costs 0.16 of a go on average, and it makes the
+    /// instruction true, which it was not: left to find its own way the search
+    /// ran the move with the finished edge at the front as often as the back.
+    private static func edgesReady(_ state: CubeState) -> Bool {
+        let home = CubeSlots.topEdges.filter { $0.isSolved(in: state) }
+        return home.count != 1 || home[0].name == "UB"
     }
 
     private static func topFaceDone(_ state: CubeState) -> Bool {

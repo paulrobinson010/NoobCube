@@ -173,10 +173,10 @@ extension SolveStage.Kind {
         switch self {
         case .whiteCorners: return ("righty", "R U R' U'")
         case .middleRow:    return ("send it right", "U R U' R' U' F' U F")
-        case .yellowCross:  return ("the cross move", "F R U R' U' F'")
+        case .yellowCross:  return ("the cross move", "F U R U' R' F'")
         case .yellowFace:   return ("the fish", "R U R' U R U2 R'")
         case .lastCorners:  return ("the corner swap", "R B' R F2 R' B R F2 R2")
-        case .lastEdges:    return ("the edge swap", "R U' R U R U R U' R' U' R2")
+        case .lastEdges:    return ("the edge swap", "F2 U R' L F2 L' R U F2")
         default:            return nil
         }
     }
