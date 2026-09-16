@@ -15,6 +15,9 @@ CROSS   = "F U R U' R' F'".split()
 SUNE    = "R U R' U R U2 R'".split()
 APERM   = "R B' R F2 R' B R F2 R2".split()
 UPERM   = "F2 U R' L F2 L' R U F2".split()
+# The same thing the other way round: both leave the back edge alone and
+# send the other three round, one clockwise and one anticlockwise.
+UPERM_L = "F2 U' R' L F2 L' R U' F2".split()
 
 U_TURNS = [[], ['U'], ['U2'], ["U'"]]
 SIDE_FACES = ['F', 'R', 'B', 'L']
@@ -251,19 +254,7 @@ def fish_ready(state):
     return dict((c, f) for f, c in slots.stickers(state, slots.CORNERS['UFL'])).get('U') == 'L'
 
 
-def edges_ready(state):
-    """The top edge that is already home sits at the back.
-
-    If none of them is home yet, any turn will do — the first go puts one
-    right. Constraining it costs 0.16 of a go on average and makes the
-    instruction true, which it was not.
-    """
-    home = [n for n in slots.U_EDGES
-            if all(state[i] == f for f, i in slots.EDGES[n])]
-    return len(home) != 1 or home[0] == 'UB'
-
-
-def bfs_alg_rounds(state, alg, goal, max_reps=8, ready=None):
+def bfs_alg_rounds(state, alg, goal, max_reps=8, ready=None, also=None):
     """Shortest sequence of (U^k then alg) that reaches `goal`, as rounds.
 
     Kept as rounds rather than one flat list because a round is what the method
@@ -281,14 +272,15 @@ def bfs_alg_rounds(state, alg, goal, max_reps=8, ready=None):
             lined = cube.apply(st, uk)
             if ready is not None and not ready(lined):
                 continue
-            nxt = cube.apply(lined, alg)
-            npath = path + [(uk, alg)]
-            if goal(nxt):
-                return npath
-            if nxt in seen:
-                continue
-            seen.add(nxt)
-            q.append((nxt, npath))
+            for a in ([alg] if also is None else [alg, also]):
+                nxt = cube.apply(lined, a)
+                npath = path + [(uk, a)]
+                if goal(nxt):
+                    return npath
+                if nxt in seen:
+                    continue
+                seen.add(nxt)
+                q.append((nxt, npath))
     raise RuntimeError('no solution for stage')
 
 
@@ -686,9 +678,9 @@ def solved_up_to_u(state):
 
 # ------------------------------------------------------------ entry point
 
-def run_rounds(sv, alg, goal, alg_name, line_up, outcome, ready=None):
+def run_rounds(sv, alg, goal, alg_name, line_up, outcome, ready=None, also=None):
     """One step per round of 'line the top up, then run the one you know'."""
-    for turn, moves in bfs_alg_rounds(sv.state, alg, goal, ready=ready):
+    for turn, moves in bfs_alg_rounds(sv.state, alg, goal, ready=ready, also=also):
         sv.step(alg_name=alg_name, spin=line_up, outcome=outcome)
         sv.do(turn)
         sv.running()
@@ -838,12 +830,11 @@ def solve(state, white_face='D'):
                'The corner swap trades two corners over, leaving the rest alone.')
     sv.stage('topedges', 'Slide the last edges home')
     run_rounds(sv, UPERM, solved_up_to_u, 'the edge swap',
-               'Turn the top so the edge that is already home is at the back. If '
-               'none of them is home yet, any turn will do — the first go will '
-               'put one right.',
-               'The edge swap leaves that one alone and slides the other three '
-               'round in a circle.',
-               ready=edges_ready)
+               'Turn the top so the edge that is already home is at the back. The '
+               'other three go round in a circle — one way or the other, whichever '
+               'way they need.',
+               'Three sides swapping takes one go. All four takes two.',
+               also=UPERM_L)
     sv.step(spin='One last spin of the top.',
             outcome='And that is the whole cube.')
     sv.do(auf(sv.state))
