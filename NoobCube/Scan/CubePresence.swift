@@ -58,7 +58,7 @@ final class CubePresence: @unchecked Sendable {
         } catch {
             return false
         }
-        guard let found = request.results as? [VNRectangleObservation] else { return false }
+        guard let found = request.results else { return false }
 
         // Near the middle, because that is where the guide square is and where
         // the child has been asked to hold it.

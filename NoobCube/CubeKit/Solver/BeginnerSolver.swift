@@ -741,12 +741,15 @@ enum BeginnerSolver {
                                  + "to bring one up. One righty lifts this one out, and "
                                  + "then we can put it in its own gap.")
             } else {
+                // Listed in the order `step` declares them; the order the child
+                // does them in is the order they are performed, just below:
+                // turn the cube first, then spin the top.
                 builder.step(piece: piece, home: piece,
+                             spin: "Spin the top until the corner sits directly over "
+                                 + "its gap, its colours above the middles that match.",
                              grip: "Look at the three middles around this corner's "
                                  + "gap — those are its colours. Turn the cube so that "
                                  + "gap is at the front right.",
-                             spin: "Spin the top until the corner sits directly over "
-                                 + "its gap, its colours above the middles that match.",
                              outcome: chosen.plan.moves.count <= 4
                                  ? "It's already the right way round — one righty "
                                  + "drops it straight in."
