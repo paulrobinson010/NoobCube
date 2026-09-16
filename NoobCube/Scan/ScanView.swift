@@ -13,42 +13,51 @@ struct ScanView: View {
     var onCancel: () -> Void
 
     var body: some View {
-        VStack(spacing: 12) {
-            header
+        // Scrolls, so nothing can be cut off. This screen carries the map,
+        // the camera, whatever went wrong and three ways on, and on a shorter
+        // phone that was more than would fit — the bottom of the map went under
+        // the viewfinder and the last button ran off the end.
+        ScrollView {
+            VStack(spacing: 12) {
+                header
 
-            CubeNetView(colours: coordinator.scan.colours,
-                        highlightedFace: coordinator.currentStep?.face,
-                        pulsingFace: coordinator.currentStep?.face,
-                        // While scanning, tapping a side that is already in
-                        // means "that one came out wrong" and asks for it
-                        // again. Afterwards a tap steps one square's colour on.
-                        onTapSticker: { index in
-                            if coordinator.isComplete {
-                                coordinator.cycleSticker(at: index)
-                            } else {
-                                coordinator.retakeFace(containing: index)
-                            }
-                        })
-                .frame(height: 150)
-                .padding(.horizontal, 20)
+                CubeNetView(colours: coordinator.scan.colours,
+                            highlightedFace: coordinator.currentStep?.face,
+                            pulsingFace: coordinator.currentStep?.face,
+                            // While scanning, tapping a side that is already in
+                            // means "that one came out wrong" and asks for it
+                            // again. Afterwards a tap steps one square's colour on.
+                            onTapSticker: { index in
+                                if coordinator.isComplete {
+                                    coordinator.cycleSticker(at: index)
+                                } else {
+                                    coordinator.retakeFace(containing: index)
+                                }
+                            })
+                    // Bigger once the scan is in: that is the screen where the
+                    // map is the thing being checked.
+                    .frame(height: coordinator.isComplete ? 230 : 150)
+                    .padding(.horizontal, 20)
 
-            if !coordinator.isComplete { sideChips }
+                if !coordinator.isComplete { sideChips }
 
-            // One viewfinder, in one place, whether the scan is finished or
-            // not. Having it inside both halves of an if meant SwiftUI counted
-            // them as two different views and pulled the camera preview layer
-            // down and built a new one the moment the last side went in — at
-            // exactly the point the picture was reported going black.
-            //
-            // It stays on afterwards on purpose: a side that came out wrong is
-            // put right by showing it again, which beats hunting for the
-            // squares that are wrong and tapping them one at a time.
-            viewfinder
+                // One viewfinder, in one place, whether the scan is finished or
+                // not. Having it inside both halves of an if meant SwiftUI counted
+                // them as two different views and pulled the camera preview layer
+                // down and built a new one the moment the last side went in — at
+                // exactly the point the picture was reported going black.
+                //
+                // It stays on afterwards on purpose: a side that came out wrong is
+                // put right by showing it again, which beats hunting for the
+                // squares that are wrong and tapping them one at a time.
+                viewfinder
 
-            if coordinator.isComplete { finishedControls } else { liveControls }
+                if coordinator.isComplete { finishedControls } else { liveControls }
 
-            Spacer(minLength: 0)
+                Spacer(minLength: 0)
+            }
         }
+        .scrollBounceBehavior(.basedOnSize)
         .background(Theme.background.ignoresSafeArea())
         .onAppear { coordinator.begin() }
         .onDisappear { coordinator.stop() }
@@ -115,7 +124,7 @@ struct ScanView: View {
         // net, whatever went wrong, and the way on, and at full height none of
         // it fitted — the bottom button was off the screen and the top of the
         // header was pushed up under the clock.
-        .frame(height: coordinator.isComplete ? 196 : 300)
+        .frame(height: coordinator.isComplete ? 150 : 300)
         .padding(.horizontal, 20)
     }
 
@@ -229,11 +238,13 @@ struct ScanView: View {
 
     private var finishedControls: some View {
         VStack(spacing: 12) {
-            Text("Not right? Hold that side up and take it again.")
-                .font(.brand(size: 16, weight: .medium))
-                .foregroundStyle(Theme.muted)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
+            if coordinator.problem == nil {
+                Text("Not right? Hold that side up and take it again.")
+                    .font(.brand(size: 16, weight: .medium))
+                    .foregroundStyle(Theme.muted)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             if let problem = coordinator.problem {
                 Text(problem)

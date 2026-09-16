@@ -86,6 +86,9 @@ struct CubeNetView: View {
     private func stickerView(at index: Int, size: CGFloat) -> some View {
         let colour = colours.indices.contains(index) ? colours[index] : nil
         let inset = size * 0.06
+        // A middle is fixed by the way the child was asked to hold the cube, so
+        // it is not something to be corrected by hand.
+        let isMiddle = index % 9 == 4
 
         return RoundedRectangle(cornerRadius: size * 0.2, style: .continuous)
             .fill(colour?.swiftUIColor ?? Color.white.opacity(0.07))
@@ -95,7 +98,7 @@ struct CubeNetView: View {
             )
             .frame(width: size - inset * 2, height: size - inset * 2)
             .contentShape(Rectangle())
-            .onTapGesture { onTapSticker?(index) }
+            .onTapGesture { if !isMiddle { onTapSticker?(index) } }
             .animation(.easeOut(duration: 0.25), value: colour)
             .accessibilityLabel(colour.map { "\($0.displayName) square" } ?? "Not seen yet")
     }

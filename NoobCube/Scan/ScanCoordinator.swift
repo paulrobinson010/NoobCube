@@ -603,6 +603,13 @@ final class ScanCoordinator: ObservableObject {
     /// Tapping a square steps it to the next colour.
     func cycleSticker(at index: Int) {
         guard index >= 0, index < 54 else { return }
+        // Not the middles. A middle is not a guess and never was — the side was
+        // asked for by name, and ``begin`` drew all six before the camera saw
+        // anything. Letting one be tapped could only ever put the same colour
+        // in the middle of two sides, which is a cube that cannot exist, and
+        // that is exactly the complaint that came back: a white middle on the
+        // back face, and "two middle stickers are the same colour".
+        guard index % 9 != 4 else { return }
         let current = scan[index] ?? .white
         let all = CubeColour.allCases
         let next = all[(all.firstIndex(of: current).map { $0 + 1 } ?? 0) % all.count]
