@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Find Swift calls whose argument labels are in a different order from the
-declaration, which Swift rejects and which is easy to do by accident when a
-function grows a new parameter.
+"""Find the two mistakes that editing Swift without a compiler keeps producing:
+a call whose argument labels are in a different order from the declaration, and
+the same thing declared twice in one type because an edit spliced in a new copy
+and left the old one behind.
 
     python3 Tools/check_call_order.py
 
@@ -21,8 +22,8 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 
-def labels(header):
-    """The argument labels in a parameter list or a call, in order.
+def pieces(header):
+    """A parameter list or a call, split into its arguments.
 
     Three things have to be stepped over, each of which this got wrong once and
     each of which hid a real error:
@@ -63,13 +64,33 @@ def labels(header):
             buffer += character
         index += 1
     parts.append(buffer)
+    return parts
 
+
+def labels(header):
+    """The argument labels in a parameter list or a call, in order."""
     found = []
-    for part in parts:
+    for part in pieces(header):
         match = re.match(r"\s*(?:(\w+)\s+)?(\w+)\s*:", part)
         if match:
             found.append(match.group(1) or match.group(2))
     return [name for name in found if name != "_"]
+
+
+def parameters(header):
+    """Each parameter as (label, type), which is what tells two overloads apart.
+
+    Swift is perfectly happy with `applying(_ move: Move)` alongside
+    `applying(_ moves: [Move])`; only the types differ. Keying on the labels
+    alone called those a duplicate.
+    """
+    out = []
+    for part in pieces(header):
+        match = re.match(r"\s*(?:(\w+)\s+)?(\w+)\s*:(.*)", part, re.S)
+        if match:
+            out.append(((match.group(1) or match.group(2)),
+                        " ".join(match.group(3).split())))
+    return tuple(out)
 
 
 def closing(text, start):
@@ -89,9 +110,96 @@ def closing(text, start):
     return index - 1
 
 
+def blanked(source):
+    """The source with strings and comments replaced by spaces.
+
+    Same length as the original, so offsets still line up, but braces inside a
+    piece of text the app says out loud no longer count as code.
+    """
+    out = []
+    index, length = 0, len(source)
+    while index < length:
+        if source.startswith("//", index):
+            while index < length and source[index] != "\n":
+                out.append(" ")
+                index += 1
+            continue
+        if source.startswith("/*", index):
+            while index < length and not source.startswith("*/", index):
+                out.append(" " if source[index] != "\n" else "\n")
+                index += 1
+            continue
+        if source[index] == '"':
+            out.append(" ")
+            index += 1
+            while index < length and source[index] != '"':
+                out.append(" " if source[index] != "\n" else "\n")
+                index += 2 if source[index] == "\\" else 1
+            if index < length:
+                out.append(" ")
+                index += 1
+            continue
+        out.append(source[index])
+        index += 1
+    return "".join(out)
+
+
+TYPE = re.compile(r"\b(?:struct|class|enum|extension|protocol|actor)\s+(\w+)")
+FUNC = re.compile(r"\bfunc\s+(\w+)\s*\(")
+
+
+def duplicates(source):
+    """Methods declared twice in the same type.
+
+    Rewriting part of a file by splicing text is how most of this is edited, and
+    the failure it produces is always the same: the new version goes in and the
+    old one is still sitting there further down.
+
+    Only methods, only against others in the same type, and the whole signature
+    is read however many lines it runs to. Two earlier versions of this got both
+    of those wrong and between them reported a hundred and twenty things that
+    were perfectly fine — local variables in different functions, and real
+    overloads whose signatures were cut off at the end of the first line.
+    """
+    code = blanked(source)
+
+    depth, depth_at = 0, []
+    for character in code:
+        depth_at.append(depth)
+        if character == "{":
+            depth += 1
+        elif character == "}":
+            depth -= 1
+
+    types = [(match.start(), match.group(1), depth_at[match.start()])
+             for match in TYPE.finditer(code)]
+
+    seen, found = {}, []
+    for match in FUNC.finditer(code):
+        here = depth_at[match.start()]
+        enclosing = [name for offset, name, level in types
+                     if offset < match.start() and level < here]
+        signature = code[match.end():closing(code, match.end())]
+        key = (enclosing[-1] if enclosing else "", match.group(1),
+               parameters(signature))
+        line = source[:match.start()].count("\n") + 1
+        if key in seen:
+            found.append((line, match.group(1), seen[key]))
+        else:
+            seen[key] = line
+    return found
+
+
 def main():
     files = sorted(ROOT.glob("NoobCube/**/*.swift")) + sorted(ROOT.glob("NoobCubeTests/**/*.swift"))
     sources = {path: path.read_text() for path in files}
+
+    repeated = 0
+    for path, source in sources.items():
+        for line, name, first in duplicates(source):
+            print("%s:%d  %s is already declared on line %d"
+                  % (path.relative_to(ROOT), line, name, first))
+            repeated += 1
 
     # Every declaration of every name, because a name can have several.
     declarations = {}
@@ -128,8 +236,9 @@ def main():
                          ", ".join(sorted(used, key=wanted.index))))
                 problems += 1
 
-    print("%d call(s) with their arguments out of order" % problems)
-    return 1 if problems else 0
+    print("%d thing(s) declared twice, %d call(s) with their arguments out of order"
+          % (repeated, problems))
+    return 1 if (problems or repeated) else 0
 
 
 if __name__ == "__main__":

@@ -118,26 +118,6 @@ extension CubeSceneController {
         return node
     }
 
-    private static func midpoint(_ a: SCNVector3, _ b: SCNVector3) -> SCNVector3 {
-        SCNVector3((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2)
-    }
-
-    private static func distance(_ a: SCNVector3, _ b: SCNVector3) -> Float {
-        length(SCNVector3(a.x - b.x, a.y - b.y, a.z - b.z))
-    }
-
-    private static func length(_ point: SCNVector3) -> Float {
-        (point.x * point.x + point.y * point.y + point.z * point.z).squareRoot()
-    }
-
-    /// The same point, moved out away from the middle of the cube.
-    private static func pushedOut(_ point: SCNVector3, by amount: Float) -> SCNVector3 {
-        let size = length(point)
-        guard size > 0.0001 else { return point }
-        let factor = (size + amount) / size
-        return SCNVector3(point.x * factor, point.y * factor, point.z * factor)
-    }
-
     /// How far out the arc rides. The cube's corners are 2.2 from the middle,
     /// so this leaves a clear gap over the top of everything.
     private static let clearance: Float = 3.3
@@ -175,6 +155,8 @@ extension CubeSceneController {
         return scaled(direction, radius)
     }
 
+    // MARK: - Vector odds and ends
+
     private static func length(_ point: SCNVector3) -> Float {
         dot(point, point).squareRoot()
     }
@@ -202,31 +184,18 @@ extension CubeSceneController {
         return size < 0.0001 ? point : scaled(point, 1 / size)
     }
 
-    /// The same point, moved out away from the middle of the cube.
-    private static func pushedOut(_ point: SCNVector3, by amount: Float) -> SCNVector3 {
-        let size = length(point)
-        guard size > 0.0001 else { return point }
-        return scaled(point, (size + amount) / size)
-    }
-
     private static func midpoint(_ a: SCNVector3, _ b: SCNVector3) -> SCNVector3 {
-        SCNVector3((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2)
+        scaled(add(a, b), 0.5)
     }
 
     private static func distance(_ a: SCNVector3, _ b: SCNVector3) -> Float {
         length(SCNVector3(a.x - b.x, a.y - b.y, a.z - b.z))
     }
 
-    private static func length(_ point: SCNVector3) -> Float {
-        (point.x * point.x + point.y * point.y + point.z * point.z).squareRoot()
-    }
-
     /// The same point, moved out away from the middle of the cube.
     private static func pushedOut(_ point: SCNVector3, by amount: Float) -> SCNVector3 {
         let size = length(point)
         guard size > 0.0001 else { return point }
-        let factor = (size + amount) / size
-        return SCNVector3(point.x * factor, point.y * factor, point.z * factor)
+        return scaled(point, (size + amount) / size)
     }
-
 }
