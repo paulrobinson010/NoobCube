@@ -1,3 +1,4 @@
+import SceneKit
 import XCTest
 @testable import NoobCube
 
@@ -167,4 +168,74 @@ func randomScramble(length: Int = 25, using generator: inout SeededGenerator) ->
         last = base
     }
     return moves
+}
+
+/// The 3D cube has to agree with the engine about where a square has got to.
+///
+/// A facelet index names a *place*, and the plates travel between places. The
+/// scene keeps a map from place to plate so a step can light up one square and
+/// draw an arrow from it; if that map is not moved along with the cube, the
+/// arrow sets off from whatever square happens to be standing in the old place.
+final class CubeSceneMapTests: XCTestCase {
+
+    private func plates() -> [Int: SCNNode] {
+        var nodes: [Int: SCNNode] = [:]
+        for index in 0..<54 { nodes[index] = SCNNode() }
+        return nodes
+    }
+
+    private var everyMove: [Move] {
+        MoveBase.allCases.flatMap { base in MoveAmount.allCases.map { Move(base, $0) } }
+    }
+
+    func testThePlateMapAgreesWithTheArrow() {
+        let before = plates()
+        for move in everyMove {
+            let after = CubeSceneController.moved(before, by: move)
+            for index in 0..<54 {
+                // `follow` is what the arrow itself uses to say where a square
+                // is going, so the plates must land exactly where it points.
+                let landing = CubeGeometry.follow(sticker: index, through: [move])
+                XCTAssertTrue(after[landing] === before[index],
+                              "\(move.notation): the plate at \(index) should be at \(landing)")
+            }
+        }
+    }
+
+    func testThePlateMapAgreesWithTheCubeletsItRidesOn() {
+        let before = plates()
+        for move in everyMove {
+            let after = CubeSceneController.moved(before, by: move)
+            // Worked out from the move's own geometry — the cubelet turns and
+            // carries its plates with it — without consulting any table.
+            for (position, normal) in CubeGeometry.stickers {
+                let index = CubeGeometry.faceletIndex(position: position, normal: normal)
+                var carried = position
+                var facing = normal
+                if move.moves(cubeletAt: position) {
+                    for _ in 0..<move.amount.rawValue {
+                        carried = carried.rotatedClockwise(about: move.turnAxis)
+                        facing = facing.rotatedClockwise(about: move.turnAxis)
+                    }
+                }
+                let landing = CubeGeometry.faceletIndex(position: carried, normal: facing)
+                XCTAssertTrue(after[landing] === before[index],
+                              "\(move.notation): the plate at \(index) rides to \(landing)")
+            }
+        }
+    }
+
+    func testTheMapStillAgreesAfterAWholeStageOfTurns() {
+        var generator = SeededGenerator(seed: 5)
+        let before = plates()
+        for _ in 0..<20 {
+            let moves = randomScramble(length: 12, using: &generator)
+            var map = before
+            for move in moves { map = CubeSceneController.moved(map, by: move) }
+            for index in 0..<54 {
+                let landing = CubeGeometry.follow(sticker: index, through: moves)
+                XCTAssertTrue(map[landing] === before[index])
+            }
+        }
+    }
 }

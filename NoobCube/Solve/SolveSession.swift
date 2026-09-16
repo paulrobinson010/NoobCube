@@ -39,6 +39,11 @@ final class SolveSession: ObservableObject {
     @Published private(set) var phase: Phase = .coaching
     @Published var help: Help = .undecided
     @Published private(set) var displayCube: ScannedCube
+    /// The cube as it was when the current step was explained.
+    ///
+    /// The little demo in the corner plays the whole set of moves, so it has to
+    /// start from where the set starts, however far through it the child is.
+    @Published private(set) var stepStartCube: ScannedCube
     @Published private(set) var isBusy = false
 
     let scene: CubeSceneController
@@ -53,6 +58,7 @@ final class SolveSession: ObservableObject {
         self.scene = scene
         self.narrator = narrator
         self.displayCube = scan
+        self.stepStartCube = scan
         self.stageIndex = 0
         self.stageIndex = Self.nextWorkableStage(in: plan, from: 0) ?? plan.stages.count
         if self.stageIndex >= plan.stages.count {
@@ -196,19 +202,6 @@ final class SolveSession: ObservableObject {
         }
     }
 
-    /// Show the move again without moving on: turn it, then turn it back.
-    func previewCurrentMove() {
-        guard !isBusy, let move = currentMove else { return }
-        isBusy = true
-        scene.animate(move, duration: 0.42) { [weak self] in
-            guard let self else { return }
-            self.scene.animate(move.inverse, duration: 0.32) {
-                self.isBusy = false
-                self.presentCurrentMove()
-            }
-        }
-    }
-
     /// Put the arrow up for the current move and say it.
     func presentCurrentMove() {
         guard let move = currentMove else {
@@ -241,6 +234,7 @@ final class SolveSession: ObservableObject {
     /// and that you line it up first, is the thing a child can still do
     /// tomorrow without the app.
     func introduceStep() {
+        stepStartCube = displayCube
         guard help == .moveByMove, let step = currentStep, currentMove != nil else {
             phase = .coaching
             presentCurrentMove()
@@ -276,26 +270,18 @@ final class SolveSession: ObservableObject {
         }
     }
 
+    /// Whether the little rolling demo has a set of moves worth showing.
+    var showsStepDemo: Bool {
+        guard help == .moveByMove, phase == .introducingStep || phase == .coaching else {
+            return false
+        }
+        return !(currentStep?.moves.isEmpty ?? true)
+    }
+
     /// Get on with the moves for the step just explained.
     func beginStepMoves() {
         phase = .coaching
         presentCurrentMove()
-    }
-
-    /// Play the whole step through and wind it straight back, so the child can
-    /// watch the piece travel before trying it themselves.
-    func demonstrateStep() {
-        guard !isBusy, let step = currentStep, !step.moves.isEmpty else { return }
-        isBusy = true
-        narrator.say("Watch where it goes.")
-        playSequence(step.moves) { [weak self] in
-            guard let self else { return }
-            self.playSequence(Move.invert(step.moves)) {
-                self.isBusy = false
-                self.scene.hideTurnArrow()
-                self.showStepMarks()
-            }
-        }
     }
 
     private func playSequence(_ moves: [Move], completion: @MainActor @escaping () -> Void) {
@@ -364,6 +350,7 @@ final class SolveSession: ObservableObject {
         moveIndex = 0
         stageIndex = Self.nextWorkableStage(in: newPlan, from: 0) ?? newPlan.stages.count
         displayCube = newScan
+        stepStartCube = newScan
         scene.reset(to: newScan.colours)
         if stageIndex >= newPlan.stages.count {
             phase = .finished

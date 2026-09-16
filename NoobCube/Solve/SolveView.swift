@@ -17,29 +17,43 @@ struct SolveView: View {
 
             CubeSceneView(controller: session.scene)
                 .frame(maxWidth: .infinity)
-                .frame(height: 300)
+                .frame(height: 276)
                 .padding(.vertical, 4)
+                .overlay(alignment: .bottomTrailing) { demoCorner }
 
-            if session.help == .moveByMove, let step = session.currentStep {
-                // The step's own moves, not the whole stage's: this is the set
-                // that goes together, and the set worth learning.
-                MoveStripView(moves: step.moves,
-                              currentIndex: session.phase == .introducingStep
-                                  ? -1 : session.moveIndexWithinStep)
+            if session.help == .moveByMove {
+                // Only once the moves have started. Showing the set beside the
+                // arrow that says where a piece is going put a single move on
+                // screen next to a journey it does not make on its own, and
+                // read as a contradiction.
+                Group {
+                    if session.phase == .coaching, let step = session.currentStep {
+                        MoveStripView(moves: step.moves,
+                                      currentIndex: session.moveIndexWithinStep)
+                    } else if let step = session.currentStep {
+                        Text(step.moves.count == 1
+                             ? "One move to do"
+                             : "\(step.moves.count) moves, one after the other")
+                            .font(.brand(size: 16, weight: .semibold))
+                            .foregroundStyle(Theme.muted)
+                    }
+                }
+                .frame(height: 76)
             }
 
-            // Scrolls rather than squeezing: a long sentence used to be cut
-            // off at the bottom of the screen with no way to read the rest.
+            // Takes whatever room is left, and scrolls if the sentence is
+            // longer than that: it used to be given a fixed slice of the screen
+            // and then covered by the buttons underneath it.
             ScrollView {
                 instructionCard
                     .padding(.horizontal, 20)
                     .padding(.top, 8)
             }
-            .frame(maxHeight: 190)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             controls
                 .padding(.horizontal, 20)
-                .padding(.bottom, 16)
+                .padding(.bottom, 10)
         }
         .background(Theme.background.ignoresSafeArea())
         .onAppear { session.announceCurrentStep() }
@@ -50,6 +64,17 @@ struct SolveView: View {
     }
 
     // MARK: - Pieces
+
+    /// The whole set of moves, playing over and over beside the big cube.
+    @ViewBuilder
+    private var demoCorner: some View {
+        if session.showsStepDemo, let step = session.currentStep {
+            StepDemoView(moves: step.moves, colours: session.stepStartCube.colours)
+                .padding(.trailing, 18)
+                .padding(.bottom, 2)
+                .transition(.scale.combined(with: .opacity))
+        }
+    }
 
     private var header: some View {
         VStack(spacing: 10) {
@@ -160,23 +185,8 @@ struct SolveView: View {
             }
 
         case .introducingStep:
-            VStack(spacing: 12) {
-                Button {
-                    session.demonstrateStep()
-                } label: {
-                    Label("Watch it first", systemImage: "play.circle.fill")
-                }
-                .buttonStyle(BigButtonStyle(tint: Theme.attention))
-                .disabled(session.isBusy)
-
-                Button {
-                    session.beginStepMoves()
-                } label: {
-                    Label("Step through it", systemImage: "arrow.turn.up.right")
-                }
-                .buttonStyle(BigButtonStyle(isProminent: false))
-                .disabled(session.isBusy)
-
+            VStack(spacing: 8) {
+                nextButton { session.beginStepMoves() }
                 rescanButton
             }
 
@@ -200,19 +210,10 @@ struct SolveView: View {
                 }
 
             case .moveByMove:
-                VStack(spacing: 12) {
-                    Button {
+                VStack(spacing: 8) {
+                    nextButton(isEnabled: session.currentMove != nil) {
                         session.confirmCurrentMove()
-                    } label: {
-                        Label("I did it!", systemImage: "checkmark.circle.fill")
                     }
-                    .buttonStyle(BigButtonStyle(tint: Theme.done))
-                    .disabled(session.isBusy || session.currentMove == nil)
-
-                    Button("Show me that move again") { session.previewCurrentMove() }
-                        .buttonStyle(BigButtonStyle(isProminent: false))
-                        .disabled(session.isBusy)
-
                     rescanButton
                 }
 
@@ -242,12 +243,32 @@ struct SolveView: View {
         }
     }
 
+    /// The only button on the screen while a step is being worked through.
+    ///
+    /// Every choice that used to sit here — watch it, step through it, show me
+    /// again — was a decision a five year old had to make before they could get
+    /// on with the cube. The demo runs by itself now, so this is all that is
+    /// left: one thing to press, that always means the same thing.
+    private func nextButton(isEnabled: Bool = true,
+                            action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label("Next", systemImage: "arrow.right.circle.fill")
+        }
+        .buttonStyle(BigButtonStyle())
+        .disabled(session.isBusy || !isEnabled)
+    }
+
+    /// Small on purpose: a way back to the camera, not somewhere to go.
     private var rescanButton: some View {
         Button {
             onRescan()
         } label: {
             Label("Look at my cube again", systemImage: "camera.fill")
+                .font(.brand(size: 15, weight: .semibold))
+                .foregroundStyle(Theme.muted)
+                .frame(maxWidth: .infinity, minHeight: 40)
+                .contentShape(Rectangle())
         }
-        .buttonStyle(BigButtonStyle(tint: Theme.muted, isProminent: false))
+        .buttonStyle(.plain)
     }
 }

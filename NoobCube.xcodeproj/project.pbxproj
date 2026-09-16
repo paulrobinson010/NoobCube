@@ -53,6 +53,7 @@
 		19A106E97D3AD1DEA3726B55 = {isa = PBXBuildFile; fileRef = 6CF8DFCB545CEF3BE984C198; };
 		B86B7592733FD9D7C7686F42 = {isa = PBXBuildFile; fileRef = 371793A352BB06B90F08D827; };
 		DCD88F911A5534E1D24AA251 = {isa = PBXBuildFile; fileRef = 3D7EDCFB0475A1E69EC17AEE; };
+		7BEF05C292647D872D265FDB = {isa = PBXBuildFile; fileRef = 77C1F26B91CF691DB5CB5A1B; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -115,6 +116,7 @@
 		6CF8DFCB545CEF3BE984C198 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StageTint.swift"; sourceTree = "<group>"; };
 		371793A352BB06B90F08D827 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "JourneyArrow.swift"; sourceTree = "<group>"; };
 		3D7EDCFB0475A1E69EC17AEE = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CubePresence.swift"; sourceTree = "<group>"; };
+		77C1F26B91CF691DB5CB5A1B = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StepDemoView.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -138,6 +140,7 @@
 		26C37DE175383478B8ECAF6F /* Solve */ = {
 			isa = PBXGroup;
 			children = (
+				77C1F26B91CF691DB5CB5A1B,
 				B927E8B62A8D208A84979FB6,
 				E1C3AD996FD4FF070A61E079,
 				D975030C1F0F281F3C3EA195 /* MoveStripView.swift */,
@@ -370,6 +373,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				7BEF05C292647D872D265FDB,
 				DCD88F911A5534E1D24AA251,
 				B86B7592733FD9D7C7686F42,
 				19A106E97D3AD1DEA3726B55,

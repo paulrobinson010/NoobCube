@@ -22,6 +22,9 @@ final class CubeSceneController {
 
     /// Sticker plates by facelet index, so a step can light up the one square
     /// it is about and point an arrow at where that square is going.
+    ///
+    /// A facelet index is a *place* on the cube, not a sticker, so this has to
+    /// be re-pointed every time a layer turns — see ``bake``.
     private(set) var stickerNodes: [Int: SCNNode] = [:]
 
     /// The curved arrow showing which way the next move goes, if one is showing.
@@ -277,8 +280,15 @@ final class CubeSceneController {
         }
     }
 
-    /// Fold the pivot's rotation into each cubelet and hand them back.
+    /// Fold the pivot's rotation into each cubelet and hand them back, and
+    /// re-point the sticker map at the plates that are now in each place.
     private func bake(pivot: SCNNode, turning: [Int], move: Move) {
+        // The cube can be pulled apart and rebuilt while a turn is still
+        // running — the little demo does it every time round the loop. A turn
+        // that finishes after that is about cubelets that no longer exist, so
+        // there is nothing left to fold in.
+        guard pivot.parent != nil else { return }
+
         for node in pivot.childNodes {
             let combined = SCNMatrix4Mult(node.transform, pivot.transform)
             node.transform = combined
@@ -294,6 +304,29 @@ final class CubeSceneController {
             }
             cubelets[index].position = position
         }
+
+        // A facelet index names a place on the cube; the plate that was there
+        // has just travelled somewhere else. Leaving the map alone meant that
+        // after the first turn of a stage, lighting up "the square to watch"
+        // lit whichever square happened to be standing in its old place, and
+        // the arrow set off from there — so the arrow stopped matching the
+        // move it was drawn for.
+        stickerNodes = Self.moved(stickerNodes, by: move)
+    }
+
+    /// The sticker map after a move: the plate now in place `index` is the one
+    /// that was in the place the move brings to `index`.
+    ///
+    /// The same permutation ``ScannedCube/applying(_:)`` uses to move colours,
+    /// so the plates and the colours can never drift apart.
+    static func moved(_ nodes: [Int: SCNNode], by move: Move) -> [Int: SCNNode] {
+        guard let permutation = CubeGeometry.allPermutations[move] else { return nodes }
+        var result: [Int: SCNNode] = [:]
+        result.reserveCapacity(nodes.count)
+        for index in 0..<54 {
+            result[index] = nodes[permutation[index]]
+        }
+        return result
     }
 
     /// Put the cube back to a known state instantly, with no animation.
