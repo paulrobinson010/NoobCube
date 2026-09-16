@@ -114,32 +114,37 @@
     scroll-snap-type: x mandatory;
     -webkit-overflow-scrolling: touch;
   }
-  .shots-row img, .shot-soon {
+  .shot {
     width: 220px;
     flex-shrink: 0;
+    margin: 0;
+    scroll-snap-align: center;
+  }
+  .shot a { display: block; text-decoration: none; }
+  .shot img {
+    display: block;
+    width: 100%;
+    height: auto;
     border-radius: 26px;
     border: 4px solid var(--card);
     box-shadow: 0 10px 28px rgba(0,0,0,.45);
-    scroll-snap-align: center;
   }
-  .shots-row img { height: auto; }
-  /* Stand-ins until the real screenshots go in */
-  .shot-soon {
-    height: 460px;
-    display: grid;
-    place-items: center;
-    text-align: center;
-    padding: 20px;
+  .shot figcaption {
+    padding: 12px 6px 0;
     color: var(--muted);
-    font-weight: 700;
-    background:
-      repeating-linear-gradient(-45deg, #131b30 0 14px, #161f38 14px 28px);
+    font-size: .82rem;
+    line-height: 1.45;
+  }
+  .shot figcaption b {
+    display: block;
+    color: var(--text);
+    font-size: .95rem;
   }
   .shots-row > :first-child { margin-left: auto; }
   .shots-row > :last-child { margin-right: auto; }
   @media (prefers-reduced-motion: no-preference) {
-    .shots-row img { transition: transform .2s ease; }
-    .shots-row img:hover { transform: translateY(-6px) rotate(-1deg); }
+    .shot img { transition: transform .2s ease; }
+    .shot a:hover img { transform: translateY(-6px) rotate(-1deg); }
   }
 
   .get { text-align: center; padding: 44px 24px 8px; }
@@ -251,19 +256,39 @@
 
 <section class="shots">
   <h2>See it in action</h2>
-  <!--
-    Screenshots go here. Drop the images into docs/screenshots/ and swap each
-    .shot-soon block below for:
-        <img src="/screenshots/1-web.jpg" alt="..." loading="lazy">
-  -->
   <div class="shots-row">
-    <div class="shot-soon">Scanning your cube<br>📷</div>
-    <div class="shot-soon">The cube folding together<br>🧩</div>
-    <div class="shot-soon">One move at a time<br>🔄</div>
-    <div class="shot-soon">Making the daisy<br>🌼</div>
-    <div class="shot-soon">Solved!<br>🎉</div>
+    <figure class="shot">
+      <a href="/screenshots/1-scan.jpg">
+        <img src="/screenshots/1-scan.jpg" width="880" height="1908" alt="The scanning screen: the six sides of the cube drawn as a flat net, the camera looking at a real cube below it, and a big green button reading “Yes, that’s my cube!”" loading="lazy" decoding="async">
+      </a>
+      <figcaption><b>Does this look right?</b>Every side you have shown it, laid out flat.</figcaption>
+    </figure>
+    <figure class="shot">
+      <a href="/screenshots/2-hold.jpg">
+        <img src="/screenshots/2-hold.jpg" width="880" height="1908" alt="The app showing a 3D cube and three coloured reminders: white on the bottom, yellow on the top, green facing you." loading="lazy" decoding="async">
+      </a>
+      <figcaption><b>Hold it like this</b>White on the bottom, yellow on the top.</figcaption>
+    </figure>
+    <figure class="shot">
+      <a href="/screenshots/3-daisy.jpg">
+        <img src="/screenshots/3-daisy.jpg" width="880" height="1908" alt="Step 1 of 8. A green arrow arcs from one square over the top of the cube to where it is going, and the card underneath names the white and green edge." loading="lazy" decoding="async">
+      </a>
+      <figcaption><b>Make a daisy</b>The arrow shows the square, and where it is going.</figcaption>
+    </figure>
+    <figure class="shot">
+      <a href="/screenshots/4-white-corners.jpg">
+        <img src="/screenshots/4-white-corners.jpg" width="880" height="1908" alt="Step 3 of 8. A row of move cards reading U, R’, U’, R with plain names underneath, and the current one spelled out as “Top right — turn the top row to the right.”" loading="lazy" decoding="async">
+      </a>
+      <figcaption><b>Fill in the white corners</b>Every move named, in words instead of letters.</figcaption>
+    </figure>
+    <figure class="shot">
+      <a href="/screenshots/5-middle-row.jpg">
+        <img src="/screenshots/5-middle-row.jpg" width="880" height="1908" alt="Step 4 of 8. A wide arrow sweeps right round the cube, and the card reads "Turn the cube so that side is facing you."" loading="lazy" decoding="async">
+      </a>
+      <figcaption><b>Finish the middle row</b>When the whole cube turns, the arrow goes round the whole cube.</figcaption>
+    </figure>
   </div>
-  <p class="note" style="margin-top:0">Screenshots coming as soon as it's running on a phone.</p>
+  <p class="note" style="margin-top:0">Tap a picture to see it properly.</p>
 </section>
 
 <section class="get">
