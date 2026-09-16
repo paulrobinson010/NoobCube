@@ -31,16 +31,32 @@ extension CubeSceneController {
 
         // The shaft, as a run of short rods. Simple, and it bends as far as we
         // like without any geometry of its own.
+        //
+        // A square heading round the back takes its arrow with it, and the
+        // cube used to eat the part that goes behind — so a long journey was
+        // shown as an arrow that set off and vanished. Each rod that is round
+        // the back is now drawn through the plastic instead, faintly, so the
+        // whole path stays readable and you can still tell which bit of it is
+        // out of sight.
         for index in 0..<(points.count - 2) {
+            let middle = Self.midpoint(points[index], points[index + 1])
             group.addChildNode(Self.rod(from: points[index], to: points[index + 1],
-                                        radius: 0.115, colour: colour))
+                                        radius: 0.115, colour: colour,
+                                        behind: isRoundTheBack(middle)))
         }
 
         // The head, pointing the way the last piece of the curve is going.
         let tip = points[points.count - 1]
         let approach = points[points.count - 2]
-        let head = SCNNode(geometry: SCNCone(topRadius: 0, bottomRadius: 0.26, height: 0.55))
-        head.geometry?.firstMaterial = Self.arrowMaterial(colour)
+        let headBehind = isRoundTheBack(tip)
+        let headMaterial = Self.arrowMaterial(colour, behind: headBehind)
+        let cone = SCNCone(topRadius: 0, bottomRadius: 0.26, height: 0.55)
+        cone.firstMaterial = headMaterial
+        let head = SCNNode(geometry: cone)
+        if headBehind {
+            Self.showThroughTheCube(head, headMaterial)
+            head.opacity = Self.hiddenStrength
+        }
         head.position = Self.midpoint(approach, tip)
         head.look(at: tip, up: SCNVector3(0, 1, 0), localFront: SCNVector3(0, 1, 0))
         group.addChildNode(head)
@@ -48,7 +64,7 @@ extension CubeSceneController {
         // A ring around the square it is going to, so where the arrow ends is
         // never in doubt.
         if let landing = stickerNodes[end] {
-            let ring = Self.ring(colour: colour, radius: 0.28)
+            let ring = Self.ring(colour: colour, radius: 0.28, behind: isRoundTheBack(to))
             landing.addChildNode(ring)
             journeyRing = ring
         }
@@ -73,8 +89,11 @@ extension CubeSceneController {
         journeyRing = nil
     }
 
+    /// How faint something round the back is drawn, before the arrow breathes.
+    static let hiddenStrength: CGFloat = 0.45
+
     /// A ring that sits on a sticker, following it wherever the sticker goes.
-    static func ring(colour: UIColor, radius: CGFloat) -> SCNNode {
+    static func ring(colour: UIColor, radius: CGFloat, behind: Bool = false) -> SCNNode {
         let torus = SCNTorus(ringRadius: radius, pipeRadius: 0.042)
         torus.ringSegmentCount = 24
         torus.pipeSegmentCount = 6
@@ -89,29 +108,41 @@ extension CubeSceneController {
         // the ring up to match, just proud of the plastic.
         node.eulerAngles = SCNVector3(Float.pi / 2, 0, 0)
         node.position = SCNVector3(0, 0, 0.02)
+        if behind {
+            showThroughTheCube(node, material)
+            node.opacity = hiddenStrength
+        }
         return node
     }
 
     // MARK: - Bits and pieces
 
-    private static func arrowMaterial(_ colour: UIColor) -> SCNMaterial {
+    private static func arrowMaterial(_ colour: UIColor, behind: Bool = false) -> SCNMaterial {
         let material = SCNMaterial()
         material.diffuse.contents = colour
         material.emission.contents = UIColor(Theme.done.dimmed(to: 0.45))
-        material.lightingModel = .physicallyBased
+        // Nothing lights what is round the back of the cube, so a hidden rod
+        // shaded like the rest would come through as a dark smudge.
+        material.lightingModel = behind ? .constant : .physicallyBased
         material.roughness.contents = 0.4
         return material
     }
 
     /// One short rod between two points, which is all a curve needs to be.
     private static func rod(from: SCNVector3, to: SCNVector3,
-                            radius: CGFloat, colour: UIColor) -> SCNNode {
+                            radius: CGFloat, colour: UIColor,
+                            behind: Bool = false) -> SCNNode {
         let length = distance(from, to)
         let cylinder = SCNCylinder(radius: radius, height: CGFloat(length))
         cylinder.radialSegmentCount = 8
-        cylinder.firstMaterial = arrowMaterial(colour)
+        let material = arrowMaterial(colour, behind: behind)
+        cylinder.firstMaterial = material
 
         let node = SCNNode(geometry: cylinder)
+        if behind {
+            showThroughTheCube(node, material)
+            node.opacity = hiddenStrength
+        }
         node.position = midpoint(from, to)
         // A cylinder stands up its own y axis, so point that at the far end.
         node.look(at: to, up: SCNVector3(0, 1, 0), localFront: SCNVector3(0, 1, 0))

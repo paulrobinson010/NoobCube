@@ -350,6 +350,48 @@ final class CubeSceneController {
     private(set) var cameraRestingPosition = SCNVector3Zero
     private(set) var cameraRestingEulerAngles = SCNVector3Zero
 
+    /// Which way the camera looks at the cube from, as a unit vector.
+    var eye: SCNVector3 {
+        let point = cameraRestingPosition
+        let size = (point.x * point.x + point.y * point.y + point.z * point.z).squareRoot()
+        guard size > 0.0001 else { return SCNVector3(0, 0, 1) }
+        return SCNVector3(point.x / size, point.y / size, point.z / size)
+    }
+
+    /// True when this face is turned away from the camera, so anything drawn
+    /// out beyond it is hidden by the plastic in front of it.
+    ///
+    /// Three of the six always are, and they are not rare: measured over 1,500
+    /// solves, 6.3% of every move the method makes turns a face you cannot
+    /// see — nearly all of them L, which "send it left", the way back to the
+    /// fish and the edge swap all lean on. They arrive in clusters, so a child
+    /// meets a run of moves with no arrow at all.
+    func isFacingAway(_ face: Face) -> Bool {
+        let normal = face.normal
+        let towards = Float(normal.x) * eye.x + Float(normal.y) * eye.y + Float(normal.z) * eye.z
+        return towards <= 0
+    }
+
+    /// True when this point sits round the back of the cube.
+    func isRoundTheBack(_ point: SCNVector3) -> Bool {
+        point.x * eye.x + point.y * eye.y + point.z * eye.z <= 0
+    }
+
+    /// Let something be seen through the plastic, faintly, the way a drawing
+    /// shows a hidden edge. Being able to see it and knowing it is round the
+    /// back are both needed: drawn at full strength it reads as floating in
+    /// front of the cube, which is a different lie.
+    static func showThroughTheCube(_ node: SCNNode, _ material: SCNMaterial) {
+        material.readsFromDepthBuffer = false
+        material.writesToDepthBuffer = false
+        node.renderingOrder = 60
+    }
+
+    /// How strong an arrow is drawn: full in front, faint round the back.
+    static func strength(behind: Bool) -> (low: CGFloat, high: CGFloat) {
+        behind ? (0.26, 0.5) : (0.65, 1.0)
+    }
+
     func cubeNodeHidden(_ hidden: Bool) {
         cubeNode.isHidden = hidden
     }

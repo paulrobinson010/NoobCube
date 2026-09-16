@@ -41,6 +41,18 @@ extension CubeSceneController {
         shape.firstMaterial = material
 
         let node = SCNNode(geometry: shape)
+
+        // An L, D or B move stands its arrow out beyond a face the camera
+        // cannot see, so the cube itself used to swallow it whole. Let it be
+        // seen through the plastic instead, faintly.
+        //
+        // The arrow needs no mirroring to be read from the other side. It
+        // depicts a rotation, and a rotation genuinely does look the other way
+        // round from the far end of its axis — which is exactly what a child
+        // holding the cube sees. Turning the drawing round to "correct" it
+        // would be the thing that lied.
+        let behind = isFacingAway(face)
+        if behind { Self.showThroughTheCube(node, material) }
         // Stand the flat arrow up so it faces out along the turning axis, using
         // the same orientations the stickers use.
         node.eulerAngles = Self.orientation(facing: face)
@@ -52,11 +64,12 @@ extension CubeSceneController {
         arrowNode = node
         scene.rootNode.addChildNode(node)
 
-        let appear = SCNAction.fadeIn(duration: 0.22)
+        let strength = Self.strength(behind: behind)
+        let appear = SCNAction.fadeOpacity(to: strength.high, duration: 0.22)
         appear.timingMode = .easeOut
         let breathe = SCNAction.sequence([
-            .fadeOpacity(to: 0.65, duration: 0.5),
-            .fadeOpacity(to: 1.0, duration: 0.5),
+            .fadeOpacity(to: strength.low, duration: 0.5),
+            .fadeOpacity(to: strength.high, duration: 0.5),
         ])
         node.runAction(.sequence([appear, .repeatForever(breathe)]))
     }
