@@ -265,7 +265,12 @@ def build_project():
         'IPHONEOS_DEPLOYMENT_TARGET': DEPLOYMENT_TARGET,
         'SDKROOT': 'iphoneos',
         'SWIFT_VERSION': SWIFT_VERSION,
-        'TARGETED_DEVICE_FAMILY': '1,2',
+        # iPhone only. An iPad build would have to earn its layout, and
+        # nobody has ever looked at one; shipping it untested to satisfy a
+        # checkbox is how you get a one-star review from a stretched phone
+        # screen. Apple also now requires an iPad app to support multitasking,
+        # which is what UIRequiresFullScreen used to opt out of.
+        'TARGETED_DEVICE_FAMILY': '1',
     }
     debug = dict(shared, **{
         'DEBUG_INFORMATION_FORMAT': 'dwarf',
