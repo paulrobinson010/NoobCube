@@ -211,6 +211,57 @@ final class CubeAlignmentTests: XCTestCase {
         }
     }
 
+    /// A cube whose own position has drifted is no longer a dead end.
+    ///
+    /// Its turns are still perfectly good, so every way of holding it stays a
+    /// candidate and the child's own moves rule the wrong ones out.
+    func testADriftedCubeKeepsEveryGripAsACandidate() {
+        var generator = SeededGenerator(seed: 12)
+        let scanned = CubeState.solved.applying(randomScramble(using: &generator))
+        let drifted = scanned.applying("R")
+        XCTAssertEqual(CubeAlignment.possibilities(cube: drifted, scanned: scanned).count, 24,
+                       "nothing is known yet, so nothing may be ruled out")
+        // And when it does agree, there is exactly one.
+        XCTAssertEqual(CubeAlignment.possibilities(cube: scanned, scanned: scanned).count, 1)
+    }
+
+    /// The whole point of keeping the candidates: the move the app asked for
+    /// narrows them, and they all read the turn the same way meanwhile.
+    func testTheGripIsLearnedFromTheTurnsThatWereAskedFor() {
+        var generator = SeededGenerator(seed: 8)
+        let scanned = CubeState.solved.applying(randomScramble(using: &generator))
+
+        for truth in CubeAlignment.allGrips {
+            let held = truth.reduce(scanned) { $0.applying($1).relabelled() }
+            var candidates = CubeAlignment.possibilities(cube: held.applying("R"), scanned: scanned)
+            XCTAssertEqual(candidates.count, 24, "a drifted cube starts knowing nothing")
+
+            guard case .found(let real) =
+                    CubeAlignment.matching(cube: held, scanned: scanned) else {
+                return XCTFail("the test's own grip should be recoverable")
+            }
+
+            var turns = 0
+            for asked in [Move(.R), Move(.U, .counterClockwise), Move(.F, .half), Move(.L)] {
+                // What the cube calls the move the child was asked to make.
+                guard let theirs = real.appFace.first(where: { $0.value == asked.base.face })
+                        .map({ Move(MoveBase(rawValue: $0.key.letter)!, asked.amount) }) else {
+                    return XCTFail("every app face is some cube face")
+                }
+                let fitting = candidates.filter { $0.appMove(for: theirs) == asked }
+                XCTAssertFalse(fitting.isEmpty, "the true grip must always survive")
+                XCTAssertTrue(fitting.allSatisfy { $0.appMove(for: theirs) == asked },
+                              "every survivor must read the turn the same way")
+                candidates = fitting
+                turns += 1
+                if candidates.count == 1 { break }
+            }
+            XCTAssertEqual(candidates.count, 1, "the grip should come down to one")
+            XCTAssertEqual(candidates[0].appFace, real.appFace)
+            XCTAssertLessThanOrEqual(turns, 3, "and within three turns")
+        }
+    }
+
     /// A solved cube looks the same from every side, so no grip can be picked
     /// out. There is nothing to solve from there, so nothing is lost.
     func testASolvedCubeCannotSayWhichWayUpItIs() {

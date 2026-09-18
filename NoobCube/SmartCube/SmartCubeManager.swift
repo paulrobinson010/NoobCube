@@ -52,15 +52,25 @@ final class SmartCubeManager: NSObject, ObservableObject {
     /// be asked to solve it first.
     @Published private(set) var cubeState: CubeState?
 
-    /// Which way round the cube is being held, once a scan has settled it.
+    /// The ways round the cube could be being held.
     ///
-    /// Until this is known the cube's turns cannot be put into the app's words:
-    /// the cube's "R" is whichever side of it happens to be on the right, and
-    /// nothing says that is the side the child is calling right.
-    @Published private(set) var alignment: CubeAlignment?
+    /// One once it is known, and until then every way that is still possible.
+    /// The cube's "R" is whichever side of it happens to be on the right, and
+    /// nothing says that is the side the child is calling right — but the app
+    /// knows which move it asked for, so each turn rules out the ways of
+    /// holding it that would have made the turn something else.
+    @Published private(set) var grips: [CubeAlignment] = []
 
-    /// Whether turns can be read as the faces the child is being told about.
-    var isFollowing: Bool { isConnected && alignment != nil && cubeState != nil }
+    /// The grip, once there is only one left it could be.
+    var alignment: CubeAlignment? { grips.count == 1 ? grips[0] : nil }
+
+    /// Whether the cube is worth listening to at all. It is, long before the
+    /// grip is settled: a turn every candidate reads the same way is a turn we
+    /// can act on.
+    var isFollowing: Bool { isConnected && !grips.isEmpty && cubeState != nil }
+
+    /// Whether the grip is still being worked out from the turns.
+    var isStillWorkingOutTheGrip: Bool { grips.count > 1 }
 
     /// Whether the cube has said what it looks like yet.
     var hasSaidWhatItLooksLike: Bool { cubeState != nil }
@@ -86,23 +96,24 @@ final class SmartCubeManager: NSObject, ObservableObject {
     func align(toScan scanned: CubeState) -> CubeAlignment.Match? {
         guard let cubeState else {
             note("No position from the cube yet, so nothing to line up against")
-            alignment = nil
+            grips = []
             return nil
         }
         let match = CubeAlignment.matching(cube: cubeState, scanned: scanned)
+        grips = CubeAlignment.possibilities(cube: cubeState, scanned: scanned)
         switch match {
         case .found(let found):
-            alignment = found
             note("Lined up with the scan: " + found.appFace
                     .sorted { $0.key.rawValue < $1.key.rawValue }
                     .map { "\($0.key.letter)->\($0.value.letter)" }
                     .joined(separator: " "))
         case .tooSymmetricToTell:
-            alignment = .identity
             note("Cube looks the same every way round, so any grip will do")
         case .cubeDisagrees:
-            alignment = nil
-            note("The cube's own position does not match the scan")
+            // Not a dead end any more. Its turns are still good, so the grip
+            // gets worked out from them over the next move or two.
+            note("The cube's own position does not match the scan — "
+                 + "working the grip out from your turns instead")
         }
         return match
     }
@@ -113,7 +124,19 @@ final class SmartCubeManager: NSObject, ObservableObject {
     /// cube exactly as it is being held, so the whole-cube turns the old plan
     /// had already made are spent and must not be counted a second time.
     func reground(to alignment: CubeAlignment) {
-        self.alignment = alignment
+        grips = [alignment]
+    }
+
+    /// Rule out the ways of holding the cube that a turn has just disproved.
+    func narrow(to remaining: [CubeAlignment]) {
+        guard !remaining.isEmpty, remaining.count < grips.count else { return }
+        grips = remaining
+        if remaining.count == 1 {
+            note("Grip settled from your turns: " + remaining[0].appFace
+                    .sorted { $0.key.rawValue < $1.key.rawValue }
+                    .map { "\($0.key.letter)->\($0.value.letter)" }
+                    .joined(separator: " "))
+        }
     }
 
     /// The child says the cube is solved right now. The only position a cube
@@ -121,7 +144,7 @@ final class SmartCubeManager: NSObject, ObservableObject {
     /// idea of itself has drifted.
     func startFromSolved() {
         cubeState = .solved
-        alignment = .identity
+        grips = [.identity]
         lastMoveSerial = nil
         note("Told it is solved right now")
     }
@@ -194,7 +217,7 @@ final class SmartCubeManager: NSObject, ObservableObject {
         cipher = nil
         generation = nil
         cubeState = nil
-        alignment = nil
+        grips = []
         hasSeenPosition = false
         lastMoveSerial = nil
         status = .idle
@@ -258,7 +281,7 @@ final class SmartCubeManager: NSObject, ObservableObject {
             // way round the cube is, the running tally is the thing to trust:
             // a late position message would otherwise undo turns already
             // counted.
-            if alignment == nil {
+            if grips.isEmpty {
                 cubeState = state
             }
         case .battery(let percent):
@@ -376,7 +399,7 @@ extension SmartCubeManager: CBCentralManagerDelegate {
                                     error: Error?) {
         Task { @MainActor in
             self.cubeState = nil
-            self.alignment = nil
+            self.grips = []
             self.status = .idle
         }
     }

@@ -49,6 +49,16 @@ def faces_after(grip):
     return {turned[CENTRE[f]]: f for f in cube.FACES}
 
 
+def possibilities(cube_state, scanned):
+    """Every way the cube could be held: one when it agrees, all 24 when not.
+
+    A cube whose own idea of itself has drifted still reports turns perfectly
+    well, so the grip is learned from those instead of given up on.
+    """
+    hits = [g for g in GRIPS if regripping(cube_state, g) == scanned]
+    return hits or list(GRIPS)
+
+
 def matching(cube_state, scanned):
     """('found', grip) | ('too symmetric', None) | ('disagrees', None)"""
     hits = [g for g in GRIPS if regripping(cube_state, g) == scanned]
@@ -170,6 +180,65 @@ def check_through_a_solve(trials=120):
     print('ALL PASS')
 
 
+def check_learning_the_grip(trials=300):
+    """When the cube's own position is wrong, the turns still give the grip.
+
+    The app knows which move it asked for. Every way of holding the cube that
+    would have made the reported turn *be* that move survives; the rest are
+    ruled out. The survivors all agree on what the turn was — that is what put
+    them in the set — so the move can be acted on while the grip comes down.
+    """
+    import solver
+    import verify_steps
+    import statistics
+
+    rng = random.Random(5)
+    settled_after, never = [], 0
+
+    for _ in range(trials):
+        start = cube.apply(cube.SOLVED, verify_steps.scramble(rng))
+        moves = solver.solve(start).all_moves()
+        truth = rng.choice(GRIPS)              # how it is really being held
+
+        # Nothing is known: the cube's own position disagreed with the scan.
+        candidates, done, settled = list(GRIPS), [], None
+
+        for move in moves:
+            if move[0] in 'xyz':
+                # A whole-cube turn moves the app's frame, so every candidate
+                # moves with it — including the real one.
+                candidates = [g + [move] for g in candidates]
+                truth = truth + [move]
+                done.append(move)
+                continue
+
+            faces = faces_after(truth)
+            theirs = next(f for f in cube.FACES if faces[f] == move[0]) + move[1:]
+
+            fits = [g for g in candidates if app_move(g, theirs) == move]
+            assert fits, 'the true grip must always survive'
+            assert all(app_move(g, theirs) == move for g in fits), \
+                'every survivor must read the turn the same way'
+            candidates = fits
+            done.append(move)
+            if settled is None and len(candidates) == 1:
+                settled = len([m for m in done if m[0] not in 'xyz'])
+
+        if settled is None:
+            never += 1
+        else:
+            settled_after.append(settled)
+
+    print('grip settled after (turns)  median %d, 90th %d, worst %d'
+          % (statistics.median(settled_after),
+             sorted(settled_after)[int(0.9 * len(settled_after))],
+             max(settled_after)))
+    print('never settled              ', never)
+    assert never == 0
+    print('ALL PASS')
+
+
 if __name__ == '__main__':
     check()
     check_through_a_solve()
+    check_learning_the_grip()

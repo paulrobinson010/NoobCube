@@ -149,8 +149,6 @@ final class AppModel: ObservableObject {
         // told is the right. Every whole-cube turn the plan has asked for since
         // the scan moved the child's frame and left the cube's where it was, so
         // the grip is caught up from the plan rather than tallied as it goes.
-        guard let base = smartCube.alignment else { return }
-
         // A cube cannot feel itself being turned round in your hands, so that
         // one instruction still offers a tap. But turning a layer at all is the
         // child saying they have moved on, so it dismisses the instruction
@@ -160,8 +158,32 @@ final class AppModel: ObservableObject {
         // Which means the turn has to be read in the frame they are holding it
         // in *now*, with the rotation counted, not the one before it.
         let spins = session.pendingWholeCubeTurns
-        let here = base.regripped(by: session.wholeCubeTurnsSoFar + spins)
-        guard let move = here.appMove(for: cubeMove) else { return }
+        let spinsSoFar = session.wholeCubeTurnsSoFar + spins
+        let here = smartCube.grips.map { $0.regripped(by: spinsSoFar) }
+        guard !here.isEmpty else { return }
+
+        // The move we asked for is what narrows an unknown grip: only the ways
+        // of holding the cube that make this turn *be* that move survive. They
+        // all agree on what the turn was — that is what put them in the set —
+        // so it can be acted on now, while the grip is still coming down.
+        let asked = spins.isEmpty ? session.currentMove : session.moveAfterWholeCubeTurns
+        let fitting = asked.map { want in
+            here.indices.filter { here[$0].appMove(for: cubeMove) == want }
+        } ?? []
+
+        if !fitting.isEmpty {
+            smartCube.narrow(to: fitting.map { smartCube.grips[$0] })
+        } else if smartCube.isStillWorkingOutTheGrip {
+            // Nothing fits, and we do not yet know the grip well enough to say
+            // what they turned. Guessing would mean telling a child they turned
+            // the wrong thing on no evidence at all.
+            narrator.say("I\u{2019}m still working out which way round your cube is. "
+                         + "Try the move I asked for.")
+            return
+        }
+
+        let reading = fitting.first.map { here[$0] } ?? here[0]
+        guard let move = reading.appMove(for: cubeMove) else { return }
 
         if spins.isEmpty {
             session.handleSmartCubeTurn(move)
@@ -171,8 +193,17 @@ final class AppModel: ObservableObject {
     }
 
     /// Work the plan out afresh from the cube's own position.
+    ///
+    /// Only possible once the grip is known. While it is still being worked out
+    /// the cube's own position cannot be put into the child's frame, so the
+    /// camera is the way back rather than a guess.
     func replanFromSmartCube() {
         guard let session, let cubeState = smartCube.cubeState else { return }
+        guard smartCube.alignment != nil else {
+            narrator.say("Let me look at your cube again.")
+            rescan()
+            return
+        }
         // Said the way the child is holding it, not the way the cube thinks of
         // itself, so the plan talks about the faces they can actually see.
         let alignment = (smartCube.alignment ?? .identity)
