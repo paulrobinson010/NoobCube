@@ -22,6 +22,20 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<!-- Export compliance, answered here so TestFlight stops asking on every
+	     build. "Non-exempt" is the operative word: this is not a claim that the
+	     app contains no encryption. It does — GANProtocol decrypts the AES-128
+	     messages a GAN smart cube sends over Bluetooth, because that protocol is
+	     encrypted and there is no other way to read it.
+
+	     It is declared exempt because the app implements no cryptography of its
+	     own: it calls CommonCrypto, which is part of iOS, and does so only to
+	     read a device protocol. Nothing is encrypted for transmission, there is
+	     no key exchange, and no data of the child's is protected or sent
+	     anywhere by it. If that reading is ever judged wrong, this key is the
+	     one to change. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>NSCameraUsageDescription</key>
 	<string>NoobCube uses the camera to look at your Rubik’s cube and work out what colour each sticker is.</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
