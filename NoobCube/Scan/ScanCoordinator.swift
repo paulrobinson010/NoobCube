@@ -334,32 +334,6 @@ final class ScanCoordinator: ObservableObject {
         return ColourClassifier.cost(even[4], as: Self.colour(for: face))
     }
 
-    /// Whether every one of the nine squares reads clearly as some colour.
-    ///
-    /// If a side can be read, it should be written down; if one square cannot
-    /// be read at all, no amount of holding still will help and filing it only
-    /// makes work. The measure is the worst square, not the average, so one bad
-    /// square is enough to wait for a better moment.
-    ///
-    /// What this catches is a square that is not a colour: a thumb over it, the
-    /// cube's own edge inside the crop, a sticker lost to shadow. What it does
-    /// not catch — and cannot — is a picture washed out evenly, because a
-    /// washed-out square reads as a white sticker perfectly well. That one is
-    /// caught at the end, where six sides have to add up to a cube.
-    ///
-    /// Measured on synthetic faces: a real face's worst square is 0.18 in
-    /// daylight, 0.29 in a dim room and 0.24 under ordinary glare, so 0.45
-    /// takes 97 to 100% of real faces while turning away a square that is
-    /// nothing at all.
-    static func readsClearly(_ reading: [RGBSample]) -> Bool {
-        guard reading.count == 9 else { return false }
-        let even = ColourClassifier.relit(face: reading, expecting: nil)
-        return even.allSatisfy { ColourClassifier.costOfBestGuess($0) <= clearEnoughToWriteDown }
-    }
-
-    /// How poorly the worst square on a side may read and still be believed.
-    static let clearEnoughToWriteDown = 0.45
-
     /// Two readings of the same nine squares, near enough.
     ///
     /// Raw pixels rather than colour names: what colour a square is called is
@@ -391,16 +365,6 @@ final class ScanCoordinator: ObservableObject {
 
         guard camera.isCubeInFrame else {
             narrator.say("I can't see your cube. Hold it in front of the camera.")
-            return
-        }
-
-        // If every square can be read, write the side down. If they cannot,
-        // say so and wait: a look that cannot be read is not a look, and
-        // filing it makes work for the child rather than saving them any.
-        guard Self.readsClearly(reading) else {
-            problem = "I can't make out all nine squares. Try moving it out of "
-                    + "the light a bit."
-            narrator.say("I can't quite see all the colours. Move it out of the light a bit.")
             return
         }
 

@@ -22,9 +22,6 @@ final class SolveSession: ObservableObject {
     }
 
     enum Phase: Hashable {
-        /// Saying which piece is about to move and where it is going, before
-        /// any of the moves that do it.
-        case introducingStep
         /// Working through the current stage.
         case coaching
         /// The child said they finished a stage themselves; offer a re-scan.
@@ -189,9 +186,7 @@ final class SolveSession: ObservableObject {
     }
 
     func announceCurrentStep() {
-        if phase == .introducingStep, let step = currentStep {
-            narrator.say(explanation(of: step))
-        } else if help == .moveByMove, currentMove != nil {
+        if help == .moveByMove, currentMove != nil {
             announceCurrentMove()
         } else {
             announceStage()
@@ -248,61 +243,36 @@ final class SolveSession: ObservableObject {
         }
     }
 
-    /// Say what the next piece is and where it is going, before moving it.
+    /// Begin a new step: the piece being worked on has changed, so the reason
+    /// behind the next few moves has too.
     ///
-    /// This is the part that turns copying into learning. The moves on their
-    /// own are a recipe; knowing that *this* piece is going into *that* gap,
-    /// and that you line it up first, is the thing a child can still do
-    /// tomorrow without the app.
+    /// There used to be a screen here, explaining which piece was about to move
+    /// and where it was going, with a button to get past it. A five year old
+    /// does not read a screen and wait — he turns the cube, because the cube is
+    /// in his hands and the app just showed him one. Every screen that is not a
+    /// move is a screen he tries to do a move on.
+    ///
+    /// So the reason lives in a line above the move now, with an "i" for the
+    /// rest of it, and every step is a move.
     func introduceStep() {
         stepStartCube = displayCube
-        guard help == .moveByMove, let step = currentStep, currentMove != nil else {
-            phase = .coaching
-            presentCurrentMove()
-            return
-        }
-        phase = .introducingStep
-        scene.hideTurnArrow()
-        showStepMarks()
-        narrator.say(explanation(of: step))
-    }
-
-    /// Show what this step is about: the one square, and where it is going.
-    func showStepMarks() {
-        guard let step = currentStep else { return }
-
-        // Turning the whole cube moves nothing *on* the cube, so an arrow from
-        // one square to another says nothing — it just draws a line between two
-        // places that stay exactly where they are relative to each other. The
-        // curled arrow, which means "spin this round", is the honest picture.
-        if let spin = step.moves.first, step.moves.allSatisfy(\.isWholeCubeTurn) {
-            scene.highlight(square: nil)
-            scene.hideJourney()
-            scene.showTurnArrow(for: spin)
-            return
-        }
-
-        scene.hideTurnArrow()
-        scene.highlight(square: step.marker)
-        if let marker = step.marker, let target = step.target {
-            scene.showJourney(from: marker, to: target)
-        } else {
-            scene.hideJourney()
-        }
-    }
-
-    /// Whether the little rolling demo has a set of moves worth showing.
-    var showsStepDemo: Bool {
-        guard help == .moveByMove, phase == .introducingStep || phase == .coaching else {
-            return false
-        }
-        return !(currentStep?.moves.isEmpty ?? true)
-    }
-
-    /// Get on with the moves for the step just explained.
-    func beginStepMoves() {
-        phase = .coaching
         presentCurrentMove()
+    }
+
+    /// The one line of why, for the banner over the move.
+    var reasonForThisStep: String? {
+        guard let step = currentStep, !step.piece.isEmpty, step.places else { return nil }
+        return "\(name(of: step).sentenceCased) goes home"
+    }
+
+    /// The whole of it, for the child who taps the "i".
+    var wholeReasonForThisStep: String? {
+        currentStep.map(explanation(of:))
+    }
+
+    /// Whether the little rolling demo has a move worth showing.
+    var showsStepDemo: Bool {
+        help == .moveByMove && currentMove != nil
     }
 
     private func playSequence(_ moves: [Move], completion: @MainActor @escaping () -> Void) {
@@ -435,7 +405,6 @@ final class SolveSession: ObservableObject {
 
         // Turning the cube is the child saying they are ready, so a step being
         // explained gets on with it rather than waiting for a tap as well.
-        if phase == .introducingStep { beginStepMoves() }
         confirmCurrentMove()
     }
 
@@ -492,7 +461,6 @@ final class SolveSession: ObservableObject {
     /// and getting on with it are not two taps.
     func confirmWholeCubeTurn() {
         guard !isBusy, currentMove?.isWholeCubeTurn == true else { return }
-        if phase == .introducingStep { beginStepMoves() }
         confirmCurrentMove()
     }
 

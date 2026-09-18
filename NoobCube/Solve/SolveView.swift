@@ -9,6 +9,7 @@ struct SolveView: View {
     var onFinish: () -> Void
 
     @State private var showingSteps = false
+    @State private var showingWhy = false
     @State private var algorithmCovered = false
 
     var body: some View {
@@ -61,15 +62,25 @@ struct SolveView: View {
             StageChecklistSheet(stages: session.plan.stages,
                                 currentKind: session.stage?.kind)
         }
+        .sheet(isPresented: $showingWhy) {
+            WhySheet(heading: session.currentStep.map(session.heading(of:)) ?? "Why this move",
+                     reason: session.wholeReasonForThisStep ?? "",
+                     stage: session.stage?.kind,
+                     onSpeak: { narrator.say(session.wholeReasonForThisStep ?? "") })
+        }
     }
 
     // MARK: - Pieces
 
-    /// The whole set of moves, playing over and over beside the big cube.
+    /// The one move in hand, playing over and over beside the big cube.
+    ///
+    /// It used to roll the whole set the step was made of, which answers a
+    /// question nobody was asking: the child is doing *this* turn, and watching
+    /// six of them go by makes it harder to see which one that is, not easier.
     @ViewBuilder
     private var demoCorner: some View {
-        if session.showsStepDemo, let step = session.currentStep {
-            StepDemoView(moves: step.moves, colours: session.stepStartCube.colours)
+        if session.showsStepDemo, let move = session.currentMove {
+            StepDemoView(moves: [move], colours: session.displayCube.colours)
                 .padding(.trailing, 18)
                 .padding(.bottom, 2)
                 .transition(.scale.combined(with: .opacity))
@@ -91,51 +102,60 @@ struct SolveView: View {
         .padding(.top, 12)
     }
 
-    /// What is about to happen, before it happens.
+    @ViewBuilder
+    private var instructionCard: some View {
+        VStack(spacing: 10) {
+            whyBanner
+            movesCard
+        }
+    }
+
+    /// One line of why, over the move it explains.
     ///
-    /// One line, because it is one thing: either getting a square where we can
-    /// work on it, or the move that puts it home. Two jobs in one paragraph is
-    /// what made this unreadable, and too long for the screen besides.
-    private func stepCard(_ step: SolveStep) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+    /// The reason used to have a screen of its own, with a button to get past
+    /// it, and it was the screen the child kept trying to turn the cube on.
+    /// Every screen that is not a move is a screen he does a move on, so the
+    /// reason comes to the move instead of the move waiting behind the reason.
+    @ViewBuilder
+    private var whyBanner: some View {
+        if session.help == .moveByMove,
+           let why = session.reasonForThisStep,
+           let step = session.currentStep {
             HStack(spacing: 8) {
-                Image(systemName: step.purpose == .positioning
-                      ? "arrow.up.and.down.and.arrow.left.and.right"
-                      : "hand.point.up.left.fill")
-                    .font(.system(size: 14, weight: .black))
-                    .foregroundStyle(step.purpose == .positioning ? Theme.attention : Theme.done)
-                Text(session.heading(of: step))
-                    .font(.brand(size: 20, weight: .heavy))
-                    .foregroundStyle(.white)
+                Image(systemName: "hand.point.up.left.fill")
+                    .font(.system(size: 12, weight: .black))
+                Text(why)
+                    .font(.brand(size: 15, weight: .bold))
+                    .lineLimit(2)
                 Spacer(minLength: 0)
                 ForEach(Array(session.colours(of: step).enumerated()), id: \.offset) { _, colour in
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
                         .fill(colour.swiftUIColor)
-                        .frame(width: 22, height: 22)
+                        .frame(width: 16, height: 16)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            RoundedRectangle(cornerRadius: 5, style: .continuous)
                                 .strokeBorder(.black.opacity(0.35), lineWidth: 1)
                         )
                 }
+                if step.text != nil {
+                    Button {
+                        showingWhy = true
+                    } label: {
+                        Image(systemName: "info.circle.fill")
+                            .font(.system(size: 18, weight: .bold))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Theme.attention)
+                    .accessibilityLabel("Why am I doing this?")
+                }
             }
-
-            if let text = step.text {
-                Text(text)
-                    .font(.brand(size: 17, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.92))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .cardBackground(stripe: step.purpose == .positioning ? Theme.attention : Theme.done)
-    }
-
-    @ViewBuilder
-    private var instructionCard: some View {
-        if session.phase == .introducingStep, let step = session.currentStep {
-            stepCard(step)
-        } else {
-            movesCard
+            .foregroundStyle(Theme.muted)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Theme.done.opacity(0.12))
+            )
         }
     }
 
@@ -183,19 +203,6 @@ struct SolveView: View {
                     .buttonStyle(BigButtonStyle())
                 Button("Keep going without looking") { session.skipToNextStage() }
                     .buttonStyle(BigButtonStyle(tint: Theme.muted, isProminent: false))
-            }
-
-        case .introducingStep:
-            // A whole-cube turn is the one thing that still wants a tap, and it
-            // wants it here too — otherwise a step that opens with one leaves
-            // nothing to press and nothing the cube can feel.
-            switch session.prompt {
-            case .turnTheWholeCube:
-                turnTheWholeCube
-            case .tapWhenDone:
-                nextButton { session.beginStepMoves() }
-            case .watching, .putItBack:
-                watchingPrompt("Turn your cube when you're ready.")
             }
 
         case .coaching:
@@ -335,4 +342,68 @@ struct SolveView: View {
         .disabled(session.isBusy || !isEnabled)
     }
 
+}
+
+/// The rest of the reason, for the child who taps the "i".
+///
+/// It is a sheet rather than a step because a step is a thing you do. This is
+/// a thing you read, or more likely a thing a grown-up reads out — which is why
+/// it can also be spoken, and why it says which of the eight steps we are on.
+struct WhySheet: View {
+    let heading: String
+    let reason: String
+    let stage: SolveStage.Kind?
+    var onSpeak: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text(heading)
+                        .font(.brand(size: 26, weight: .heavy))
+                        .foregroundStyle(.white)
+
+                    if !reason.isEmpty {
+                        Text(reason)
+                            .font(.brand(size: 18, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.92))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    if let stage {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(stage.title)
+                                .font(.brand(size: 17, weight: .bold))
+                                .foregroundStyle(Theme.done)
+                            Text(stage.why)
+                                .font(.brand(size: 16, weight: .medium))
+                                .foregroundStyle(Theme.muted)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .cardBackground(stripe: stage.tint)
+                    }
+
+                    Button {
+                        onSpeak()
+                    } label: {
+                        Label("Read it to me", systemImage: "speaker.wave.2.fill")
+                    }
+                    .buttonStyle(BigButtonStyle(isProminent: false))
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(20)
+            }
+            .background(Theme.background.ignoresSafeArea())
+            .navigationTitle("Why this move?")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Got it") { dismiss() }
+                }
+            }
+        }
+    }
 }
