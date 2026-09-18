@@ -211,6 +211,29 @@ final class CubeAlignmentTests: XCTestCase {
         }
     }
 
+    /// After a scan, the cube's own position is corrected to match what the
+    /// camera saw. That is what stops the two ever disagreeing again — and a
+    /// disagreement is what used to let a correct scan be thrown away and
+    /// replaced with the cube's wrong idea of itself.
+    func testAScanCanBePutBackIntoTheCubesOwnFrame() {
+        var generator = SeededGenerator(seed: 44)
+        for _ in 0..<20 {
+            let scanned = CubeState.solved.applying(randomScramble(using: &generator))
+            for grip in CubeAlignment.allGrips {
+                let asTheCubeSeesIt = regripping(scanned, by: grip)
+                guard case .found(let alignment) =
+                        CubeAlignment.matching(cube: asTheCubeSeesIt, scanned: scanned) else {
+                    return XCTFail("no single grip fitted")
+                }
+                // Turning a grip back is turning it the other way.
+                XCTAssertEqual(alignment.cubeState(of: scanned), asTheCubeSeesIt,
+                               "the scan, said the way the cube thinks of itself")
+                XCTAssertEqual(alignment.appState(of: alignment.cubeState(of: scanned)), scanned,
+                               "and back again, unchanged")
+            }
+        }
+    }
+
     /// A cube whose own position has drifted is no longer a dead end.
     ///
     /// Its turns are still perfectly good, so every way of holding it stays a

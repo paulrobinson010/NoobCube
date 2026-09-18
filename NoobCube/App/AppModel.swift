@@ -91,27 +91,7 @@ final class AppModel: ObservableObject {
         scene.clearHighlight()
         session?.cubeIsFollowing = smartCube.isFollowing
         screen = .solving
-        // The cube may have been turned between the picture and pressing the
-        // button. Better to notice here than to let the first real turn be
-        // called wrong when it was the plan that had gone stale.
-        if smartCube.isFollowing, let session, cubeHasMovedOn(from: session) {
-            replanFromSmartCube()
-        }
         session?.startStage()
-    }
-
-    /// Whether the cube is somewhere other than where the plan expects it.
-    ///
-    /// Compared as colours rather than as solver letters, because that is what
-    /// both sides can be said in without another conversion that could throw.
-    private func cubeHasMovedOn(from session: SolveSession) -> Bool {
-        guard let cubeState = smartCube.cubeState, let alignment = smartCube.alignment else {
-            return false
-        }
-        let asHeld = alignment.regripped(by: session.wholeCubeTurnsSoFar)
-        let onTheCube = asHeld.appState(of: cubeState).facelets
-            .map { CubeColour.defaultColour(for: $0) as CubeColour? }
-        return onTheCube != session.displayCube.colours
     }
 
     /// The child wants the app to look at the cube again, part way through.
@@ -194,12 +174,13 @@ final class AppModel: ObservableObject {
 
     /// Work the plan out afresh from the cube's own position.
     ///
-    /// Only possible once the grip is known. While it is still being worked out
-    /// the cube's own position cannot be put into the child's frame, so the
-    /// camera is the way back rather than a guess.
+    /// Only possible once the grip is known *and* the cube's own position has
+    /// been put right by a scan. Either missing, and the camera is the way back
+    /// rather than a guess — planning a solve from a position the cube has got
+    /// wrong is how a correct scan ends up replaced by a wrong one.
     func replanFromSmartCube() {
         guard let session, let cubeState = smartCube.cubeState else { return }
-        guard smartCube.alignment != nil else {
+        guard smartCube.alignment != nil, smartCube.positionIsTrustworthy else {
             narrator.say("Let me look at your cube again.")
             rescan()
             return

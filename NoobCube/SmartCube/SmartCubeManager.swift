@@ -72,6 +72,14 @@ final class SmartCubeManager: NSObject, ObservableObject {
     /// Whether the grip is still being worked out from the turns.
     var isStillWorkingOutTheGrip: Bool { grips.count > 1 }
 
+    /// Whether the cube's own position is worth planning a solve from.
+    ///
+    /// Only after the camera has put it right, or the child has said it is
+    /// solved. A cube whose position disagreed with the scan keeps reporting
+    /// turns perfectly well — which is enough to follow along — but its idea of
+    /// where it *is* remains wrong, and a plan built on that would be wrong too.
+    @Published private(set) var positionIsTrustworthy = false
+
     /// Whether the cube has said what it looks like yet.
     var hasSaidWhatItLooksLike: Bool { cubeState != nil }
 
@@ -103,13 +111,20 @@ final class SmartCubeManager: NSObject, ObservableObject {
         grips = CubeAlignment.possibilities(cube: cubeState, scanned: scanned)
         switch match {
         case .found(let found):
+            // The camera has just seen the cube as it really is, so whatever
+            // the cube believed is replaced rather than merely agreed with.
+            // Nothing can drift apart again from here.
+            self.cubeState = found.cubeState(of: scanned)
+            positionIsTrustworthy = true
             note("Lined up with the scan: " + found.appFace
                     .sorted { $0.key.rawValue < $1.key.rawValue }
                     .map { "\($0.key.letter)->\($0.value.letter)" }
                     .joined(separator: " "))
         case .tooSymmetricToTell:
+            positionIsTrustworthy = true
             note("Cube looks the same every way round, so any grip will do")
         case .cubeDisagrees:
+            positionIsTrustworthy = false
             // Not a dead end any more. Its turns are still good, so the grip
             // gets worked out from them over the next move or two.
             note("The cube's own position does not match the scan — "
@@ -125,6 +140,7 @@ final class SmartCubeManager: NSObject, ObservableObject {
     /// had already made are spent and must not be counted a second time.
     func reground(to alignment: CubeAlignment) {
         grips = [alignment]
+        positionIsTrustworthy = true
     }
 
     /// Rule out the ways of holding the cube that a turn has just disproved.
@@ -145,6 +161,7 @@ final class SmartCubeManager: NSObject, ObservableObject {
     func startFromSolved() {
         cubeState = .solved
         grips = [.identity]
+        positionIsTrustworthy = true
         lastMoveSerial = nil
         note("Told it is solved right now")
     }
@@ -218,6 +235,7 @@ final class SmartCubeManager: NSObject, ObservableObject {
         generation = nil
         cubeState = nil
         grips = []
+        positionIsTrustworthy = false
         hasSeenPosition = false
         lastMoveSerial = nil
         status = .idle
@@ -400,6 +418,7 @@ extension SmartCubeManager: CBCentralManagerDelegate {
         Task { @MainActor in
             self.cubeState = nil
             self.grips = []
+            self.positionIsTrustworthy = false
             self.status = .idle
         }
     }

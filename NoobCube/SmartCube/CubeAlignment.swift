@@ -49,6 +49,17 @@ struct CubeAlignment: Equatable, Sendable {
         Self.regripping(cubeState, by: grip)
     }
 
+    /// A position the app knows about, said the way the cube thinks of itself.
+    ///
+    /// The camera is the one thing that can see the cube as it really is, so
+    /// after a scan the cube's own idea of itself is corrected to match rather
+    /// than left to disagree. Turning a grip back is just turning it the other
+    /// way: checked in `Tools/CubeReference` over 200 scrambles under every
+    /// grip, and exact every time.
+    func cubeState(of appState: CubeState) -> CubeState {
+        Self.regripping(appState, by: Move.invert(grip))
+    }
+
     /// The child turned the whole cube round: the app's frame moved with them,
     /// the cube's frame did not.
     func regripped(by rotations: [Move]) -> CubeAlignment {
