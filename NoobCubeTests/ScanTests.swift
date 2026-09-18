@@ -713,4 +713,65 @@ final class ScanTests: XCTestCase {
                 ColourClassifier.tooPoorToBelieve, "a lump of noise was taken for a cube")
         }
     }
+
+    // MARK: - A side with nothing on it
+
+    /// The bug: a solved white side was filed as the orange one, and nine
+    /// oranges written down in its place.
+    ///
+    /// Nine identical white squares under an amber lamp are nine identical
+    /// cream squares. The light cannot be worked out from a side where every
+    /// square reads the same — the test for it is that the palest square is
+    /// markedly paler than the strongest, and here they are the same square
+    /// over and over. So the side was read raw, and raw it is orange.
+    func testASolvedWhiteSideIsNotFiledAsTheOrangeOne() {
+        guard let whiteSide = CubeColourScheme.face(forCentre: .white) else {
+            return XCTFail("the scanning layout has no white side")
+        }
+        let nine = [CubeColour](repeating: .white, count: 9)
+        for haze in [0.0, 0.1, 0.3] {
+            let seen = look(nine, haze: haze)
+            XCTAssertEqual(ScanCoordinator.side(of: seen, askedFor: .white), whiteSide,
+                           "a solved white side was filed elsewhere under \(haze) glare")
+        }
+    }
+
+    /// And asking for white must not be able to *make* a side white. Worked
+    /// back from an orange square, "this is white" gives the colour of orange,
+    /// which is no lamp, and the answer is thrown away rather than used.
+    func testAskingForWhiteCannotTalkAnotherSideIntoBeingWhite() {
+        guard let whiteSide = CubeColourScheme.face(forCentre: .white) else {
+            return XCTFail("the scanning layout has no white side")
+        }
+        for colour in CubeColour.allCases where colour != .white {
+            let seen = look([CubeColour](repeating: colour, count: 9), haze: 0.1)
+            XCTAssertNotEqual(ScanCoordinator.side(of: seen, askedFor: .white), whiteSide,
+                              "a solved \(colour.rawValue) side was taken for the white one")
+        }
+    }
+
+    /// A uniform side has nothing on it to go on, so the evidence has to come
+    /// from another side. Once the white side has been taken, the room's light
+    /// is known, and every solved side reads as itself — including the yellow
+    /// one, which under an amber lamp reads orange without it.
+    func testAUniformSideIsReadUnderTheRoomsLight() {
+        let white = look([CubeColour](repeating: .white, count: 9), haze: 0.1)
+        guard let room = ColourClassifier.illuminant(onFace: white, expecting: .white) else {
+            return XCTFail("the white side should give the room's light")
+        }
+        for colour in CubeColour.allCases {
+            guard let home = CubeColourScheme.face(forCentre: colour) else { continue }
+            let seen = look([CubeColour](repeating: colour, count: 9), haze: 0.1)
+            XCTAssertEqual(ScanCoordinator.side(of: seen, under: room), home,
+                           "a solved \(colour.rawValue) side was misread under the room's light")
+        }
+        // Without it, the white and yellow ones are not: both read amber, and
+        // amber is orange. This is what the room's light is for.
+        for colour in [CubeColour.white, .yellow] {
+            guard let home = CubeColourScheme.face(forCentre: colour) else { continue }
+            let seen = look([CubeColour](repeating: colour, count: 9), haze: 0.1)
+            XCTAssertNotEqual(ScanCoordinator.side(of: seen), home,
+                              "this test no longer shows what it was written to show")
+        }
+    }
 }

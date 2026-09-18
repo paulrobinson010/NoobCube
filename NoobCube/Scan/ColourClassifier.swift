@@ -248,9 +248,40 @@ enum ColourClassifier {
     /// colours is not evidence of anything.
     private static let paleEnoughToBeWhite = 0.30
 
-    static func relit(face samples: [RGBSample], expecting centre: CubeColour?) -> [RGBSample] {
-        guard let light = illuminant(onFace: samples, expecting: centre) else { return samples }
-        return divide(samples, by: light)
+    /// One side's nine readings with the colour of the light taken out.
+    ///
+    /// `orUnder` is the room's own light, worked out from the sides already
+    /// seen, and it is what saves a side that has nothing on it to compare
+    /// anything with. Nine identical white squares under an amber lamp are nine
+    /// identical cream squares, and the test above — the palest markedly paler
+    /// than the strongest — cannot fire on a side where every square is the
+    /// same. There is no evidence *on* that side, so the evidence has to come
+    /// from another one; and a light measured off a different side cannot be
+    /// one this side chose to flatter itself.
+    static func relit(face samples: [RGBSample],
+                      expecting centre: CubeColour?,
+                      orUnder room: RGBSample? = nil) -> [RGBSample] {
+        if let light = illuminant(onFace: samples, expecting: centre) {
+            return divide(samples, by: light)
+        }
+        guard let room else { return samples }
+        return divide(samples, by: room)
+    }
+
+    /// The colour of the room, from however many sides can offer an opinion.
+    ///
+    /// Taken to the middle rather than averaged, so one side that read its
+    /// light badly cannot drag the rest with it.
+    static func middle(of lights: [RGBSample]) -> RGBSample? {
+        guard !lights.isEmpty else { return nil }
+        let middle = RGBSample(red: median(lights.map(\.red)),
+                               green: median(lights.map(\.green)),
+                               blue: median(lights.map(\.blue)))
+        let strongest = max(middle.red, max(middle.green, middle.blue))
+        guard strongest > 0.001 else { return nil }
+        return RGBSample(red: middle.red / strongest,
+                         green: middle.green / strongest,
+                         blue: middle.blue / strongest)
     }
 
     private static func divide(_ samples: [RGBSample], by light: RGBSample) -> [RGBSample] {
@@ -279,16 +310,7 @@ enum ColourClassifier {
                 lights.append(light)
             }
         }
-        guard !lights.isEmpty else { return nil }
-
-        let middle = RGBSample(red: median(lights.map(\.red)),
-                               green: median(lights.map(\.green)),
-                               blue: median(lights.map(\.blue)))
-        let strongest = max(middle.red, max(middle.green, middle.blue))
-        guard strongest > 0.001 else { return nil }
-        return RGBSample(red: middle.red / strongest,
-                         green: middle.green / strongest,
-                         blue: middle.blue / strongest)
+        return middle(of: lights)
     }
 
     private static func median(_ values: [Double]) -> Double {

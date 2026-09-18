@@ -155,20 +155,41 @@ final class ScanCoordinator: ObservableObject {
     /// side lands.
     private(set) var palette = ColourPalette.unmeasured
 
-    private func remeasurePalette() {
-        var looks: [Face: [RGBSample]] = [:]
+    /// The colour of the light in this room, from the sides already taken.
+    ///
+    /// One room, so one light. A side that cannot work its own light out — a
+    /// solved white one, where every square reads the same cream — is read
+    /// under this instead of read raw.
+    private(set) var roomLight: RGBSample?
+
+    private func relearnTheRoom() {
+        // The light first, from every side that can say anything about it, and
+        // only then the sides — so that a side with nothing on it is read under
+        // the same light as the rest rather than left raw beside them.
         var centres: [Face: CubeColour] = [:]
+        var lights: [RGBSample] = []
+        for (face, look) in lookAtSide {
+            let colour = Self.colour(for: face)
+            centres[face] = colour
+            if let light = ColourClassifier.illuminant(onFace: look, expecting: colour) {
+                lights.append(light)
+            }
+        }
+        roomLight = ColourClassifier.middle(of: lights)
+
+        var looks: [Face: [RGBSample]] = [:]
         for (face, look) in lookAtSide {
             looks[face] = ColourClassifier.relit(face: look,
-                                                 expecting: Self.colour(for: face))
-            centres[face] = Self.colour(for: face)
+                                                 expecting: centres[face],
+                                                 orUnder: roomLight)
         }
         palette = ColourPalette.measured(fromLooks: looks, centres: centres)
     }
 
     private func relit(_ samples: [RGBSample]) -> [RGBSample] {
         ColourClassifier.relit(face: samples,
-                               expecting: currentStep.map { Self.colour(for: $0.face) })
+                               expecting: currentStep.map { Self.colour(for: $0.face) },
+                               orUnder: roomLight)
     }
 
     /// True once the camera is looking at something other than the side just
@@ -239,7 +260,12 @@ final class ScanCoordinator: ObservableObject {
         let reading = camera.steadyReading.count == 9 ? camera.steadyReading : camera.liveSamples
         guard reading.count == 9 else { return forgetTheNaming() }
 
-        let named = palette.names(onFace: ColourClassifier.relit(face: reading, expecting: nil))
+        // The very names on screen, not a second opinion about them. They used
+        // to be worked out without the side being asked for, so a solved white
+        // side showed nine steady whites while this saw oranges flickering
+        // against creams, and the two seconds of no change never came: the app
+        // simply would not take the picture.
+        let named = palette.names(onFace: relit(reading))
         guard named == naming else {
             naming = named
             namingSince = Date()
@@ -336,8 +362,37 @@ final class ScanCoordinator: ObservableObject {
     ///
     /// Good light was never the problem, which is why this survived every test
     /// it had: they all used clean colours.
-    static func side(of reading: [RGBSample]) -> Face {
-        let even = ColourClassifier.relit(face: reading, expecting: nil)
+    ///
+    /// `askedFor` and `under` are the two ways a side that has nothing on it
+    /// can still be read. Nine identical white squares under an amber lamp are
+    /// nine identical cream squares, and the light cannot be worked out from a
+    /// side where every square is the same — so a solved white side was being
+    /// filed as the orange one, and nine oranges written down in its place.
+    ///
+    /// The side the child was *asked* for is outside evidence, and it comes
+    /// with its own check built in: worked back from a white square the answer
+    /// is the colour of the lamp, and worked back from an orange square being
+    /// shown instead it is the colour of orange, which
+    /// ``ColourClassifier/illuminant(from:knownToBe:)`` throws out as a colour
+    /// no lamp is. White is also the only colour bright enough in all three
+    /// channels to divide back out of at all, so asking for a side can only
+    /// ever argue one *into being white* — and over every side that could be
+    /// shown while white was asked for, in four rooms, not one was.
+    ///
+    /// `under` is the room's own light from the sides already taken, and it is
+    /// what covers the rest: a solved white or yellow side turning up while a
+    /// different side is being asked for still reads amber, and amber is a very
+    /// good orange. Measured over all 144 combinations of asked-for side, shown
+    /// side and room, with a lighting gradient across the face and sensor noise
+    /// on top — `Tools/CubeReference/colours.py`:
+    ///
+    ///     nothing but the side itself   138/144
+    ///     knowing which side was asked   139/144
+    ///     under the room's light         144/144
+    static func side(of reading: [RGBSample],
+                     askedFor centre: CubeColour? = nil,
+                     under room: RGBSample? = nil) -> Face {
+        let even = ColourClassifier.relit(face: reading, expecting: centre, orUnder: room)
         guard even.count == 9 else { return .U }
         return Face.allCases.min {
             ColourClassifier.cost(even[4], as: Self.colour(for: $0))
@@ -346,9 +401,11 @@ final class ScanCoordinator: ObservableObject {
     }
 
     /// What it costs to call this reading's middle sticker that side's colour,
-    /// under a light no side had a hand in choosing.
-    static func centreCost(_ reading: [RGBSample], as face: Face) -> Double {
-        let even = ColourClassifier.relit(face: reading, expecting: nil)
+    /// under a light that side had no hand in choosing.
+    static func centreCost(_ reading: [RGBSample],
+                           as face: Face,
+                           under room: RGBSample? = nil) -> Double {
+        let even = ColourClassifier.relit(face: reading, expecting: nil, orUnder: room)
         guard even.count == 9 else { return 10 }
         return ColourClassifier.cost(even[4], as: Self.colour(for: face))
     }
@@ -389,7 +446,9 @@ final class ScanCoordinator: ObservableObject {
 
         problem = nil
         // The middle says which side this is, and that is the end of it.
-        let side = Self.side(of: reading)
+        let side = Self.side(of: reading,
+                             askedFor: currentStep.map { Self.colour(for: $0.face) },
+                             under: roomLight)
         if lookAtSide[side] != nil {
             narrator.say("That's the \(Self.colour(for: side).spokenName) side again. "
                        + "I'll use this look at it.")
@@ -409,7 +468,7 @@ final class ScanCoordinator: ObservableObject {
     ///
     /// Run after every look, so the net fills in as the child works.
     private func redraw() {
-        remeasurePalette()
+        relearnTheRoom()
         var map = ScannedCube()
         for (face, look) in lookAtSide {
             let colour = Self.colour(for: face)

@@ -172,9 +172,24 @@ def illuminant_on_face(samples, centre=None, guarded=True):
     return light
 
 
-def relit(samples, centre=None, guarded=True):
-    light = illuminant_on_face(samples, centre, guarded)
+def relit(samples, centre=None, guarded=True, room=None):
+    """One side with the colour of the light taken out.
+
+    `room` is the light worked out from the sides already seen, and it is what
+    saves a side with nothing on it to compare anything with. Nine identical
+    white squares under an amber lamp are nine identical cream squares, and the
+    test for a white one — markedly paler than the strongest — cannot fire on a
+    side where every square is the same.
+    """
+    light = illuminant_on_face(samples, centre, guarded) or room
     return divide(samples, light) if light else samples
+
+
+def side_of(reading, asked_for=None, room=None):
+    """Which side a look is, by its middle sticker. The twin of
+    `ScanCoordinator.side(of:askedFor:under:)`."""
+    even = relit(reading, asked_for, room=room)
+    return min(COLOURS, key=lambda c: cost(even[4], c))
 
 
 # ---------------------------------------------------------------- ColourPalette
@@ -519,7 +534,70 @@ def check_a_cube_is_still_told_from_a_wall(trials=300, seed=5):
     print('ALL PASS')
 
 
+def check_a_side_with_nothing_on_it(seed=2):
+    """A solved side: nine identical squares, and no light to be had from it.
+
+    This was being filed as the orange side, and nine oranges written down in
+    its place — under a warm lamp a white square photographs cream, and cream
+    is a very good orange. The light cannot be worked out from a side where
+    every square reads the same, because the test for a white square is that it
+    is markedly paler than the strongest on the side, and here they are the
+    same square nine times.
+
+    Two things outside the side settle it. The side the child was asked for,
+    which carries its own check: worked back from a white square the answer is
+    the lamp, and worked back from an orange square being shown instead it is
+    the colour of orange, which no lamp is, so it is thrown away. And the
+    room's own light from the sides already taken.
+
+    Every asked-for side against every side that could be shown instead, in
+    four rooms.
+    """
+    rng = random.Random(seed)
+
+    def uniform(colour, light, haze=0.1, shade=0.15):
+        out = []
+        for o in range(9):
+            row, col = divmod(o, 3)
+            s = camera(colour, light=light,
+                       gain=0.9 * (1 - shade * (row + col) / 4.0), haze=haze)
+            out.append(tuple(min(1.0, max(0.0, c + rng.gauss(0, 0.012))) for c in s))
+        return out
+
+    blind = asked = roomed = both = talked_into = total = 0
+    for light in LIGHTS:
+        # The white side is the one that can always teach the room its colour,
+        # because white is the only colour bright enough in all three channels
+        # to divide back out of.
+        room = illuminant_on_face(uniform('white', light), 'white')
+        for shown in COLOURS:
+            seen = uniform(shown, light)
+            for asked_for in COLOURS:
+                total += 1
+                blind += side_of(seen) == shown
+                asked += side_of(seen, asked_for=asked_for) == shown
+                roomed += side_of(seen, room=room) == shown
+                both += side_of(seen, asked_for=asked_for, room=room) == shown
+                # Only white is bright enough in all three channels to divide
+                # back out of, so asking for a side can only ever argue a side
+                # *into being white*. That is the one thing to count.
+                if shown != 'white' and side_of(seen, asked_for='white') == 'white':
+                    talked_into += 1
+
+    print('a solved side, filed by its middle                right')
+    print('  as it was (nothing but the side itself)      %3d/%d' % (blind, total))
+    print('  knowing which side was asked for             %3d/%d' % (asked, total))
+    print("  under the room's light                       %3d/%d" % (roomed, total))
+    print('  both                                         %3d/%d' % (both, total))
+    print('  sides argued into being white                  %d' % talked_into)
+    assert talked_into == 0, talked_into
+    assert both == total, both
+    print('ALL PASS')
+
+
 if __name__ == '__main__':
+    check_a_side_with_nothing_on_it()
+    print()
     check_the_net()
     print()
     check_the_settled_scan()
