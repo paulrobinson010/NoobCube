@@ -91,6 +91,14 @@ final class SmartCubeManager: NSObject, ObservableObject {
     /// cube can be reported with the detail needed to add support for it.
     @Published private(set) var diagnostics: [String] = []
 
+    /// What the cube said and what the app made of it, for when a turn on the
+    /// screen does not match the turn in the child's hands. Without this, that
+    /// is a thing you can only describe; with it, it is a thing you can read.
+    func noteTurn(_ said: Move, readAs ours: Move) {
+        note("cube said \(said.notation), read as \(ours.notation)"
+             + (grips.count == 1 ? "" : " (\(grips.count) grips still possible)"))
+    }
+
     func note(_ line: String) {
         diagnostics.append(line)
         if diagnostics.count > 40 { diagnostics.removeFirst() }
@@ -141,6 +149,19 @@ final class SmartCubeManager: NSObject, ObservableObject {
     func reground(to alignment: CubeAlignment) {
         grips = [alignment]
         positionIsTrustworthy = true
+    }
+
+    /// Throw the grip away and work it out again from the turns.
+    ///
+    /// For when the grip we settled on keeps disagreeing with what the child is
+    /// actually doing. A grip derived from a cube's own position is only as
+    /// good as that position, and if it turns out to be wrong there is no
+    /// reason to keep believing it — the turns themselves are better evidence,
+    /// and they are what settled it in the first place.
+    func reopenTheGrip() {
+        guard grips.count == 1 else { return }
+        grips = CubeAlignment.allGrips.map { CubeAlignment.identity.regripped(by: $0) }
+        note("That grip kept being wrong — working it out from your turns again")
     }
 
     /// Rule out the ways of holding the cube that a turn has just disproved.

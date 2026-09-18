@@ -23,6 +23,11 @@ final class AppModel: ObservableObject {
     let smartCube: SmartCubeManager
     private(set) lazy var scanCoordinator = ScanCoordinator(camera: camera, narrator: narrator)
 
+    /// Turns in a row that fitted no way of holding the cube. A child fumbling
+    /// gets some right; a wrong grip gets everything wrong, so a run of them is
+    /// evidence about the grip rather than about the child.
+    private var turnsThatFittedNothing = 0
+
     private var smartCubeObserver: AnyCancellable?
     private var smartCubeStatusObserver: AnyCancellable?
 
@@ -153,17 +158,37 @@ final class AppModel: ObservableObject {
 
         if !fitting.isEmpty {
             smartCube.narrow(to: fitting.map { smartCube.grips[$0] })
+            turnsThatFittedNothing = 0
+
         } else if smartCube.isStillWorkingOutTheGrip {
-            // Nothing fits, and we do not yet know the grip well enough to say
-            // what they turned. Guessing would mean telling a child they turned
-            // the wrong thing on no evidence at all.
+            // Nothing fits and the grip is not known well enough to say what
+            // they turned. Guessing would mean telling a child they turned the
+            // wrong thing on no evidence at all.
             narrator.say("I\u{2019}m still working out which way round your cube is. "
                          + "Try the move I asked for.")
             return
+
+        } else {
+            // The grip is settled and yet nothing the child does fits it. One
+            // of those is a mistake. Three in a row is the grip being wrong —
+            // a child fumbling gets some of them right, and a grip is only ever
+            // as good as the position it was worked out from. So it is thrown
+            // away and learned again from the turns, which are better evidence
+            // than the cube's own idea of where it is.
+            turnsThatFittedNothing += 1
+            if turnsThatFittedNothing >= 3 {
+                turnsThatFittedNothing = 0
+                smartCube.reopenTheGrip()
+                session.forgetTheMistake()
+                narrator.say("I had which way round your cube is wrong. "
+                             + "Do the next move and I\u{2019}ll pick it up.")
+                return
+            }
         }
 
         let reading = fitting.first.map { here[$0] } ?? here[0]
         guard let move = reading.appMove(for: cubeMove) else { return }
+        smartCube.noteTurn(cubeMove, readAs: move)
 
         if spins.isEmpty {
             session.handleSmartCubeTurn(move)

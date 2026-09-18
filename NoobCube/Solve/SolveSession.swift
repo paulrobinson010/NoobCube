@@ -536,6 +536,14 @@ final class SolveSession: ObservableObject {
         }
     }
 
+    /// Forget a mistake without acting on it, for when it turns out the app
+    /// was wrong about what the child did rather than the other way round.
+    func forgetTheMistake() {
+        wrongTurn = nil
+        waitingTurns.removeAll()
+        presentCurrentMove()
+    }
+
     /// Put the arrow back on the turn that undoes a mistake.
     func showTheWayBack() {
         guard let wrong = wrongTurn else { return }
