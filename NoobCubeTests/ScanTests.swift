@@ -478,6 +478,52 @@ final class ScanTests: XCTestCase {
                        "a square that is not any colour should stop the whole side")
     }
 
+    /// The premise of taking a side once its colours stop changing.
+    ///
+    /// Stability used to be measured in pixels, and that asked for frame-to-
+    /// frame drift under 0.46% per channel — below the sensor's own noise.
+    /// Measured against that metric, even half a percent of noise scores 0.86
+    /// and fails the 0.88 it wanted, which is why a cube could sit rock steady
+    /// on screen, named correctly, and never be taken.
+    ///
+    /// Names have no such problem. They either change or they do not.
+    @MainActor
+    func testTheNamedColoursSurviveNoiseThatPixelsDoNot() {
+        var generator = SeededGenerator(seed: 17)
+        let truth = scrambledColours(using: &generator)
+        let steady = lit(readings(of: truth, face: .F))
+
+        func naming(_ samples: [RGBSample]) -> [CubeColour] {
+            ColourClassifier.bestGuesses(ColourClassifier.relit(face: samples, expecting: nil))
+        }
+        func jittered(by amount: Double) -> [RGBSample] {
+            steady.map { sample in
+                func nudge(_ value: Double) -> Double {
+                    min(1, max(0, value + Double.random(in: -amount...amount, using: &generator)))
+                }
+                return RGBSample(red: nudge(sample.red),
+                                 green: nudge(sample.green),
+                                 blue: nudge(sample.blue))
+            }
+        }
+
+        let wanted = naming(steady)
+        XCTAssertEqual(wanted.count, 9)
+
+        // Sensor noise, several times over: the answer must not move.
+        for _ in 0..<40 {
+            XCTAssertEqual(naming(jittered(by: 0.06)), wanted,
+                           "ordinary noise must not change what the colours are called")
+        }
+
+        // And it must still be capable of being unsteady, or waiting for it to
+        // settle would mean nothing at all.
+        var seen: Set<[CubeColour]> = []
+        for _ in 0..<40 { seen.insert(naming(jittered(by: 0.15))) }
+        XCTAssertGreaterThan(seen.count, 1,
+                             "a genuinely unstable reading should still read as unstable")
+    }
+
     // MARK: - Taking the same side twice
 
     private func readings(of colours: [CubeColour], face: Face) -> [RGBSample] {

@@ -69,6 +69,7 @@ final class AppModel: ObservableObject {
             session = SolveSession(plan: plan, scan: finishedScan,
                                    scene: scene, narrator: narrator)
             session?.onLost = { [weak self] in self?.replanFromSmartCube() }
+            session?.onSolved = { [weak self] in self?.smartCubeIsSolved() }
 
             // A smart cube knows which way it has been turned but not which
             // way up it is being held, so the scan is what lines the two up.
@@ -208,9 +209,15 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// The child says the cube is solved right now: the way back when the
-    /// cube's own idea of itself has drifted from the cube in their hands.
+    /// The cube is solved — either because the child said so, or because the
+    /// solve just finished and it demonstrably is.
+    ///
+    /// This is the one position a cube can be told about without looking at it,
+    /// so finishing a solve is a free chance to put its own idea of itself
+    /// straight. Whatever drift had crept in is gone, and the next scramble is
+    /// tracked from a position both sides agree on.
     func smartCubeIsSolved() {
+        guard smartCube.isConnected else { return }
         smartCube.startFromSolved()
     }
 
@@ -230,6 +237,7 @@ final class AppModel: ObservableObject {
             scan = scanned
             session = SolveSession(plan: plan, scan: scanned, scene: scene, narrator: narrator)
             session?.onLost = { [weak self] in self?.replanFromSmartCube() }
+            session?.onSolved = { [weak self] in self?.smartCubeIsSolved() }
             session?.cubeIsFollowing = smartCube.isFollowing
             scene.stopIdleSpin()
             screen = .ready

@@ -90,10 +90,10 @@ final class ScanCoordinator: ObservableObject {
     /// quick the moment it was driven by the frames themselves. Eight frames is
     /// an eighth of a second, which is not long enough to tell a cube being
     /// held up from a cube on its way past.
-    private var steadySince: Date?
-
-    /// How long the cube has to be held still before a side is taken by itself.
-    private static let holdBeforeTaking = 0.8
+    /// The nine colours the camera is naming right now, and when they last
+    /// changed. The whole auto-capture rule is these two.
+    private var naming: [CubeColour]?
+    private var namingSince: Date?
 
     /// What the camera was looking at when a side was last taken.
     ///
@@ -174,7 +174,7 @@ final class ScanCoordinator: ObservableObject {
         isComplete = false
         problem = nil
         result = nil
-        steadySince = nil
+        forgetTheNaming()
         lastCaptured = []
         announcedFace = nil
         // Every frame gets a chance to be the one that takes the side, rather
@@ -201,29 +201,47 @@ final class ScanCoordinator: ObservableObject {
         camera.stop()
     }
 
-    /// Called every frame: take the face automatically once the cube has been
-    /// held still long enough for the reading to settle.
+    /// Called every frame: take the face once the colours have stopped changing.
+    ///
+    /// What counts as "held still" used to be measured in pixels, and that was
+    /// the wrong thing to measure. It asked for frame-to-frame drift under
+    /// 0.46% per channel, which is below the sensor's own noise in anything but
+    /// bright light — so a cube could be rock steady on screen, named correctly,
+    /// and never taken, because the pixels underneath it were shimmering.
+    ///
+    /// Nine colour *names* either change or they do not. There is no noise in
+    /// that, it is exactly what the child can see on screen, and when it has
+    /// held for two seconds the app has plainly worked the side out.
     func considerAutoCapture() {
         guard currentStep != nil, !isComplete else { return }
+        guard camera.isCubeInFrame else { return forgetTheNaming() }
+
+        let reading = camera.steadyReading.count == 9 ? camera.steadyReading : camera.liveSamples
+        guard reading.count == 9 else { return forgetTheNaming() }
+
+        let named = ColourClassifier.bestGuesses(
+            ColourClassifier.relit(face: reading, expecting: nil))
+        guard named == naming else {
+            naming = named
+            namingSince = Date()
+            return
+        }
+
         // Holding the cube still is not a reason to take the same picture
         // twice — a camera that does that is the stutter this app started
         // with. Taking a side again is what ``takeThatSideAgain`` is for.
-        // Still is not the same as readable. A cube held perfectly still in
-        // glare is still unreadable, and taking it anyway files a side that is
-        // wrong and then has to be undone by hand.
-        guard camera.isCubeInFrame,
-              camera.steadiness > 0.88,
-              camera.settling >= 1,
-              Self.readsClearly(camera.steadyReading),
-              hasMovedOn(to: camera.steadyReading) else {
-            steadySince = nil
-            return
-        }
-        let since = steadySince ?? Date()
-        steadySince = since
-        if Date().timeIntervalSince(since) >= Self.holdBeforeTaking {
-            captureCurrentFace()
-        }
+        guard let since = namingSince,
+              Date().timeIntervalSince(since) >= Self.holdBeforeTaking,
+              hasMovedOn(to: reading) else { return }
+        captureCurrentFace()
+    }
+
+    /// How long the nine colours must read the same before the side is taken.
+    static let holdBeforeTaking = 2.0
+
+    private func forgetTheNaming() {
+        naming = nil
+        namingSince = nil
     }
 
     /// Whether there is a look to throw away.
@@ -259,7 +277,7 @@ final class ScanCoordinator: ObservableObject {
     /// the very same picture is allowed to be taken a second time.
     private func readyForAnotherLook() {
         lastCaptured = []
-        steadySince = nil
+        forgetTheNaming()
         camera.resetSteadiness()
     }
 
@@ -398,7 +416,7 @@ final class ScanCoordinator: ObservableObject {
 
         redraw()
         lastCaptured = reading
-        steadySince = nil
+        forgetTheNaming()
         camera.resetSteadiness()
 
         advanceToNextUnseenFace()

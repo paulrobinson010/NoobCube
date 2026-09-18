@@ -109,6 +109,10 @@ struct WelcomeView: View {
                               showingSmartCubeSheet = false
                               model.startFromSmartCube()
                           },
+                          onUseCamera: {
+                              showingSmartCubeSheet = false
+                              model.startScanning()
+                          },
                           onCalibrateSolved: { model.smartCubeIsSolved() })
         }
     }

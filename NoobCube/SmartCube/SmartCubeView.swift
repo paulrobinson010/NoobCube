@@ -5,6 +5,7 @@ struct SmartCubeView: View {
     @ObservedObject var manager: SmartCubeManager
     @ObservedObject var narrator: Narrator
     var onUseCube: () -> Void
+    var onUseCamera: () -> Void
     var onCalibrateSolved: () -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -104,13 +105,24 @@ struct SmartCubeView: View {
                 Button("Solve this") { onUseCube() }
                     .buttonStyle(BigButtonStyle(tint: Theme.done))
 
-                Text("Not your cube? Solve it, then tell me — or show it to the "
-                     + "camera, which is the surer way.")
+                Text("Not your cube? Show it to the camera and I'll put it right.")
                     .font(.brand(size: 14, weight: .medium))
                     .foregroundStyle(Theme.muted)
                     .multilineTextAlignment(.center)
 
-                Button("It's solved right now") { onCalibrateSolved() }
+                // The cube knows which way it has been turned but not what
+                // colour anything is, so when its idea of itself is wrong the
+                // camera is the only thing that can correct it. Saying "it's
+                // solved" was the only way out of here, which is no use at all
+                // when the cube in your hand is scrambled.
+                Button {
+                    onUseCamera()
+                } label: {
+                    Label("Show me your cube", systemImage: "camera.fill")
+                }
+                .buttonStyle(BigButtonStyle())
+
+                Button("Or it's solved right now") { onCalibrateSolved() }
                     .buttonStyle(BigButtonStyle(isProminent: false))
             } else {
                 ProgressView()

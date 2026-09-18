@@ -61,6 +61,10 @@ final class SolveSession: ObservableObject {
     /// covers, so the plan has to be worked out again from what the cube says.
     var onLost: (() -> Void)?
 
+    /// Called the moment the whole cube comes out solved, so a connected cube
+    /// can be told its own position is now a known one.
+    var onSolved: (() -> Void)?
+
     let scene: CubeSceneController
     private let narrator: Narrator
     /// The scan the current plan was made from, kept so a stage can be
@@ -336,6 +340,7 @@ final class SolveSession: ObservableObject {
         guard let next = Self.nextWorkableStage(in: plan, from: stageIndex + 1) else {
             phase = .finished
             narrator.say("You did it! The whole cube is finished. Well done!")
+            onSolved?()
             return
         }
         stageIndex = next
@@ -374,6 +379,7 @@ final class SolveSession: ObservableObject {
         if stageIndex >= newPlan.stages.count {
             phase = .finished
             narrator.say("You did it! The whole cube is finished. Well done!")
+            onSolved?()
         } else {
             phase = .coaching
             help = .undecided
