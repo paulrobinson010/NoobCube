@@ -194,8 +194,53 @@ enum ColourClassifier {
         let saturations = samples.map { $0.hsv.saturation }
         guard let palest = saturations.min(), let strongest = saturations.max(), strongest > 0.001,
               1 - palest / strongest >= paleEnoughToBeWhite,
-              let index = saturations.firstIndex(of: palest) else { return nil }
-        return illuminant(from: mean(of: matching(index, in: samples)), knownToBe: .white)
+              let index = saturations.firstIndex(of: palest),
+              let light = illuminant(from: mean(of: matching(index, in: samples)),
+                                     knownToBe: .white),
+              worthUsing(light, on: samples, expecting: centre) else { return nil }
+        return light
+    }
+
+    /// Whether a light worked out from one square is worth applying to the face.
+    ///
+    /// The palest square on a face is only a white one if the face has a white
+    /// square on it, and most do not. Take a blue square instead and the
+    /// arithmetic still produces a light — and blue is the one sticker colour
+    /// it produces a *believable* light from. A washed-out red normalises to
+    /// something with almost no blue in it, and a washed-out green to something
+    /// with almost no red, and both are thrown out by
+    /// ``dimmestPlausibleChannel`` as colours no lamp is. A washed-out blue
+    /// normalises to about (0.75, 0.81, 1.0), which is an ordinary cool
+    /// daylight. So it sails through, and dividing it out of a warm-lit face
+    /// turns the whole side orange and the blue square white.
+    ///
+    /// Two things catch it. The middle square's colour was known before the
+    /// camera saw it, so a light that renames the middle is wrong by
+    /// construction. And a light that is really there makes the rest of the
+    /// face read *better*; one invented from a blue square makes it read worse.
+    private static func worthUsing(_ light: RGBSample,
+                                   on samples: [RGBSample],
+                                   expecting centre: CubeColour?) -> Bool {
+        let relit = divide(samples, by: light)
+        if let centre, bestGuess(relit[4]) != centre { return false }
+        return faceFit(relit, expecting: centre) < faceFit(samples, expecting: centre)
+    }
+
+    /// How well nine readings account for themselves as one side of a cube.
+    ///
+    /// The middle is charged at the colour it is known to be rather than the
+    /// colour that suits it best, because that is the one square that cannot
+    /// be allowed to be talked into something else.
+    private static func faceFit(_ samples: [RGBSample], expecting centre: CubeColour?) -> Double {
+        var total = 0.0
+        for (index, sample) in samples.enumerated() {
+            if index == 4, let centre {
+                total += cost(sample, as: centre)
+            } else {
+                total += costOfBestGuess(sample)
+            }
+        }
+        return total
     }
 
     /// How much paler than the strongest sticker on a face the palest one has
@@ -407,14 +452,46 @@ enum ColourClassifier {
         }
         let samples = levelled(whiteBalanced(relitSamples))
 
+        // What the six colours turned out to look like here, which is worth
+        // far more than what they look like in general. Blended with the fixed
+        // references rather than replacing them: the palette knows this room
+        // and the references know what a cube is, and each catches the other
+        // out. Measured over 500 scrambles in `Tools/CubeReference/colours.py`,
+        // scans read perfectly went from 94.6% to 95.6% and squares read wrong
+        // from 0.38% to 0.34%; either half on its own was worse than the two
+        // together.
+        let palette = ColourPalette.measured(from: samples, centres: expectedCentres)
+        var brightest = [Double](repeating: 1, count: 6)
+        for face in Face.allCases {
+            brightest[face.rawValue] = max(0.001, face.faceletIndices
+                .map { samples[$0].hsv.value }.max() ?? 1)
+        }
+
         var prices = [Double](repeating: 0, count: 54 * 6)
         for index in 0..<54 {
+            let relative = samples[index].hsv.value / brightest[index / 9]
             for colour in CubeColour.allCases {
-                prices[index * 6 + colour.ordinal] = cost(samples[index], as: colour)
+                var price = cost(samples[index], as: colour) * fixedReferenceShare
+                if !palette.isEmpty {
+                    price += palette.distance(samples[index], as: colour,
+                                              inContextOf: relative)
+                }
+                prices[index * 6 + colour.ordinal] = price
             }
         }
         return Priced(samples: samples, prices: prices)
     }
+
+    /// How much the fixed references are worth beside the measured palette when
+    /// settling a scan.
+    ///
+    /// Swept from nothing to everything over 400 scans in
+    /// `Tools/CubeReference/colours.py`. The palette on its own reads 0.85% of
+    /// squares wrong and the fixed references on their own 0.42%; together they
+    /// bottom out around 0.33%, flat anywhere from three to six, and fall away
+    /// again past ten. Set in the middle of the flat part rather than on the
+    /// exact best, which is a feature of one synthetic camera and not of rooms.
+    private static let fixedReferenceShare = 4.0
 
     static func settle(_ priced: Priced,
                        expectedCentres: [Face: CubeColour] = [:]) -> Settled {
@@ -427,8 +504,17 @@ enum ColourClassifier {
         for face in Face.allCases {
             assignment[face.centreIndex] = naming[face] ?? .white
         }
-        var fit = fill(&assignment, slots: CubeSlots.edges, naming: naming, priced: priced)
-        fit += fill(&assignment, slots: CubeSlots.corners, naming: naming, priced: priced)
+        fill(&assignment, slots: CubeSlots.edges, naming: naming, priced: priced)
+        fill(&assignment, slots: CubeSlots.corners, naming: naming, priced: priced)
+
+        // The reading is chosen with the palette's help and then reported on
+        // without it, so that how well a scan explains its pixels stays the
+        // same measurement it has always been — and ``tooPoorToBelieve``, which
+        // was calibrated against tables, walls and keyboards, keeps its meaning.
+        var fit = 0.0
+        for (index, colour) in assignment.enumerated() where index % 9 != 4 {
+            fit += cost(priced.samples[index], as: colour ?? .white)
+        }
         return Settled(colours: assignment.map { $0 ?? .white }, fit: fit)
     }
 
@@ -445,6 +531,7 @@ enum ColourClassifier {
     /// can only spoil the piece it is on. Cheapest fit first: each round takes
     /// the best remaining (slot, piece, way round) whose slot and piece are
     /// both still free.
+    @discardableResult
     private static func fill(_ assignment: inout [CubeColour?],
                              slots: [CubeSlot],
                              naming: [Face: CubeColour],

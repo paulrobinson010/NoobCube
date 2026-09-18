@@ -56,6 +56,7 @@
 		7BEF05C292647D872D265FDB = {isa = PBXBuildFile; fileRef = 77C1F26B91CF691DB5CB5A1B; };
 		23B58EF9A83AB7473A08F2A8 = {isa = PBXBuildFile; fileRef = 0DC1040F71DD10CA37D9244D; };
 		F2A8C50DEB7497C3CED9E40B = {isa = PBXBuildFile; fileRef = 8C6A370C2C039FE042165B06; };
+		94887707BA168FD89436234C = {isa = PBXBuildFile; fileRef = 06E00E2B74E76B2233EF602B; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -121,6 +122,7 @@
 		77C1F26B91CF691DB5CB5A1B = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StepDemoView.swift"; sourceTree = "<group>"; };
 		0DC1040F71DD10CA37D9244D = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CubeAlignment.swift"; sourceTree = "<group>"; };
 		8C6A370C2C039FE042165B06 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SmartCubeTests.swift"; sourceTree = "<group>"; };
+		06E00E2B74E76B2233EF602B = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ColourPalette.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -168,6 +170,7 @@
 		3FE09AD2DEA8103ED1C5C2FF /* Scan */ = {
 			isa = PBXGroup;
 			children = (
+				06E00E2B74E76B2233EF602B,
 				3D7EDCFB0475A1E69EC17AEE,
 				F399168BC23552D0FC060EFF /* CameraController.swift */,
 				66D93017330A460C5A222D0E /* ColourClassifier.swift */,
@@ -379,6 +382,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				94887707BA168FD89436234C,
 				23B58EF9A83AB7473A08F2A8,
 				7BEF05C292647D872D265FDB,
 				DCD88F911A5534E1D24AA251,

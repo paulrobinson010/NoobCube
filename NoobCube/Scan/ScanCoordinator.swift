@@ -143,7 +143,27 @@ final class ScanCoordinator: ObservableObject {
     /// app will actually record rather than what the lamp is doing.
     var livePreview: [CubeColour] {
         guard camera.isCubeInFrame, camera.liveSamples.count == 9 else { return [] }
-        return ColourClassifier.bestGuesses(relit(camera.liveSamples))
+        return palette.names(onFace: relit(camera.liveSamples))
+    }
+
+    /// What the six colours look like on this cube, in this room.
+    ///
+    /// Rebuilt after every look, and empty until the last side has been shown —
+    /// a palette missing a colour is worse than none, for the reason set out in
+    /// ``ColourPalette``. So the net reads the same way it always did while the
+    /// child is scanning, and every square is named again the moment the sixth
+    /// side lands.
+    private(set) var palette = ColourPalette.unmeasured
+
+    private func remeasurePalette() {
+        var looks: [Face: [RGBSample]] = [:]
+        var centres: [Face: CubeColour] = [:]
+        for (face, look) in lookAtSide {
+            looks[face] = ColourClassifier.relit(face: look,
+                                                 expecting: Self.colour(for: face))
+            centres[face] = Self.colour(for: face)
+        }
+        palette = ColourPalette.measured(fromLooks: looks, centres: centres)
     }
 
     private func relit(_ samples: [RGBSample]) -> [RGBSample] {
@@ -219,8 +239,7 @@ final class ScanCoordinator: ObservableObject {
         let reading = camera.steadyReading.count == 9 ? camera.steadyReading : camera.liveSamples
         guard reading.count == 9 else { return forgetTheNaming() }
 
-        let named = ColourClassifier.bestGuesses(
-            ColourClassifier.relit(face: reading, expecting: nil))
+        let named = palette.names(onFace: ColourClassifier.relit(face: reading, expecting: nil))
         guard named == naming else {
             naming = named
             namingSince = Date()
@@ -390,11 +409,12 @@ final class ScanCoordinator: ObservableObject {
     ///
     /// Run after every look, so the net fills in as the child works.
     private func redraw() {
+        remeasurePalette()
         var map = ScannedCube()
         for (face, look) in lookAtSide {
             let colour = Self.colour(for: face)
-            map.setFace(face, to: ColourClassifier.bestGuesses(
-                ColourClassifier.relit(face: look, expecting: colour)))
+            map.setFace(face, to: palette.names(
+                onFace: ColourClassifier.relit(face: look, expecting: colour)))
         }
         show(map)
     }

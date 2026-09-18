@@ -510,4 +510,207 @@ final class ScanTests: XCTestCase {
             XCTAssertEqual(resolved.filter { $0 == colour }.count, 9)
         }
     }
+
+    // MARK: - Naming a square against what the cube has already shown
+
+    /// What a real sticker reflects, which is nothing like the drawing palette:
+    /// blue and red are dark, and white is the only one bright in all three.
+    private func reflectance(_ colour: CubeColour) -> RGBSample {
+        switch colour {
+        case .white:  return RGBSample(red: 0.90, green: 0.90, blue: 0.90)
+        case .yellow: return RGBSample(red: 0.95, green: 0.78, blue: 0.05)
+        case .red:    return RGBSample(red: 0.75, green: 0.06, blue: 0.08)
+        case .orange: return RGBSample(red: 0.95, green: 0.35, blue: 0.02)
+        case .green:  return RGBSample(red: 0.05, green: 0.60, blue: 0.25)
+        case .blue:   return RGBSample(red: 0.03, green: 0.20, blue: 0.70)
+        }
+    }
+
+    /// One square as the phone sees it: lit, veiled by glare, clipped.
+    ///
+    /// `haze` is the important one — a lamp reflecting off shiny plastic pulls
+    /// every square towards a bright grey. It is what breaks colour naming, and
+    /// what every earlier test in this file left out.
+    private func photographed(_ colour: CubeColour,
+                              lamp: (Double, Double, Double) = (1, 0.85, 0.65),
+                              gain: Double = 0.9,
+                              haze: Double = 0) -> RGBSample {
+        let sticker = reflectance(colour)
+        let channels = [sticker.red * lamp.0, sticker.green * lamp.1, sticker.blue * lamp.2]
+            .enumerated()
+            .map { index, value -> Double in
+                let lit = min(1, value * gain)
+                let veil = 0.92 * gain * [lamp.0, lamp.1, lamp.2][index]
+                return lit * (1 - haze) + veil * haze
+            }
+        return RGBSample(red: channels[0], green: channels[1], blue: channels[2])
+    }
+
+    private func look(_ colours: [CubeColour], haze: Double) -> [RGBSample] {
+        colours.map { photographed($0, haze: haze) }
+    }
+
+    /// A whole cube's worth of looks, so the palette has all six colours.
+    private func everySide(_ truth: [CubeColour], haze: Double) -> [Face: [RGBSample]] {
+        var looks: [Face: [RGBSample]] = [:]
+        for face in Face.allCases {
+            looks[face] = face.faceletIndices.map { photographed(truth[$0], haze: haze) }
+        }
+        return looks
+    }
+
+    private var scanningCentres: [Face: CubeColour] {
+        var centres: [Face: CubeColour] = [:]
+        for face in Face.allCases { centres[face] = CubeColourScheme.scanningLayout[face] }
+        return centres
+    }
+
+    /// The report this was built for: "blue quite often is shown as white".
+    ///
+    /// A blue sticker with a lamp reflected in it is pale, and pale is a fine
+    /// description of white. Nothing about that one square can say otherwise,
+    /// and the fixed references go on saying white however hard they are tuned.
+    /// Against a blue measured on the blue side under that same lamp, it is
+    /// plainly blue.
+    func testBlueIsNotCalledWhiteOnceEverySideHasBeenSeen() {
+        var generator = SeededGenerator(seed: 13)
+        for haze in [0.3, 0.45] {
+            var blueCalledWhite = 0
+            var blueSquares = 0
+            for _ in 0..<20 {
+                let truth = scrambledColours(using: &generator)
+                let looks = everySide(truth, haze: haze)
+                let palette = ColourPalette.measured(fromLooks: looks,
+                                                     centres: scanningCentres)
+                XCTAssertFalse(palette.isEmpty, "six sides should make a palette")
+                for face in Face.allCases {
+                    let named = palette.names(onFace: looks[face]!)
+                    for (offset, colour) in named.enumerated() {
+                        let real = truth[face.rawValue * 9 + offset]
+                        guard real == .blue else { continue }
+                        blueSquares += 1
+                        if colour == .white { blueCalledWhite += 1 }
+                    }
+                }
+            }
+            // Measured over 500 scans in `Tools/CubeReference/colours.py`: 9.5%
+            // of blue squares were called white, and 1.0% are now. Twenty scans
+            // is a smaller sample, so this asks only that it is rare.
+            XCTAssertLessThan(Double(blueCalledWhite) / Double(blueSquares), 0.03,
+                              "\(blueCalledWhite) of \(blueSquares) blue squares were "
+                              + "called white under \(haze) glare")
+        }
+    }
+
+    /// Orange and red, which is the other pair a warm room ruins.
+    ///
+    /// Telling orange from an idea of orange is hard; telling it from the red
+    /// measured on the red side two looks ago is not. And two squares sharing
+    /// a side share a light, so which of them is darker means something even
+    /// when neither one's brightness does.
+    func testOrangeAndRedAreToldApartOnceBothHaveBeenSeen() {
+        var generator = SeededGenerator(seed: 29)
+        var confused = 0
+        var warmSquares = 0
+        for _ in 0..<20 {
+            let truth = scrambledColours(using: &generator)
+            let looks = everySide(truth, haze: 0.3)
+            let palette = ColourPalette.measured(fromLooks: looks, centres: scanningCentres)
+            for face in Face.allCases {
+                let named = palette.names(onFace: looks[face]!)
+                for (offset, colour) in named.enumerated() {
+                    let real = truth[face.rawValue * 9 + offset]
+                    guard real == .red || real == .orange else { continue }
+                    warmSquares += 1
+                    if colour != real { confused += 1 }
+                }
+            }
+        }
+        XCTAssertLessThan(Double(confused) / Double(warmSquares), 0.04,
+                          "\(confused) of \(warmSquares) red and orange squares "
+                          + "were read as something else")
+    }
+
+    /// Before any side has been seen there is nothing to compare against, so
+    /// the palette has to behave exactly as the app did before it existed.
+    func testAnEmptyPaletteFallsBackToTheFixedReferences() {
+        var generator = SeededGenerator(seed: 31)
+        let truth = scrambledColours(using: &generator)
+        let nine = (0..<9).map { photographed(truth[$0], haze: 0.1) }
+        XCTAssertTrue(ColourPalette.unmeasured.isEmpty)
+        XCTAssertEqual(ColourPalette.unmeasured.names(onFace: nine),
+                       ColourClassifier.bestGuesses(nine))
+    }
+
+    /// The hole the guard closes.
+    ///
+    /// The palest square on a side is only a white one if the side has a white
+    /// square on it, and most do not. Taking a blue one instead still produces
+    /// a light — and blue is the one sticker colour that produces a
+    /// *believable* one, because a washed-out blue normalises to about
+    /// (0.75, 0.81, 1.0), an ordinary cool daylight. A washed-out red or green
+    /// normalises to something no lamp is and was already thrown out. So a
+    /// warm-lit side with no white on it used to be divided by a cool light,
+    /// which turned the whole side orange and the blue squares white.
+    ///
+    /// This does not rescue the blue square — under this much glare nothing
+    /// looking at one square can — but it stops one bad square wrecking the
+    /// other eight.
+    func testNoLightIsInventedFromABlueSquare() {
+        let side: [CubeColour] = [.blue, .green, .orange, .green, .blue,
+                                  .yellow, .red, .green, .blue]
+        let seen = look(side, haze: 0.45)
+        XCTAssertNil(ColourClassifier.illuminant(onFace: seen, expecting: .blue),
+                     "a light was invented from a blue square")
+
+        // Left alone, the side reads as itself apart from the washed-out blues
+        // and, at this much glare, a yellow that has gone amber.
+        let named = ColourClassifier.bestGuesses(
+            ColourClassifier.relit(face: seen, expecting: .blue))
+        for index in [1, 2, 3, 6, 7] {
+            XCTAssertEqual(named[index], side[index],
+                           "square \(index) was spoiled by a made-up light")
+        }
+    }
+
+    /// A real white side under a warm lamp still gets its light worked out —
+    /// the guard must not throw the good case away with the bad.
+    func testAWhiteSideUnderALampIsStillCorrected() {
+        let nine = [CubeColour](repeating: .white, count: 9)
+        for haze in [0.0, 0.2, 0.4] {
+            let seen = look(nine, haze: haze)
+            let relit = ColourClassifier.relit(face: seen, expecting: .white)
+            XCTAssertEqual(ColourClassifier.bestGuesses(relit), nine,
+                           "a white side under a lamp read as "
+                           + "\(ColourClassifier.bestGuesses(relit))")
+        }
+    }
+
+    /// Settling now takes the palette's advice, so the assignment can differ —
+    /// but it is still reported on with the fixed references alone, so how well
+    /// a scan explains its pixels keeps the meaning it was calibrated with.
+    func testHowWellAScanExplainsItselfStillTellsACubeFromAWall() {
+        var generator = SeededGenerator(seed: 47)
+        var expected: [Face: CubeColour] = [:]
+        for face in Face.allCases { expected[face] = CubeColourScheme.scanningLayout[face] }
+
+        for _ in 0..<40 {
+            let truth = scrambledColours(using: &generator)
+            let seen = truth.enumerated().map { index, colour in
+                photographed(colour, gain: 0.7 + 0.3 * Double((index / 9) % 2), haze: 0.2)
+            }
+            let settled = ColourClassifier.settle(rawSamples: seen, expectedCentres: expected)
+            XCTAssertLessThan(settled.averageFit, ColourClassifier.tooPoorToBelieve,
+                              "a real cube was refused")
+
+            let noise = (0..<54).map { _ in
+                RGBSample(red: Double.random(in: 0...1, using: &generator),
+                          green: Double.random(in: 0...1, using: &generator),
+                          blue: Double.random(in: 0...1, using: &generator))
+            }
+            XCTAssertGreaterThan(
+                ColourClassifier.settle(rawSamples: noise, expectedCentres: expected).averageFit,
+                ColourClassifier.tooPoorToBelieve, "a lump of noise was taken for a cube")
+        }
+    }
 }
