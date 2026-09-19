@@ -393,6 +393,28 @@ final class SolveSession: ObservableObject {
 
         guard let expected = currentMove else { return giveUpAndReplan() }
 
+        // Nothing has been asked of them yet.
+        //
+        // At the start of a stage the child is still being asked whether they
+        // want to do it themselves or be walked through it move by move, and
+        // until they answer, no move has been put in front of them. A turn now
+        // cannot be the wrong one, because there was no right one — being told
+        // "not that one" before being told anything at all is the app blaming a
+        // child for its own impatience.
+        //
+        // Turning the cube is them getting on with it, so that is what it is
+        // taken as: the move the plan wanted moves them along, and anything
+        // else is simply where their cube is now, worked out again without
+        // comment.
+        if help == .undecided {
+            guard !expected.isWholeCubeTurn, move == expected else {
+                return playTheirTurn(move) { [weak self] in self?.replanQuietly() }
+            }
+            help = .wholeStage
+            confirmCurrentMove()
+            return
+        }
+
         // Whole-cube turns are dealt with before we get here, by
         // ``takeTheTurnAsDone(andThen:)``, because the mapping of the turn that
         // dismissed them depends on their having happened.
@@ -415,6 +437,17 @@ final class SolveSession: ObservableObject {
         wrongTurn = nil
         waitingTurns.removeAll()
         narrator.say("Let me work out where your cube is now.")
+        onLost?()
+    }
+
+    /// The same thing without saying so.
+    ///
+    /// For a turn made before anything was asked for: their cube is somewhere
+    /// new, the plan follows it there, and none of that is the child's
+    /// business.
+    private func replanQuietly() {
+        wrongTurn = nil
+        waitingTurns.removeAll()
         onLost?()
     }
 

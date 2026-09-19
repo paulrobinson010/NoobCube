@@ -220,10 +220,12 @@ final class SmartCubeManager: NSObject, ObservableObject {
         (1...100).contains(percent) ? percent : nil
     }
 
-    /// Colours matching `cubeState`, using the cube's standard scheme.
+    /// Colours matching `cubeState`.
+    ///
+    /// In the cube's own frame, because that is the frame `cubeState` is in.
     var trackedColours: [CubeColour?]? {
         cubeState.map { state in
-            state.facelets.map { CubeColour.defaultColour(for: $0) }
+            state.facelets.map { CubeColour.onTheCubesOwnFace($0) }
         }
     }
 

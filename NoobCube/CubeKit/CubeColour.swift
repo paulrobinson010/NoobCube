@@ -210,8 +210,37 @@ struct ScannedCube: Equatable, Codable, Sendable {
 }
 
 extension CubeColour {
+    /// The colour on each face of a cube described in *its own* frame.
+    ///
+    /// A smart cube has no idea what colour anything is. It reports where its
+    /// pieces are, numbered against its own fixed frame, and something has to
+    /// decide what to paint on the picture. The app used to paint the way it
+    /// asks a child to hold a cube — yellow on top — and that is the wrong
+    /// question: what matters is the orientation the cube's own electronics
+    /// count from, which is the standard one a cube is described in, white on
+    /// top and green at the front.
+    ///
+    /// The two differ by half a turn about the green-blue axis, so getting it
+    /// wrong shows up as white and yellow swapped, red and orange swapped, and
+    /// green and blue exactly right — which is precisely what it did, on every
+    /// report, through four rounds of looking somewhere else entirely. It is
+    /// not about which way round the cube is being *held*: no way of holding it
+    /// puts a different colour under your thumb.
+    ///
+    /// Taken from behaviour rather than from documentation GAN have never
+    /// published, so if it is ever wrong for some other cube it will be wrong
+    /// in exactly that way, and this is the one line to turn over.
+    static func onTheCubesOwnFace(_ face: Face) -> CubeColour {
+        CubeColourScheme.reference[face] ?? defaultColour(for: face)
+    }
+
     /// The usual colour for a face when nothing has been scanned yet: white on
     /// the bottom, yellow on top, green at the front.
+    ///
+    /// This is how the *child* is asked to hold it, which is not the same
+    /// question as ``onTheCubesOwnFace(_:)``. Use this for a cube already said
+    /// the way they are holding it, and that one for a cube the smart cube has
+    /// described in its own terms.
     static func defaultColour(for face: Face) -> CubeColour {
         switch face {
         case .U: return .yellow

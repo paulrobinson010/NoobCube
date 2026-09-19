@@ -539,4 +539,54 @@ final class CubeAlignmentTests: XCTestCase {
             Face.allCases.map { alignment.appFace[$0]?.letter ?? "?" }.joined()
         }).count, 24)
     }
+
+    // MARK: - Painting a cube the cube described itself
+
+    /// The bug behind four rounds of looking in the wrong place.
+    ///
+    /// A smart cube has no idea what colour anything is. It says where its
+    /// pieces are in its own frame, and something has to decide what to paint.
+    /// Painting it the way a child is asked to hold a cube — yellow on top —
+    /// rather than the way a cube is described — white on top — differs by half
+    /// a turn about the green-blue axis, which shows up as white and yellow
+    /// swapped, red and orange swapped, and green and blue exactly right.
+    func testTheCubesOwnFramePaintsWhiteOnTopNotYellow() {
+        XCTAssertEqual(CubeColour.onTheCubesOwnFace(.U), .white)
+        XCTAssertEqual(CubeColour.onTheCubesOwnFace(.D), .yellow)
+        XCTAssertEqual(CubeColour.onTheCubesOwnFace(.F), .green)
+        XCTAssertEqual(CubeColour.onTheCubesOwnFace(.B), .blue)
+        XCTAssertEqual(CubeColour.onTheCubesOwnFace(.R), .red)
+        XCTAssertEqual(CubeColour.onTheCubesOwnFace(.L), .orange)
+    }
+
+    /// And the two schemes differ in exactly the way the symptom described:
+    /// two pairs swapped, one pair untouched.
+    func testTheTwoSchemesDifferByHalfATurnAboutGreenAndBlue() {
+        var swapped: [CubeColour] = []
+        var same: [CubeColour] = []
+        for face in Face.allCases {
+            let own = CubeColour.onTheCubesOwnFace(face)
+            if own == CubeColour.defaultColour(for: face) {
+                same.append(own)
+            } else {
+                swapped.append(own)
+                // Whatever differs, differs by swapping with its opposite.
+                XCTAssertEqual(CubeColour.defaultColour(for: face), own.conventionalOpposite)
+            }
+        }
+        XCTAssertEqual(Set(same), [.green, .blue])
+        XCTAssertEqual(Set(swapped), [.white, .yellow, .red, .orange])
+    }
+
+    /// Both are real cubes, whichever is used — six different colours with
+    /// opposites where they belong.
+    func testBothSchemesDescribeAPossibleCube() {
+        for scheme in [Face.allCases.map { CubeColour.onTheCubesOwnFace($0) },
+                       Face.allCases.map { CubeColour.defaultColour(for: $0) }] {
+            XCTAssertEqual(Set(scheme).count, 6)
+        }
+        var own: [Face: CubeColour] = [:]
+        for face in Face.allCases { own[face] = CubeColour.onTheCubesOwnFace(face) }
+        XCTAssertTrue(CubeColourScheme.isPlausible(centres: own))
+    }
 }
