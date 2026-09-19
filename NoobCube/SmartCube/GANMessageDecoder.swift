@@ -62,10 +62,10 @@ enum GANMessageDecoder {
         for offset in stride(from: unseen - 1, through: 0, by: -1) {
             let face = reader.word(at: 12 + 5 * offset, bits: 4)
             let direction = reader.word(at: 16 + 5 * offset, bits: 1)
-            guard let move = GANProtocol.move(faceIndex: face, clockwise: direction == 0) else {
-                continue
-            }
-            turns.append(GANProtocol.Turn(move: move, serial: (serial - offset) & 0xFF))
+            guard (0..<6).contains(face) else { continue }
+            turns.append(GANProtocol.Turn(label: face,
+                                          clockwise: direction == 0,
+                                          serial: (serial - offset) & 0xFF))
         }
         return .moves(turns)
     }
@@ -124,11 +124,12 @@ enum GANMessageDecoder {
                                    serialAt: Int, directionAt: Int, faceAt: Int) -> Event {
         let serial = reader.word(at: serialAt, bits: 16, littleEndian: true)
         let direction = reader.word(at: directionAt, bits: 2)
-        guard let face = GANProtocol.faceIndex(fromBits: reader.word(at: faceAt, bits: 6)),
-              let move = GANProtocol.move(faceIndex: face, clockwise: direction == 0) else {
+        guard let face = GANProtocol.faceIndex(fromBits: reader.word(at: faceAt, bits: 6)) else {
             return .ignored
         }
-        return .moves([GANProtocol.Turn(move: move, serial: serial & 0xFF)])
+        return .moves([GANProtocol.Turn(label: face,
+                                        clockwise: direction == 0,
+                                        serial: serial & 0xFF)])
     }
 
     /// Every generation packs the position the same way — seven corners, eleven

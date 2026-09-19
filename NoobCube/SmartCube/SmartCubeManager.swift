@@ -259,7 +259,17 @@ final class SmartCubeManager: NSObject, ObservableObject {
         positionIsTrustworthy = false
         hasSeenPosition = false
         lastMoveSerial = nil
+        forgetTheDialect()
         status = .idle
+    }
+
+    /// What a cube's labels mean belongs to that cube's firmware, so it is kept
+    /// for as long as the cube is connected and thrown away when it is not.
+    private func forgetTheDialect() {
+        dialect.forget()
+        turnsAwaitingTheirMeaning = []
+        positionBeforeThem = nil
+        lastMove = nil
     }
 
     private func beginScanIfPossible() {
@@ -306,23 +316,11 @@ final class SmartCubeManager: NSObject, ObservableObject {
             guard hasSeenPosition || generation == .gen2 else { return }
             for turn in turns {
                 lastMoveSerial = turn.serial
-                // Keep the cube's own position up to date before saying a turn
-                // happened, so anything reacting to the turn sees the cube as
-                // it is now rather than as it was a move ago.
-                if let state = cubeState {
-                    cubeState = state.applying(turn.move)
-                }
-                lastTurn = turn
+                received(turn)
             }
         case .facelets(_, let state):
             hasSeenPosition = true
-            // Only before anything has been lined up. Once the app knows which
-            // way round the cube is, the running tally is the thing to trust:
-            // a late position message would otherwise undo turns already
-            // counted.
-            if grips.isEmpty {
-                cubeState = state
-            }
+            positionArrived(state)
         case .battery(let percent):
             batteryPercent = Self.believableBattery(percent)
             if batteryPercent == nil {
@@ -348,6 +346,96 @@ final class SmartCubeManager: NSObject, ObservableObject {
     private func requestBattery() {
         guard let generation, let command = generation.requestBatteryCommand else { return }
         send(command)
+    }
+
+    // MARK: - Reading a turn
+
+    /// What this cube's own words for its faces turned out to mean.
+    private(set) var dialect = SmartCubeDialect.unknown
+
+    /// Turns whose label the cube has not been asked about yet.
+    ///
+    /// Held rather than guessed at. The cube is asked where it is, and the
+    /// answer says both what the turn was and what the label meant, for good.
+    /// One question per label, and a whole solve only ever turns five faces.
+    private var turnsAwaitingTheirMeaning: [GANProtocol.Turn] = []
+
+    /// Where the cube was before the first of those.
+    private var positionBeforeThem: CubeState?
+
+    /// The move the app made of the last turn, once the cube's own word for it
+    /// has been translated. This is what the rest of the app listens to: what
+    /// the cube calls its faces is nobody else's business.
+    @Published private(set) var lastMove: Move?
+
+    private func received(_ turn: GANProtocol.Turn) {
+        if let move = dialect.move(forLabel: turn.label, clockwise: turn.clockwise) {
+            return act(on: turn, as: move)
+        }
+        guard let here = cubeState else {
+            // Nowhere to measure from. The cube is asked on connecting, so this
+            // is a message arriving before the answer — ask again rather than
+            // name the turn from a table nothing has checked.
+            requestState()
+            return
+        }
+        if turnsAwaitingTheirMeaning.isEmpty {
+            positionBeforeThem = here
+        }
+        turnsAwaitingTheirMeaning.append(turn)
+        requestState()
+    }
+
+    private func act(on turn: GANProtocol.Turn, as move: Move) {
+        // Keep the cube's own position up to date before saying a turn
+        // happened, so anything reacting to the turn sees the cube as it is
+        // now rather than as it was a move ago.
+        if let state = cubeState {
+            cubeState = state.applying(move)
+        }
+        lastTurn = turn
+        lastMove = move
+    }
+
+    private func positionArrived(_ state: CubeState) {
+        guard !turnsAwaitingTheirMeaning.isEmpty else {
+            // Nothing outstanding, so this is the cube saying where it is. A
+            // position the cube reports is better evidence than a tally built
+            // on top of one, and disagreeing with it quietly is exactly what
+            // let a misread turn go unnoticed for a whole solve.
+            if cubeState == nil || grips.isEmpty {
+                cubeState = state
+            } else if cubeState != state {
+                note("Cube says it is somewhere else; taking its word for it")
+                cubeState = state
+            }
+            return
+        }
+
+        let waiting = turnsAwaitingTheirMeaning
+        let before = positionBeforeThem
+        turnsAwaitingTheirMeaning = []
+        positionBeforeThem = nil
+
+        // One turn between the two positions is the case worth having: the move
+        // is then exactly determined, and with it what the cube's word for that
+        // face means. More than one and this says nothing about any of them.
+        if waiting.count == 1, let before, let move = Move.between(before, and: state) {
+            let turn = waiting[0]
+            dialect.learn(label: turn.label, clockwise: turn.clockwise, was: move)
+            note("Cube's face \(turn.label)\(turn.clockwise ? "" : " reversed")"
+                 + " turned out to be \(move.notation)")
+            cubeState = before
+            return act(on: turn, as: move)
+        }
+
+        // Too much happened at once to learn anything from it. Take the cube's
+        // own position — it is still the truth — and say nothing about the
+        // turns rather than name them from a table that has never been checked.
+        // The next turn on that face will be asked about again.
+        cubeState = state
+        note("\(waiting.count) turns arrived before the cube said where it was; "
+             + "nothing learned from them")
     }
 
     /// Ask the cube to send its current state.
@@ -440,6 +528,7 @@ extension SmartCubeManager: CBCentralManagerDelegate {
             self.cubeState = nil
             self.grips = []
             self.positionIsTrustworthy = false
+            self.forgetTheDialect()
             self.status = .idle
         }
     }

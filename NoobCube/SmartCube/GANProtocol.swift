@@ -331,21 +331,30 @@ enum GANProtocol {
         return (cp, co, ep, eo)
     }
 
-    /// A move the cube says was made.
+    /// A move the cube says was made — in the cube's own words, not the app's.
+    ///
+    /// A number for the face and a bit for the direction. What they mean is a
+    /// detail of firmware GAN have never published, so nothing here pretends to
+    /// know: ``SmartCubeDialect`` finds out, from the cube's own position
+    /// reports, and this carries the numbers across untouched.
+    ///
+    /// It used to carry a `Move`, named from a hand-written table. If that
+    /// table was wrong for the cube in your hands, nothing anywhere could
+    /// notice — and a wrong table need not even be a possible way of labelling
+    /// a cube, so no way of holding it could undo the damage.
     struct Turn: Equatable, Sendable {
-        let move: Move
+        /// The face, as the cube numbered it. Nothing here knows what it means.
+        let label: Int
+        /// The direction, as the cube sent it. Likewise.
+        let clockwise: Bool
         let serial: Int
     }
 
-    /// The cube reports faces in the order U R F D L B.
-    static func move(faceIndex: Int, clockwise: Bool) -> Move? {
-        let bases: [MoveBase] = [.U, .R, .F, .D, .L, .B]
-        guard bases.indices.contains(faceIndex) else { return nil }
-        return Move(bases[faceIndex], clockwise ? .clockwise : .counterClockwise)
-    }
-
     /// Generations 3 and 4 send the face as a single set bit rather than an
-    /// index, in this order.
+    /// index. Which bit is which face is exactly what is not known for certain,
+    /// but the six values are, and that is all this is used for: turning a
+    /// one-hot field into a number between nought and five, for
+    /// ``SmartCubeDialect`` to make sense of.
     static let faceBitOrder = [2, 32, 8, 1, 16, 4]
 
     static func faceIndex(fromBits bits: Int) -> Int? {

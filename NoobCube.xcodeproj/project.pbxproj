@@ -57,6 +57,7 @@
 		23B58EF9A83AB7473A08F2A8 = {isa = PBXBuildFile; fileRef = 0DC1040F71DD10CA37D9244D; };
 		F2A8C50DEB7497C3CED9E40B = {isa = PBXBuildFile; fileRef = 8C6A370C2C039FE042165B06; };
 		94887707BA168FD89436234C = {isa = PBXBuildFile; fileRef = 06E00E2B74E76B2233EF602B; };
+		6B2FA18FF2B85CFB0261E7A3 = {isa = PBXBuildFile; fileRef = 393C78CDBB32CFEB261539B5; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -123,6 +124,7 @@
 		0DC1040F71DD10CA37D9244D = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CubeAlignment.swift"; sourceTree = "<group>"; };
 		8C6A370C2C039FE042165B06 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SmartCubeTests.swift"; sourceTree = "<group>"; };
 		06E00E2B74E76B2233EF602B = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ColourPalette.swift"; sourceTree = "<group>"; };
+		393C78CDBB32CFEB261539B5 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SmartCubeDialect.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -228,6 +230,7 @@
 		B0A5E67D7443F0533B33DB7E /* SmartCube */ = {
 			isa = PBXGroup;
 			children = (
+				393C78CDBB32CFEB261539B5,
 				0DC1040F71DD10CA37D9244D,
 				76CE2838A0927B121B9D3AF1 /* GANMessageDecoder.swift */,
 				84E6B692A62E5ABA18A14CC6 /* GANProtocol.swift */,
@@ -382,6 +385,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				6B2FA18FF2B85CFB0261E7A3,
 				94887707BA168FD89436234C,
 				23B58EF9A83AB7473A08F2A8,
 				7BEF05C292647D872D265FDB,

@@ -118,10 +118,13 @@ final class AppModel: ObservableObject {
     /// other turn means the cube is no longer where we thought, so the plan is
     /// worked out again from what the cube says it is.
     private func observeSmartCube() {
-        smartCubeObserver = smartCube.$lastTurn
+        // The move, not the message. What the cube calls its faces is the
+        // cube's business and ``SmartCubeDialect``'s; by the time it reaches
+        // here it is a turn in the cube's own frame.
+        smartCubeObserver = smartCube.$lastMove
             .compactMap { $0 }
-            .sink { [weak self] turn in
-                Task { @MainActor in self?.handleSmartCubeTurn(turn.move) }
+            .sink { [weak self] move in
+                Task { @MainActor in self?.handleSmartCubeTurn(move) }
             }
     }
 

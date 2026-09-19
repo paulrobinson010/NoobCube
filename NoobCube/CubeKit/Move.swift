@@ -114,6 +114,32 @@ struct Move: Hashable, Codable, Sendable {
 
     var inverse: Move { Move(base, amount.inverse) }
 
+    /// Every turn of a single face: six faces, three amounts each.
+    static let everyFaceTurn: [Move] = MoveBase.allCases
+        .filter { !$0.isRotation }
+        .flatMap { base in
+            [MoveAmount.clockwise, .half, .counterClockwise].map { Move(base, $0) }
+        }
+
+    /// Which single turn took the cube from one position to the other.
+    ///
+    /// There is never more than one answer. A face turn moves twenty stickers
+    /// and no two of the eighteen possible turns move them the same way, so
+    /// looking for the one that fits is not a guess — it is arithmetic.
+    /// Checked over 57,906 turns along 400 real solves in
+    /// `Tools/CubeReference/dialect.py`: never wrong, never two answers.
+    ///
+    /// This is what lets the app stop believing a hand-written table about
+    /// what a smart cube calls its own faces, and find out instead.
+    static func between(_ before: CubeState, and after: CubeState) -> Move? {
+        var found: Move?
+        for candidate in everyFaceTurn where before.applying(candidate) == after {
+            guard found == nil else { return nil }
+            found = candidate
+        }
+        return found
+    }
+
     var isRotation: Bool { base.isRotation }
 
     init?(notation: String) {
