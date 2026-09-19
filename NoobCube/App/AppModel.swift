@@ -240,7 +240,7 @@ final class AppModel: ObservableObject {
 
         let reading = fitting.first.map { here[$0] } ?? here[0]
         guard let move = reading.appMove(for: cubeMove) else { return }
-        smartCube.noteTurn(cubeMove, readAs: move)
+        smartCube.noteTurn(cubeMove, readAs: move, whenAskedFor: asked)
 
         // The grip has just come down to one and the screen missed some turns
         // while it was being worked out. The cube knows where it is, so the
@@ -371,11 +371,7 @@ final class AppModel: ObservableObject {
     /// because all the surviving ways of holding it agree on what it was.
     func startFromSmartCube() {
         guard let state = smartCube.cubeState else { return }
-        // The cube described itself in its own frame, so it has to be painted
-        // in its own frame too. Painting it the way a child is asked to hold a
-        // cube is how the picture ended up with white and yellow the wrong way
-        // round, and red and orange with them.
-        let scanned = ScannedCube(colours: state.facelets.map { CubeColour.onTheCubesOwnFace($0) })
+        let scanned = ScannedCube(colours: state.facelets.map { CubeColour.defaultColour(for: $0) })
         let whiteFace = scanned.face(withCentre: .white) ?? .D
         do {
             let plan = try BeginnerSolver.solve(state, whiteFace: whiteFace)

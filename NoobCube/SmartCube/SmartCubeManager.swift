@@ -94,14 +94,29 @@ final class SmartCubeManager: NSObject, ObservableObject {
     /// What the cube said and what the app made of it, for when a turn on the
     /// screen does not match the turn in the child's hands. Without this, that
     /// is a thing you can only describe; with it, it is a thing you can read.
-    func noteTurn(_ said: Move, readAs ours: Move) {
-        note("cube said \(said.notation), read as \(ours.notation)"
-             + (grips.count == 1 ? "" : " (\(grips.count) grips still possible)"))
+    /// Everything about one turn, in one line.
+    ///
+    /// A turn coming out as the wrong face has four places it can go wrong —
+    /// the number the cube sent, what that number means, which way round the
+    /// cube is being held, and what the app was expecting — and describing the
+    /// symptom cannot tell them apart. This can.
+    func noteTurn(_ said: Move, readAs ours: Move, whenAskedFor asked: Move?) {
+        let label = lastTurn.map { "#\($0.label)\($0.clockwise ? "" : "'")" } ?? "#?"
+        let held = alignment.map { grip in
+            grip.appFace.sorted { $0.key.rawValue < $1.key.rawValue }
+                .map { "\($0.key.letter)\($0.value.letter)" }.joined()
+        } ?? "\(grips.count) still possible"
+        note("turn \(label) -> \(said.notation) -> \(ours.notation)"
+             + "   asked \(asked?.notation ?? "-")   held \(held)"
+             + "   sensor \(sensorGrip == nil ? "no" : "yes")")
     }
 
     func note(_ line: String) {
         diagnostics.append(line)
         if diagnostics.count > 40 { diagnostics.removeFirst() }
+        // Also to the console, because the one place this is needed is a cube
+        // in someone's hands and a screen that is not showing what it should.
+        print("NoobCube smart cube: \(line)")
     }
 
     /// Work out which way round the cube is being held, by holding what it
@@ -220,12 +235,10 @@ final class SmartCubeManager: NSObject, ObservableObject {
         (1...100).contains(percent) ? percent : nil
     }
 
-    /// Colours matching `cubeState`.
-    ///
-    /// In the cube's own frame, because that is the frame `cubeState` is in.
+    /// Colours matching `cubeState`, using the cube's standard scheme.
     var trackedColours: [CubeColour?]? {
         cubeState.map { state in
-            state.facelets.map { CubeColour.onTheCubesOwnFace($0) }
+            state.facelets.map { CubeColour.defaultColour(for: $0) }
         }
     }
 
