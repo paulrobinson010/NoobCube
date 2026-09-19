@@ -151,6 +151,18 @@ final class SmartCubeManager: NSObject, ObservableObject {
         positionIsTrustworthy = true
     }
 
+    /// Every way the cube could be being held, with nothing ruled out.
+    ///
+    /// This is what "we do not know yet" looks like, and it is the only honest
+    /// thing to say before a turn has been seen. A cube reports its turns in
+    /// its own frame, and how that frame sits in a child's hands is not
+    /// something the cube can tell you — only the turns can, and they settle it
+    /// after two of them.
+    func openEveryGrip(trustingPosition: Bool = false) {
+        grips = CubeAlignment.allGrips.map { CubeAlignment.identity.regripped(by: $0) }
+        if trustingPosition { positionIsTrustworthy = true }
+    }
+
     /// Throw the grip away and work it out again from the turns.
     ///
     /// For when the grip we settled on keeps disagreeing with what the child is
@@ -160,7 +172,7 @@ final class SmartCubeManager: NSObject, ObservableObject {
     /// and they are what settled it in the first place.
     func reopenTheGrip() {
         guard grips.count == 1 else { return }
-        grips = CubeAlignment.allGrips.map { CubeAlignment.identity.regripped(by: $0) }
+        openEveryGrip()
         note("That grip kept being wrong — working it out from your turns again")
     }
 
@@ -181,10 +193,16 @@ final class SmartCubeManager: NSObject, ObservableObject {
     /// idea of itself has drifted.
     func startFromSolved() {
         cubeState = .solved
-        grips = [.identity]
+        // Where it is, yes. Which way round it is being held, no — and a solved
+        // cube is the one position from which that can never be read, because
+        // it looks exactly the same all twenty-four ways round. Saying
+        // "identity" here is a one-in-twenty-four guess dressed up as a fact,
+        // and because it leaves a single settled grip the app stops learning
+        // and starts telling the child they turned the wrong side instead.
+        openEveryGrip()
         positionIsTrustworthy = true
         lastMoveSerial = nil
-        note("Told it is solved right now")
+        note("Told it is solved right now; which way round it is held is still open")
     }
 
     var isConnected: Bool { status.isConnected }

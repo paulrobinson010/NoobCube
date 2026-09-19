@@ -166,9 +166,12 @@ final class AppModel: ObservableObject {
         } else if smartCube.isStillWorkingOutTheGrip {
             // Nothing fits and the grip is not known well enough to say what
             // they turned. Guessing would mean telling a child they turned the
-            // wrong thing on no evidence at all.
-            narrator.say("I\u{2019}m still working out which way round your cube is. "
-                         + "Try the move I asked for.")
+            // wrong thing on no evidence at all — but the cube has moved, and
+            // the screen has not, so from here the two are out of step until
+            // the grip settles and the screen can be put right from the cube.
+            screenIsBehindTheCube = true
+            narrator.say("I\u{2019}m still learning how you\u{2019}re holding your cube. "
+                         + "Have a go at the move I asked for.")
             return
 
         } else {
@@ -183,8 +186,9 @@ final class AppModel: ObservableObject {
                 turnsThatFittedNothing = 0
                 smartCube.reopenTheGrip()
                 session.forgetTheMistake()
-                narrator.say("I had which way round your cube is wrong. "
-                             + "Do the next move and I\u{2019}ll pick it up.")
+                screenIsBehindTheCube = true
+                narrator.say("Sorry — I was looking at your cube the wrong way "
+                             + "round. Keep going and I\u{2019}ll catch up.")
                 return
             }
         }
@@ -193,11 +197,31 @@ final class AppModel: ObservableObject {
         guard let move = reading.appMove(for: cubeMove) else { return }
         smartCube.noteTurn(cubeMove, readAs: move)
 
+        // The grip has just come down to one and the screen missed some turns
+        // while it was being worked out. The cube knows where it is, so the
+        // screen is put right from it rather than left quietly wrong.
+        if screenIsBehindTheCube, !smartCube.isStillWorkingOutTheGrip {
+            screenIsBehindTheCube = false
+            narrator.say("Got it — that\u{2019}s how you\u{2019}re holding it.")
+            return catchUpWithTheCube()
+        }
+
         if spins.isEmpty {
             session.handleSmartCubeTurn(move)
         } else {
             session.takeTheTurnAsDone(andThen: move)
         }
+    }
+
+    /// The screen has fallen behind the cube in the child's hands.
+    ///
+    /// Only ever true while the grip is being worked out, because a turn that
+    /// cannot be named cannot be drawn. The cube itself never loses track, so
+    /// catching up is a matter of asking it where it is.
+    private var screenIsBehindTheCube = false
+
+    private func catchUpWithTheCube() {
+        replanFromSmartCube()
     }
 
     /// Work the plan out afresh from the cube's own position.
@@ -208,9 +232,21 @@ final class AppModel: ObservableObject {
     /// wrong is how a correct scan ends up replaced by a wrong one.
     func replanFromSmartCube() {
         guard let session, let cubeState = smartCube.cubeState else { return }
+
+        // A cube that is still telling us its turns is not lost, whatever it
+        // has just done. If the grip is not settled yet, the next turn or two
+        // will settle it and the screen is put right then — sending a child
+        // back to the camera because they fumbled two turns in a row is the
+        // app giving up on a cube that is working perfectly well.
         guard smartCube.alignment != nil, smartCube.positionIsTrustworthy else {
-            narrator.say("Let me look at your cube again.")
-            rescan()
+            guard smartCube.isFollowing else {
+                narrator.say("Let me look at your cube again.")
+                rescan()
+                return
+            }
+            screenIsBehindTheCube = true
+            narrator.say("Let me work out how you\u{2019}re holding it. "
+                         + "Carry on turning.")
             return
         }
         // Said the way the child is holding it, not the way the cube thinks of
@@ -264,16 +300,28 @@ final class AppModel: ObservableObject {
     /// Begin a solve from wherever the connected cube says it is.
     ///
     /// Nothing is confirmed first. The cube says what it looks like the moment
-    /// it connects, so the app shows that and gets on with it — the frame it
-    /// reports in becomes the frame the child is told about, which is true
-    /// enough to solve from and is put right the moment the camera looks.
+    /// it connects, so the app shows that and gets on with it.
+    ///
+    /// The plan is written in the cube's own frame, which is the only frame
+    /// available before the camera has looked. That does *not* mean the child
+    /// is holding it that way. The app used to say it did — a flat assertion
+    /// that the grip was the identity one — and being a single settled grip it
+    /// stopped the app ever learning otherwise: a child turning the side the
+    /// screen showed them was told, over and over, that they had turned the
+    /// wrong one. It is a one-in-twenty-four guess, so it is right about four
+    /// times in a hundred.
+    ///
+    /// So the grip is left open instead, and the first turn or two settle it —
+    /// measured at a median of two turns in `Tools/CubeReference/alignment.py`,
+    /// three at worst, and every turn in the meantime is read correctly anyway
+    /// because all the surviving ways of holding it agree on what it was.
     func startFromSmartCube() {
         guard let state = smartCube.cubeState else { return }
         let scanned = ScannedCube(colours: state.facelets.map { CubeColour.defaultColour(for: $0) })
         let whiteFace = scanned.face(withCentre: .white) ?? .D
         do {
             let plan = try BeginnerSolver.solve(state, whiteFace: whiteFace)
-            smartCube.reground(to: .identity)
+            smartCube.openEveryGrip(trustingPosition: true)
             scan = scanned
             session = SolveSession(plan: plan, scan: scanned, scene: scene, narrator: narrator)
             session?.onLost = { [weak self] in self?.replanFromSmartCube() }
