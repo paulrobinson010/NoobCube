@@ -539,4 +539,54 @@ final class CubeAlignmentTests: XCTestCase {
             Face.allCases.map { alignment.appFace[$0]?.letter ?? "?" }.joined()
         }).count, 24)
     }
+
+    // MARK: - Painting a cube the cube described itself
+
+    /// The numbering a smart cube uses for its own faces, which is the standard
+    /// way a cube is described rather than the way a child is asked to hold one:
+    ///
+    ///     0  U  white     3  D  yellow
+    ///     1  R  red       4  L  orange
+    ///     2  F  green     5  B  blue
+    func testTheCubesOwnFramePaintsWhiteOnTopNotYellow() {
+        XCTAssertEqual(CubeColour.onTheCubesOwnFace(.U), .white)
+        XCTAssertEqual(CubeColour.onTheCubesOwnFace(.R), .red)
+        XCTAssertEqual(CubeColour.onTheCubesOwnFace(.F), .green)
+        XCTAssertEqual(CubeColour.onTheCubesOwnFace(.D), .yellow)
+        XCTAssertEqual(CubeColour.onTheCubesOwnFace(.L), .orange)
+        XCTAssertEqual(CubeColour.onTheCubesOwnFace(.B), .blue)
+    }
+
+    /// And the two schemes differ in exactly the way the symptom described:
+    /// white and yellow swapped, red and orange swapped, green and blue alone.
+    func testTheTwoSchemesDifferByHalfATurnAboutGreenAndBlue() {
+        var swapped: Set<CubeColour> = []
+        var same: Set<CubeColour> = []
+        for face in Face.allCases {
+            let own = CubeColour.onTheCubesOwnFace(face)
+            if own == CubeColour.defaultColour(for: face) {
+                same.insert(own)
+            } else {
+                swapped.insert(own)
+                XCTAssertEqual(CubeColour.defaultColour(for: face), own.conventionalOpposite,
+                               "a difference that is not a swap with its opposite")
+            }
+        }
+        XCTAssertEqual(same, [.green, .blue])
+        XCTAssertEqual(swapped, [.white, .yellow, .red, .orange])
+    }
+
+    /// Both describe a cube that could exist.
+    func testBothSchemesDescribeAPossibleCube() {
+        var own: [Face: CubeColour] = [:]
+        var held: [Face: CubeColour] = [:]
+        for face in Face.allCases {
+            own[face] = CubeColour.onTheCubesOwnFace(face)
+            held[face] = CubeColour.defaultColour(for: face)
+        }
+        XCTAssertEqual(Set(own.values).count, 6)
+        XCTAssertEqual(Set(held.values).count, 6)
+        XCTAssertTrue(CubeColourScheme.isPlausible(centres: own))
+        XCTAssertTrue(CubeColourScheme.isPlausible(centres: held))
+    }
 }

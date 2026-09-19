@@ -210,8 +210,37 @@ struct ScannedCube: Equatable, Codable, Sendable {
 }
 
 extension CubeColour {
+    /// The colour on each face of a cube described in *its own* frame.
+    ///
+    /// A smart cube has no idea what colour anything is. It reports where its
+    /// pieces are, numbered against its own fixed frame, and something has to
+    /// decide what to paint on the picture. That numbering is the standard one:
+    ///
+    ///     0  U  white     3  D  yellow
+    ///     1  R  red       4  L  orange
+    ///     2  F  green     5  B  blue
+    ///
+    /// The app used to paint it the way a child is asked to *hold* a cube —
+    /// yellow on top — which is a different question and differs by half a turn
+    /// about the green-blue axis. So the picture came out with white and yellow
+    /// swapped and red and orange with them, which is exactly how it was
+    /// reported, every time.
+    ///
+    /// It is not about which way round the cube is being held: no way of
+    /// holding a cube puts a different colour under your thumb. Nor does it fix
+    /// a turn being read as the wrong face, which is a separate fault in a
+    /// separate place.
+    static func onTheCubesOwnFace(_ face: Face) -> CubeColour {
+        CubeColourScheme.reference[face] ?? defaultColour(for: face)
+    }
+
     /// The usual colour for a face when nothing has been scanned yet: white on
     /// the bottom, yellow on top, green at the front.
+    ///
+    /// How the *child* is asked to hold it, which is not the same question as
+    /// ``onTheCubesOwnFace(_:)``. Use this for a cube already described the way
+    /// they are holding it, and that one for a cube the smart cube has
+    /// described in its own terms.
     static func defaultColour(for face: Face) -> CubeColour {
         switch face {
         case .U: return .yellow
