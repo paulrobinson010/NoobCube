@@ -100,6 +100,52 @@ final class SmartCubeManager: NSObject, ObservableObject {
     /// the number the cube sent, what that number means, which way round the
     /// cube is being held, and what the app was expecting — and describing the
     /// symptom cannot tell them apart. This can.
+    /// What the cube called each face, against the face that was asked for.
+    ///
+    /// When a child follows the instructions exactly, the face they turned *is*
+    /// the face that was asked for. So every turn pins one row of the mapping
+    /// outright, whatever any table or grip believes — and if the app disagrees
+    /// with this after a few turns, the app is wrong and this says how.
+    private var faceForLabel: [Int: [MoveBase: Int]] = [:]
+    private var directionAgreed = 0
+    private var directionDisagreed = 0
+
+    /// The mapping those turns add up to, most-seen first.
+    var whatYourTurnsSay: String {
+        let rows = faceForLabel.keys.sorted().compactMap { label -> String? in
+            guard let best = faceForLabel[label]?.max(by: { $0.value < $1.value }) else {
+                return nil
+            }
+            let total = faceForLabel[label]?.values.reduce(0, +) ?? 0
+            return "#\(label)=\(best.key.rawValue)\(best.value == total ? "" : "?")"
+        }
+        guard !rows.isEmpty else { return "nothing yet" }
+        let turning = directionDisagreed == 0 ? "same way round"
+            : (directionAgreed == 0 ? "OTHER way round" : "direction unclear")
+        return rows.joined(separator: " ") + "   " + turning
+    }
+
+    /// Write down what was asked for beside what the cube reported.
+    ///
+    /// Called before the app has decided anything, because the turns worth
+    /// learning from are exactly the ones it goes on to get wrong, and those
+    /// leave by an earlier door.
+    func noteAsked(_ asked: Move?) {
+        guard let asked, let turn = lastTurn, !asked.isWholeCubeTurn else { return }
+        faceForLabel[turn.label, default: [:]][asked.base, default: 0] += 1
+        // A half turn arrives as two quarter turns and says nothing about which
+        // way round the cube counts, so it is left out of that tally.
+        if asked.amount != .half {
+            if (asked.amount == .clockwise) == turn.clockwise {
+                directionAgreed += 1
+            } else {
+                directionDisagreed += 1
+            }
+        }
+        note("asked \(asked.notation), cube sent #\(turn.label)\(turn.clockwise ? "" : "'")"
+             + "   so far: \(whatYourTurnsSay)")
+    }
+
     func noteTurn(_ said: Move, readAs ours: Move, whenAskedFor asked: Move?) {
         let label = lastTurn.map { "#\($0.label)\($0.clockwise ? "" : "'")" } ?? "#?"
         let held = alignment.map { grip in
@@ -305,6 +351,9 @@ final class SmartCubeManager: NSObject, ObservableObject {
     /// for as long as the cube is connected and thrown away when it is not.
     private func forgetTheDialect() {
         dialect.forget()
+        faceForLabel = [:]
+        directionAgreed = 0
+        directionDisagreed = 0
         orientation.forget()
         lastQuaternion = nil
         sensorGrip = nil
