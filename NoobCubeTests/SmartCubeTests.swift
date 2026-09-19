@@ -1,3 +1,4 @@
+import Foundation
 import XCTest
 @testable import NoobCube
 
@@ -393,5 +394,127 @@ final class CubeAlignmentTests: XCTestCase {
             }
             XCTAssertLessThanOrEqual(asked, 6, "it should ask once per face at most")
         }
+    }
+
+    // MARK: - Which way up it is, from the cube's own sensor
+
+    private func quaternion(turning degrees: Double,
+                            about axis: (Double, Double, Double))
+        -> CubeOrientation.Quaternion {
+        let size = (axis.0 * axis.0 + axis.1 * axis.1 + axis.2 * axis.2).squareRoot()
+        let n = size > 0.000001 ? size : 1
+        let half = degrees * .pi / 360
+        let s = sin(half)
+        return CubeOrientation.Quaternion(w: cos(half), x: axis.0 / n * s,
+                                          y: axis.1 / n * s, z: axis.2 / n * s)
+    }
+
+    /// The grips are rotations, and turning one by a whole-cube move gives the
+    /// rotation of the grip you land on. If this did not hold, nothing built on
+    /// it would mean anything.
+    func testEveryGripIsARotationThatAgreesWithItself() {
+        XCTAssertEqual(CubeOrientation.everyGrip.count, 24)
+        for candidate in CubeOrientation.everyGrip {
+            // A rotation's inverse is its transpose, so the two must cancel.
+            let back = candidate.rotation.times(candidate.rotation.inverse)
+            XCTAssertEqual(back.agreement(with: .identity), 3, accuracy: 0.000001)
+            // And it is the nearest thing to itself.
+            XCTAssertEqual(CubeOrientation.nearestGrip(to: candidate.rotation).appFace,
+                           candidate.alignment.appFace)
+        }
+    }
+
+    /// GAN's axes never have to be known. The sensor's frame and the child's
+    /// differ by one fixed rotation; one known grip pins it and it cancels from
+    /// then on. Measured over 10,000 readings in
+    /// `Tools/CubeReference/orientation.py`: exact while the cube is held
+    /// within 20° of square, 99.6% at 30°.
+    func testTheSensorsAxesNeverHaveToBeKnown() {
+        var generator = SeededGenerator(seed: 41)
+        for _ in 0..<50 {
+            // Whatever frame the cube's firmware chose, and whenever its sensor
+            // happened to be zeroed.
+            let offset = CubeOrientation.Rotation(
+                quaternion(turning: Double.random(in: 0...360, using: &generator),
+                           about: (Double.random(in: -1...1, using: &generator),
+                                   Double.random(in: -1...1, using: &generator),
+                                   Double.random(in: -1...1, using: &generator))))
+
+            // A moment where the grip is known some other way.
+            let known = CubeOrientation.everyGrip.randomElement(using: &generator)!
+            let sensorThen = offset.inverse.times(known.rotation)
+            var orientation = CubeOrientation()
+            orientation.calibrate(sensor: quaternionOf(sensorThen),
+                                  isBeingHeldAs: known.alignment)
+            XCTAssertTrue(orientation.isCalibrated)
+
+            // Now hold it any way at all.
+            for candidate in CubeOrientation.everyGrip {
+                let sensorNow = offset.inverse.times(candidate.rotation)
+                XCTAssertEqual(orientation.grip(sensor: quaternionOf(sensorNow))?.appFace,
+                               candidate.alignment.appFace,
+                               "the sensor lost track of how the cube is held")
+            }
+        }
+    }
+
+    /// The instruction a connected cube could never follow along with: a cube
+    /// cannot feel itself being turned round in your hands, so "turn the cube
+    /// around" was the one step that still needed a tap. The sensor feels it.
+    func testATurnOfTheWholeCubeIsVisibleToTheSensor() {
+        var generator = SeededGenerator(seed: 59)
+        let offset = CubeOrientation.Rotation(
+            quaternion(turning: 37, about: (0.3, 0.8, -0.5)))
+        let before = CubeOrientation.everyGrip.randomElement(using: &generator)!
+        var orientation = CubeOrientation()
+        orientation.calibrate(sensor: quaternionOf(offset.inverse.times(before.rotation)),
+                              isBeingHeldAs: before.alignment)
+
+        for spin in ["y", "y'", "y2", "x", "x'", "x2", "z", "z'", "z2"] {
+            let after = before.alignment.regripped(by: Move.parse(spin))
+            let sensor = offset.inverse.times(CubeOrientation.rotation(of: after))
+            XCTAssertEqual(orientation.grip(sensor: quaternionOf(sensor))?.appFace,
+                           after.appFace, "\(spin) was not felt")
+        }
+    }
+
+    /// A reading that is not a rotation at all must be thrown out rather than
+    /// acted on — the byte offsets for this message have never been held
+    /// against real hardware.
+    func testNonsenseFromTheSensorIsRefused() {
+        XCTAssertFalse(CubeOrientation.Quaternion(w: 0, x: 0, y: 0, z: 0).isUsable)
+        XCTAssertFalse(CubeOrientation.Quaternion(w: 9, x: 9, y: 9, z: 9).isUsable)
+        XCTAssertTrue(CubeOrientation.Quaternion(w: 1, x: 0, y: 0, z: 0).isUsable)
+
+        var orientation = CubeOrientation()
+        orientation.calibrate(sensor: .init(w: 0, x: 0, y: 0, z: 0),
+                              isBeingHeldAs: .identity)
+        XCTAssertFalse(orientation.isCalibrated, "nonsense was taken for a calibration")
+        XCTAssertNil(orientation.grip(sensor: .init(w: 1, x: 0, y: 0, z: 0)),
+                     "an uncalibrated sensor must not have an opinion")
+    }
+
+    /// Turning a rotation back into a quaternion, for the tests above.
+    private func quaternionOf(_ r: CubeOrientation.Rotation) -> CubeOrientation.Quaternion {
+        let m = r.rows
+        let trace = m[0][0] + m[1][1] + m[2][2]
+        if trace > 0 {
+            let s = (trace + 1).squareRoot() * 2
+            return .init(w: 0.25 * s, x: (m[2][1] - m[1][2]) / s,
+                         y: (m[0][2] - m[2][0]) / s, z: (m[1][0] - m[0][1]) / s)
+        }
+        if m[0][0] > m[1][1], m[0][0] > m[2][2] {
+            let s = (1 + m[0][0] - m[1][1] - m[2][2]).squareRoot() * 2
+            return .init(w: (m[2][1] - m[1][2]) / s, x: 0.25 * s,
+                         y: (m[0][1] + m[1][0]) / s, z: (m[0][2] + m[2][0]) / s)
+        }
+        if m[1][1] > m[2][2] {
+            let s = (1 + m[1][1] - m[0][0] - m[2][2]).squareRoot() * 2
+            return .init(w: (m[0][2] - m[2][0]) / s, x: (m[0][1] + m[1][0]) / s,
+                         y: 0.25 * s, z: (m[1][2] + m[2][1]) / s)
+        }
+        let s = (1 + m[2][2] - m[0][0] - m[1][1]).squareRoot() * 2
+        return .init(w: (m[1][0] - m[0][1]) / s, x: (m[0][2] + m[2][0]) / s,
+                     y: (m[1][2] + m[2][1]) / s, z: 0.25 * s)
     }
 }

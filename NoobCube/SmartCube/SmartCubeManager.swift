@@ -124,6 +124,7 @@ final class SmartCubeManager: NSObject, ObservableObject {
             // Nothing can drift apart again from here.
             self.cubeState = found.cubeState(of: scanned)
             positionIsTrustworthy = true
+            calibrateOrientation(against: found)
             note("Lined up with the scan: " + found.appFace
                     .sorted { $0.key.rawValue < $1.key.rawValue }
                     .map { "\($0.key.letter)->\($0.value.letter)" }
@@ -181,6 +182,7 @@ final class SmartCubeManager: NSObject, ObservableObject {
         guard !remaining.isEmpty, remaining.count < grips.count else { return }
         grips = remaining
         if remaining.count == 1 {
+            calibrateOrientation(against: remaining[0])
             note("Grip settled from your turns: " + remaining[0].appFace
                     .sorted { $0.key.rawValue < $1.key.rawValue }
                     .map { "\($0.key.letter)->\($0.value.letter)" }
@@ -285,6 +287,9 @@ final class SmartCubeManager: NSObject, ObservableObject {
     /// for as long as the cube is connected and thrown away when it is not.
     private func forgetTheDialect() {
         dialect.forget()
+        orientation.forget()
+        lastQuaternion = nil
+        sensorGrip = nil
         turnsAwaitingTheirMeaning = []
         positionBeforeThem = nil
         lastMove = nil
@@ -339,6 +344,8 @@ final class SmartCubeManager: NSObject, ObservableObject {
         case .facelets(_, let state):
             hasSeenPosition = true
             positionArrived(state)
+        case .orientation(let quaternion):
+            orientationArrived(quaternion)
         case .battery(let percent):
             batteryPercent = Self.believableBattery(percent)
             if batteryPercent == nil {
@@ -364,6 +371,58 @@ final class SmartCubeManager: NSObject, ObservableObject {
     private func requestBattery() {
         guard let generation, let command = generation.requestBatteryCommand else { return }
         send(command)
+    }
+
+    // MARK: - Which way up it is
+
+    /// The cube's own sense of which way up it is.
+    ///
+    /// Its face numbers are welded to the plastic, so the position it reports
+    /// is right however the child holds it — that never needed a grip and never
+    /// will. What needed one is *talking* about it: "turn the right-hand side"
+    /// means knowing which side is on their right. The motion sensor answers
+    /// that outright, and keeps answering it while the cube is turned about.
+    private var orientation = CubeOrientation()
+    private var lastQuaternion: CubeOrientation.Quaternion?
+
+    /// How the cube is being held, according to its motion sensor.
+    ///
+    /// Nil until the sensor has been pinned against a grip worked out some
+    /// other way — from a scan, or from the turns settling it. Until then the
+    /// app has no business having an opinion, and the old way of guessing one
+    /// is what spent four rounds telling a child they turned the wrong side.
+    @Published private(set) var sensorGrip: CubeAlignment?
+
+    var knowsHowItIsHeld: Bool { sensorGrip != nil }
+
+    private func orientationArrived(_ quaternion: CubeOrientation.Quaternion) {
+        lastQuaternion = quaternion
+        guard orientation.isCalibrated else { return }
+        let held = orientation.grip(sensor: quaternion)
+        if held != sensorGrip {
+            sensorGrip = held
+            if let held, grips.count > 1 {
+                // The sensor knows, so there is nothing left to work out.
+                grips = [held]
+                note("Held as " + held.appFace
+                        .sorted { $0.key.rawValue < $1.key.rawValue }
+                        .map { "\($0.key.letter)->\($0.value.letter)" }
+                        .joined(separator: " ") + " (from the cube's own sensor)")
+            }
+        }
+    }
+
+    /// Pin the sensor's frame to the child's, from a moment the grip is known.
+    ///
+    /// GAN's axes never have to be known: the two frames differ by one fixed
+    /// rotation, and this is where it is measured. Everything after cancels.
+    private func calibrateOrientation(against grip: CubeAlignment) {
+        guard let lastQuaternion else { return }
+        orientation.calibrate(sensor: lastQuaternion, isBeingHeldAs: grip)
+        sensorGrip = orientation.grip(sensor: lastQuaternion)
+        if orientation.isCalibrated {
+            note("Motion sensor lined up; which way up it is no longer has to be guessed")
+        }
     }
 
     // MARK: - Reading a turn

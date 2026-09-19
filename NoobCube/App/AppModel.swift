@@ -29,6 +29,7 @@ final class AppModel: ObservableObject {
     private var turnsThatFittedNothing = 0
 
     private var smartCubeObserver: AnyCancellable?
+    private var smartCubeGripObserver: AnyCancellable?
     private var smartCubeStatusObserver: AnyCancellable?
 
     init() {
@@ -117,6 +118,38 @@ final class AppModel: ObservableObject {
     /// Follow a connected cube: matching turns move the child along, and any
     /// other turn means the cube is no longer where we thought, so the plan is
     /// worked out again from what the cube says it is.
+    /// The cube has been turned round in the child's hands.
+    ///
+    /// This used to be the one instruction a connected cube could not follow
+    /// along with, because a cube cannot feel itself being turned — so it was
+    /// the one that still asked for a tap. Its motion sensor can feel it
+    /// perfectly well, so when the plan asks them to turn the cube round and
+    /// they do, that is the end of it. No button.
+    private func heldDifferently(_ held: CubeAlignment) {
+        guard screen == .solving, let session else {
+            gripWhenTheStepBegan = held
+            return
+        }
+        // Not waiting on a turn of the whole cube, so whatever they have just
+        // done with their hands is simply how they are holding it now.
+        guard let asked = session.currentMove, asked.isWholeCubeTurn,
+              let before = gripWhenTheStepBegan else {
+            gripWhenTheStepBegan = held
+            return
+        }
+
+        // The way the plan is asking them to hold it, measured from the way
+        // they were holding it when the instruction came up.
+        let wanted = before.regripped(by: session.pendingWholeCubeTurns)
+        guard wanted.appFace == held.appFace else { return }
+        gripWhenTheStepBegan = held
+        session.confirmWholeCubeTurn()
+    }
+
+    /// How the cube was being held when the current instruction came up, which
+    /// is what a "turn it round" is measured against.
+    private var gripWhenTheStepBegan: CubeAlignment?
+
     private func observeSmartCube() {
         // The move, not the message. What the cube calls its faces is the
         // cube's business and ``SmartCubeDialect``'s; by the time it reaches
@@ -125,6 +158,11 @@ final class AppModel: ObservableObject {
             .compactMap { $0 }
             .sink { [weak self] move in
                 Task { @MainActor in self?.handleSmartCubeTurn(move) }
+            }
+        smartCubeGripObserver = smartCube.$sensorGrip
+            .compactMap { $0 }
+            .sink { [weak self] held in
+                Task { @MainActor in self?.heldDifferently(held) }
             }
     }
 

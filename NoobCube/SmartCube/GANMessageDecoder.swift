@@ -12,6 +12,7 @@ enum GANMessageDecoder {
     enum Event: Equatable, Sendable {
         case moves([GANProtocol.Turn])
         case facelets(serial: Int, state: CubeState)
+        case orientation(CubeOrientation.Quaternion)
         case battery(percent: Int)
         case hardware(name: String)
         case disconnected
@@ -33,6 +34,8 @@ enum GANMessageDecoder {
     static func decodeGen2(_ bytes: [UInt8], lastSerial: Int?) -> Event? {
         let reader = GANProtocol.BitReader(bytes: bytes)
         switch reader.word(at: 0, bits: 4) {
+        case 0x01:
+            return orientation(reader, at: 4)
         case 0x02:
             return decodeGen2Moves(reader, lastSerial: lastSerial)
         case 0x04:
@@ -130,6 +133,29 @@ enum GANMessageDecoder {
         return .moves([GANProtocol.Turn(label: face,
                                         clockwise: direction == 0,
                                         serial: serial & 0xFF)])
+    }
+
+    /// The cube's own sense of which way up it is, as a quaternion.
+    ///
+    /// Four sixteen-bit words, each sign-and-magnitude: the top bit is the
+    /// sign and the rest is a fraction of 0x7FFF. The offsets come from
+    /// `gan-web-bluetooth` like everything else here, and are the one part of
+    /// this that has never been held against real hardware — so nothing is
+    /// taken on trust. ``CubeOrientation`` is only ever believed once it has
+    /// agreed with a grip worked out some other way, and a reading that is not
+    /// a rotation at all is thrown out by ``CubeOrientation/Quaternion/isUsable``.
+    /// If these offsets are wrong the app behaves exactly as it did before the
+    /// cube had a motion sensor at all.
+    private static func orientation(_ reader: GANProtocol.BitReader,
+                                    at start: Int) -> Event? {
+        func part(_ index: Int) -> Double {
+            let raw = reader.word(at: start + 16 * index, bits: 16)
+            let sign = (raw >> 15) == 1 ? -1.0 : 1.0
+            return sign * Double(raw & 0x7FFF) / Double(0x7FFF)
+        }
+        let quaternion = CubeOrientation.Quaternion(w: part(0), x: part(1),
+                                                    y: part(2), z: part(3))
+        return quaternion.isUsable ? .orientation(quaternion) : .ignored
     }
 
     /// Every generation packs the position the same way — seven corners, eleven
