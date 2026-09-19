@@ -41,9 +41,11 @@ struct CubeAlignment: Equatable, Sendable {
     /// the way the app asks them to.
     ///
     /// These cubes number their faces against a fixed orientation — white on
-    /// top, green at the front, red on the right — confirmed by asking one,
-    /// eight turns named by colour, in ``SmartCubeCheckView``. The app asks the
-    /// child to hold theirs yellow on top and green at the front. Those are not
+    /// top, green at the front, red on the right. That was established by
+    /// asking a cube: eight turns, each named by colour rather than by a side
+    /// of the screen, so that how it was being held could not come into the
+    /// answer. The app asks the child to hold theirs yellow on top and green
+    /// at the front. Those are not
     /// the same way up, and the difference is half a turn:
     ///
     ///     U->D   R->L   F->F   D->U   L->R   B->B

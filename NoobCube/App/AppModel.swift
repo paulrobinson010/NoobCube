@@ -193,12 +193,6 @@ final class AppModel: ObservableObject {
         // all agree on what the turn was — that is what put them in the set —
         // so it can be acted on now, while the grip is still coming down.
         let asked = spins.isEmpty ? session.currentMove : session.moveAfterWholeCubeTurns
-
-        // Before anything is decided. A child following the instructions turns
-        // the face that was asked for, so asked-against-reported is the mapping
-        // itself — and the turns worth learning from are the ones the app is
-        // about to get wrong, which leave by an earlier door than the reading.
-        smartCube.noteAsked(asked)
         let fitting = asked.map { want in
             here.indices.filter { here[$0].appMove(for: cubeMove) == want }
         } ?? []
