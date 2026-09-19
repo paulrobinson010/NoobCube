@@ -518,75 +518,54 @@ final class CubeAlignmentTests: XCTestCase {
                      y: (m[1][2] + m[2][1]) / s, z: 0.25 * s)
     }
 
-    /// When nothing has narrowed the grip yet, the app reads a turn with the
-    /// first candidate. That has to be the cube's own frame — the frame the
-    /// plan and the picture are both written in — or a turn with no move on
-    /// screen to compare against is read as some arbitrary way of holding it.
-    func testTheFirstWayOfHoldingItIsTheCubesOwnFrame() {
-        XCTAssertEqual(CubeAlignment.allGrips.count, 24)
-        XCTAssertEqual(CubeAlignment.allGrips.first?.isEmpty, true,
-                       "the identity grip must come first")
-
-        let opened = CubeAlignment.allGrips.map { CubeAlignment.identity.regripped(by: $0) }
-        XCTAssertEqual(opened.first?.appFace, CubeAlignment.identity.appFace)
-        for face in Face.allCases {
-            XCTAssertEqual(CubeAlignment.identity.appMove(for: Move(MoveBase(rawValue: face.letter)!)),
-                           Move(MoveBase(rawValue: face.letter)!),
-                           "the cube's own frame must rename nothing")
-        }
-        // And all twenty-four are different ways of holding it, not repeats.
-        XCTAssertEqual(Set(opened.map { alignment in
-            Face.allCases.map { alignment.appFace[$0]?.letter ?? "?" }.joined()
-        }).count, 24)
-    }
-
-    // MARK: - Painting a cube the cube described itself
-
-    /// The numbering a smart cube uses for its own faces, which is the standard
-    /// way a cube is described rather than the way a child is asked to hold one:
+    /// How the cube's own frame sits in a child's hands when they hold it as
+    /// asked: white-on-top numbering against yellow-on-top instructions, which
+    /// is half a turn apart.
     ///
-    ///     0  U  white     3  D  yellow
-    ///     1  R  red       4  L  orange
-    ///     2  F  green     5  B  blue
-    func testTheCubesOwnFramePaintsWhiteOnTopNotYellow() {
-        XCTAssertEqual(CubeColour.onTheCubesOwnFace(.U), .white)
-        XCTAssertEqual(CubeColour.onTheCubesOwnFace(.R), .red)
-        XCTAssertEqual(CubeColour.onTheCubesOwnFace(.F), .green)
-        XCTAssertEqual(CubeColour.onTheCubesOwnFace(.D), .yellow)
-        XCTAssertEqual(CubeColour.onTheCubesOwnFace(.L), .orange)
-        XCTAssertEqual(CubeColour.onTheCubesOwnFace(.B), .blue)
+    /// Top and bottom swapped, left and right swapped, front and back alone —
+    /// the whole of "it turns the opposite side".
+    func testTheCubesFrameIsHalfATurnFromHowTheChildHoldsIt() {
+        let held = CubeAlignment.asTheChildIsAskedToHoldIt
+        XCTAssertEqual(held.appFace[.U], .D)
+        XCTAssertEqual(held.appFace[.D], .U)
+        XCTAssertEqual(held.appFace[.R], .L)
+        XCTAssertEqual(held.appFace[.L], .R)
+        XCTAssertEqual(held.appFace[.F], .F)
+        XCTAssertEqual(held.appFace[.B], .B)
+        XCTAssertNotEqual(held.appFace, CubeAlignment.identity.appFace)
     }
 
-    /// And the two schemes differ in exactly the way the symptom described:
-    /// white and yellow swapped, red and orange swapped, green and blue alone.
-    func testTheTwoSchemesDifferByHalfATurnAboutGreenAndBlue() {
-        var swapped: Set<CubeColour> = []
-        var same: Set<CubeColour> = []
+    /// Every face keeps its colour across it. That is what makes it the right
+    /// half turn rather than just a half turn.
+    func testHoldingItAsAskedKeepsEveryColourWhereItIs() {
+        let held = CubeAlignment.asTheChildIsAskedToHoldIt
         for face in Face.allCases {
-            let own = CubeColour.onTheCubesOwnFace(face)
-            if own == CubeColour.defaultColour(for: face) {
-                same.insert(own)
-            } else {
-                swapped.insert(own)
-                XCTAssertEqual(CubeColour.defaultColour(for: face), own.conventionalOpposite,
-                               "a difference that is not a swap with its opposite")
+            guard let landsOn = held.appFace[face] else {
+                return XCTFail("\(face) went nowhere")
             }
+            XCTAssertEqual(CubeColour.onTheCubesOwnFace(face),
+                           CubeColour.defaultColour(for: landsOn),
+                           "the cube's \(face) is not the same colour as the side it sits on")
         }
-        XCTAssertEqual(same, [.green, .blue])
-        XCTAssertEqual(swapped, [.white, .yellow, .red, .orange])
     }
 
-    /// Both describe a cube that could exist.
-    func testBothSchemesDescribeAPossibleCube() {
-        var own: [Face: CubeColour] = [:]
-        var held: [Face: CubeColour] = [:]
-        for face in Face.allCases {
-            own[face] = CubeColour.onTheCubesOwnFace(face)
-            held[face] = CubeColour.defaultColour(for: face)
-        }
-        XCTAssertEqual(Set(own.values).count, 6)
-        XCTAssertEqual(Set(held.values).count, 6)
-        XCTAssertTrue(CubeColourScheme.isPlausible(centres: own))
-        XCTAssertTrue(CubeColourScheme.isPlausible(centres: held))
+    /// And it is what a turn is read with before anything has narrowed the set,
+    /// which is the fallback that used to be the cube's own frame.
+    func testTheFirstWayOfHoldingItIsTheWayTheyWereAsked() {
+        let asked = CubeAlignment.asTheChildIsAskedToHoldIt
+        let every = CubeAlignment.allGrips.map { CubeAlignment.identity.regripped(by: $0) }
+        let ordered = every.filter { $0.appFace == asked.appFace }
+                    + every.filter { $0.appFace != asked.appFace }
+        XCTAssertEqual(ordered.count, 24)
+        XCTAssertEqual(ordered.first?.appFace, asked.appFace)
+        XCTAssertEqual(Set(ordered.map { alignment in
+            Face.allCases.map { alignment.appFace[$0]?.letter ?? "?" }.joined()
+        }).count, 24, "all twenty-four must still be there, and different")
+
+        // A turn on the cube's red face is a turn on the child's left.
+        XCTAssertEqual(asked.appMove(for: Move(.R)), Move(.L))
+        XCTAssertEqual(asked.appMove(for: Move(.U, .counterClockwise)),
+                       Move(.D, .counterClockwise))
     }
+
 }

@@ -238,7 +238,65 @@ def check_learning_the_grip(trials=300):
     print('ALL PASS')
 
 
+# ------------------------------------------- how the cube's frame sits in a hand
+
+# What a smart cube's own face numbers mean. Confirmed by asking one: eight
+# turns, each named by colour so that how it was held could not come into it.
+CUBE_FRAME = {'U': 'white', 'R': 'red', 'F': 'green',
+              'D': 'yellow', 'L': 'orange', 'B': 'blue'}
+
+# What the app asks the child for: yellow on top, white underneath, green at
+# the front.
+CHILD_FRAME = {'U': 'yellow', 'R': 'orange', 'F': 'green',
+               'D': 'white', 'L': 'red', 'B': 'blue'}
+
+
+def as_the_child_is_asked_to_hold_it():
+    """The grip between the two, worked out from the colours rather than typed."""
+    where = {colour: face for face, colour in CHILD_FRAME.items()}
+    want = {f: where[CUBE_FRAME[f]] for f in cube.FACES}
+    for grip in GRIPS:
+        if faces_after(grip) == want:
+            return grip, want
+    raise RuntimeError('the two colour schemes are not a way of holding a cube')
+
+
+def check_the_frame_the_child_holds_it_in(trials=200, seed=5):
+    """The bug that survived six rounds of looking elsewhere.
+
+    The cube numbers its faces white-on-top; the child is asked to hold theirs
+    yellow-on-top. Those are half a turn apart, so reading a turn as though the
+    two frames were the same is wrong on four faces out of six — top and bottom
+    swapped, left and right swapped, front and back alone. Which is exactly and
+    only what "it turns the opposite side" ever was.
+    """
+    grip, want = as_the_child_is_asked_to_hold_it()
+    print('the cube is held', grip, 'from the frame it numbers its faces in')
+    for f in cube.FACES:
+        assert CUBE_FRAME[f] == CHILD_FRAME[want[f]], f
+    print('  every colour keeps its place across it')
+    print('  ' + '  '.join('%s->%s' % (f, want[f]) for f in cube.FACES))
+
+    rng = random.Random(seed)
+    checked = 0
+    for _ in range(trials):
+        scrambled = cube.apply(cube.SOLVED, scramble(rng))
+        for face in cube.FACES:
+            for suffix in ('', "'", '2'):
+                theirs = face + suffix
+                ours = app_move(grip, theirs)
+                assert (regripping(cube.apply(scrambled, [theirs]), grip)
+                        == cube.apply(regripping(scrambled, grip), [ours]))
+                checked += 1
+    print('  turns renamed through it and checked  %d' % checked)
+    assert app_move(grip, 'R') == 'L' and app_move(grip, 'U') == 'D'
+    print('  a turn of the red face is a turn of their left')
+    print('ALL PASS')
+
+
 if __name__ == '__main__':
     check()
     check_through_a_solve()
     check_learning_the_grip()
+    print()
+    check_the_frame_the_child_holds_it_in()

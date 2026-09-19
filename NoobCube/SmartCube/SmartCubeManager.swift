@@ -221,7 +221,14 @@ final class SmartCubeManager: NSObject, ObservableObject {
     /// something the cube can tell you — only the turns can, and they settle it
     /// after two of them.
     func openEveryGrip(trustingPosition: Bool = false) {
-        grips = CubeAlignment.allGrips.map { CubeAlignment.identity.regripped(by: $0) }
+        let asked = CubeAlignment.asTheChildIsAskedToHoldIt
+        let every = CubeAlignment.allGrips.map { CubeAlignment.identity.regripped(by: $0) }
+        // The way they were asked to hold it comes first, so a turn read before
+        // anything has narrowed the set is read that way rather than as though
+        // the cube's own frame were the child's. It was the second of those,
+        // and it is wrong on four faces out of six.
+        grips = every.filter { $0.appFace == asked.appFace }
+             + every.filter { $0.appFace != asked.appFace }
         if trustingPosition { positionIsTrustworthy = true }
     }
 
@@ -281,13 +288,14 @@ final class SmartCubeManager: NSObject, ObservableObject {
         (1...100).contains(percent) ? percent : nil
     }
 
-    /// Colours matching `cubeState`.
-    ///
-    /// In the cube's own frame, because that is the frame `cubeState` is in:
-    /// white on top, green at the front, as the cube numbers its own faces.
+    /// Colours matching `cubeState`, laid out the way the child is asked to
+    /// hold the cube — yellow on top — rather than the way the cube numbers
+    /// its own faces. They are half a turn apart, and the one worth showing is
+    /// the one they can hold up against what is in their hands.
     var trackedColours: [CubeColour?]? {
         cubeState.map { state in
-            state.facelets.map { CubeColour.onTheCubesOwnFace($0) }
+            CubeAlignment.asTheChildIsAskedToHoldIt.appState(of: state)
+                .facelets.map { CubeColour.defaultColour(for: $0) }
         }
     }
 

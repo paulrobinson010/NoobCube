@@ -377,13 +377,18 @@ final class AppModel: ObservableObject {
     /// because all the surviving ways of holding it agree on what it was.
     func startFromSmartCube() {
         guard let state = smartCube.cubeState else { return }
-        // The cube described itself in its own frame, so it is painted in its
-        // own frame: white on top, the way the cube numbers its faces, not the
-        // way a child is asked to hold one.
-        let scanned = ScannedCube(colours: state.facelets.map { CubeColour.onTheCubesOwnFace($0) })
+        // The cube described itself in its own frame — white on top, the way it
+        // numbers its faces. The child is asked to hold theirs yellow on top,
+        // so the plan and the picture are said that way round instead, and the
+        // half turn between the two is exactly what "it turns the opposite
+        // side" was.
+        let held = CubeAlignment.asTheChildIsAskedToHoldIt
+        let asTheyHoldIt = held.appState(of: state)
+        let scanned = ScannedCube(
+            colours: asTheyHoldIt.facelets.map { CubeColour.defaultColour(for: $0) })
         let whiteFace = scanned.face(withCentre: .white) ?? .D
         do {
-            let plan = try BeginnerSolver.solve(state, whiteFace: whiteFace)
+            let plan = try BeginnerSolver.solve(asTheyHoldIt, whiteFace: whiteFace)
             smartCube.openEveryGrip(trustingPosition: true)
             scan = scanned
             session = SolveSession(plan: plan, scan: scanned, scene: scene, narrator: narrator)

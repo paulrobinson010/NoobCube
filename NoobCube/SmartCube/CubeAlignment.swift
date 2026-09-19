@@ -37,6 +37,40 @@ struct CubeAlignment: Equatable, Sendable {
     /// The cube held exactly the way the app thinks of it.
     static let identity = CubeAlignment(grip: [])
 
+    /// How a smart cube's own frame sits in a child's hands when they hold it
+    /// the way the app asks them to.
+    ///
+    /// These cubes number their faces against a fixed orientation — white on
+    /// top, green at the front, red on the right — confirmed by asking one,
+    /// eight turns named by colour, in ``SmartCubeCheckView``. The app asks the
+    /// child to hold theirs yellow on top and green at the front. Those are not
+    /// the same way up, and the difference is half a turn:
+    ///
+    ///     U->D   R->L   F->F   D->U   L->R   B->B
+    ///
+    /// Top and bottom swapped, left and right swapped, front and back alone —
+    /// which is what "it turns the opposite side" was, every time it was
+    /// reported. Reading a turn as though the cube's frame and the child's were
+    /// the same is wrong on four of the six faces, and no colour, table or
+    /// motion sensor could have made it right.
+    ///
+    /// Worked out from the two colour schemes rather than written down as a
+    /// rotation, so it stays true if either of them is ever changed.
+    static let asTheChildIsAskedToHoldIt: CubeAlignment = {
+        var wanted: [Face: Face] = [:]
+        for face in Face.allCases {
+            guard let home = CubeColourScheme.face(forCentre: .onTheCubesOwnFace(face)) else {
+                return .identity
+            }
+            wanted[face] = home
+        }
+        for grip in allGrips {
+            let candidate = CubeAlignment.identity.regripped(by: grip)
+            if candidate.appFace == wanted { return candidate }
+        }
+        return .identity
+    }()
+
     /// The move the child actually made, said in the app's words.
     func appMove(for cubeMove: Move) -> Move? {
         guard let face = cubeMove.base.face, let mapped = appFace[face] else { return nil }
