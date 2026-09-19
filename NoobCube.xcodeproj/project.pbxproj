@@ -59,6 +59,7 @@
 		94887707BA168FD89436234C = {isa = PBXBuildFile; fileRef = 06E00E2B74E76B2233EF602B; };
 		6B2FA18FF2B85CFB0261E7A3 = {isa = PBXBuildFile; fileRef = 393C78CDBB32CFEB261539B5; };
 		1D7CE616B008B233114239F4 = {isa = PBXBuildFile; fileRef = 617D9EEF414546E18342EE47; };
+		323BB0300F59C1AFF1EC4DD6 = {isa = PBXBuildFile; fileRef = 4C0C94406EF0476E1BDDB657; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -127,6 +128,7 @@
 		06E00E2B74E76B2233EF602B = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ColourPalette.swift"; sourceTree = "<group>"; };
 		393C78CDBB32CFEB261539B5 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SmartCubeDialect.swift"; sourceTree = "<group>"; };
 		617D9EEF414546E18342EE47 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CubeOrientation.swift"; sourceTree = "<group>"; };
+		4C0C94406EF0476E1BDDB657 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SmartCubeCheckView.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -232,6 +234,7 @@
 		B0A5E67D7443F0533B33DB7E /* SmartCube */ = {
 			isa = PBXGroup;
 			children = (
+				4C0C94406EF0476E1BDDB657,
 				617D9EEF414546E18342EE47,
 				393C78CDBB32CFEB261539B5,
 				0DC1040F71DD10CA37D9244D,
@@ -388,6 +391,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				323BB0300F59C1AFF1EC4DD6,
 				1D7CE616B008B233114239F4,
 				6B2FA18FF2B85CFB0261E7A3,
 				94887707BA168FD89436234C,

@@ -351,6 +351,7 @@ final class SmartCubeManager: NSObject, ObservableObject {
     /// for as long as the cube is connected and thrown away when it is not.
     private func forgetTheDialect() {
         dialect.forget()
+        lastRawTurn = nil
         faceForLabel = [:]
         directionAgreed = 0
         directionDisagreed = 0
@@ -512,7 +513,13 @@ final class SmartCubeManager: NSObject, ObservableObject {
     /// the cube calls its faces is nobody else's business.
     @Published private(set) var lastMove: Move?
 
+    /// Every turn exactly as the cube sent it, before the app makes anything
+    /// of it. Only the cube check listens to this; everything else wants the
+    /// move, not the message.
+    @Published private(set) var lastRawTurn: GANProtocol.Turn?
+
     private func received(_ turn: GANProtocol.Turn) {
+        lastRawTurn = turn
         if let move = dialect.move(forLabel: turn.label, clockwise: turn.clockwise) {
             return act(on: turn, as: move)
         }

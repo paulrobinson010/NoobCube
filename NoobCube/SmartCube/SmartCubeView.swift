@@ -9,6 +9,7 @@ struct SmartCubeView: View {
     var onCalibrateSolved: () -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @State private var isChecking = false
 
     var body: some View {
         NavigationStack {
@@ -38,6 +39,9 @@ struct SmartCubeView: View {
         }
         .onAppear { manager.startScanning() }
         .onDisappear { manager.stopScanning() }
+        .sheet(isPresented: $isChecking) {
+            SmartCubeCheckView(manager: manager)
+        }
     }
 
     private var statusCard: some View {
@@ -123,6 +127,12 @@ struct SmartCubeView: View {
                 .buttonStyle(BigButtonStyle())
 
                 Button("Or it's solved right now") { onCalibrateSolved() }
+                    .buttonStyle(BigButtonStyle(isProminent: false))
+
+                // Eight turns that say what this cube means by its own face
+                // numbers, named by colour so nothing about how it is held
+                // comes into it.
+                Button("Check what my turns mean") { isChecking = true }
                     .buttonStyle(BigButtonStyle(isProminent: false))
             } else {
                 ProgressView()
