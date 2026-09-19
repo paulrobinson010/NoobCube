@@ -63,6 +63,25 @@ struct SolveStage: Identifiable, Hashable, Sendable {
         case yellowFace
         case lastCorners
         case lastEdges
+
+        /// How far through a solve this stage is. The cases are declared in the
+        /// order they are done, so comparing these says whether a cube has gone
+        /// forwards or backwards.
+        var howFarThrough: Int { Self.allCases.firstIndex(of: self) ?? 0 }
+
+        /// What a child would see come apart if a cube went back this far,
+        /// said the way they would say it.
+        var whatItTakesApart: String {
+            switch self {
+            case .hold, .daisy: return "daisy"
+            case .whiteCross: return "white cross"
+            case .whiteCorners: return "white side"
+            case .middleRow: return "middle row"
+            case .yellowCross: return "yellow cross"
+            case .yellowFace: return "yellow top"
+            case .lastCorners, .lastEdges: return "last layer"
+            }
+        }
     }
 
     let kind: Kind

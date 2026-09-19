@@ -407,12 +407,25 @@ final class SolveSession: ObservableObject {
         // else is simply where their cube is now, worked out again without
         // comment.
         if help == .undecided {
-            guard !expected.isWholeCubeTurn, move == expected else {
-                return playTheirTurn(move) { [weak self] in self?.replanQuietly() }
+            if !expected.isWholeCubeTurn, move == expected {
+                help = .wholeStage
+                confirmCurrentMove()
+                return
             }
-            help = .wholeStage
-            confirmCurrentMove()
-            return
+            // Unless it undoes work they have already done. Turning a side at
+            // the start of the middle row can take the finished white layer
+            // apart, and quietly re-planning from there sends a child back over
+            // ground they had won without ever saying why. They just made the
+            // move, so the way back is one turn, and it is worth offering
+            // before the plan accepts it.
+            if let backwards = stageThisWouldGoBackTo(after: move) {
+                wrongTurn = move
+                narrator.say("Careful — that takes your \(backwards) apart. "
+                             + "\(move.inverse.spokenInstruction) to put it back.")
+                playTheirTurn(move) { [weak self] in self?.showTheWayBack() }
+                return
+            }
+            return playTheirTurn(move) { [weak self] in self?.replanQuietly() }
         }
 
         // Whole-cube turns are dealt with before we get here, by
@@ -438,6 +451,30 @@ final class SolveSession: ObservableObject {
         waitingTurns.removeAll()
         narrator.say("Let me work out where your cube is now.")
         onLost?()
+    }
+
+    /// The stage this turn would send them back to, if it undoes finished work.
+    ///
+    /// Worked out by solving the cube as it would be afterwards and seeing
+    /// where that plan starts. Stages already finished come back empty, so the
+    /// first one with anything in it is how far along the cube really is — if
+    /// that is earlier than the stage in hand, the turn took something apart.
+    ///
+    /// Nil for a turn that costs nothing, which most of them do: spinning the
+    /// top, or turning the whole cube round, leaves every finished layer
+    /// finished and is none of the app's business.
+    private func stageThisWouldGoBackTo(after move: Move) -> String? {
+        // Turning the whole cube round moves nothing relative to anything else,
+        // so it can never take a finished layer apart. Worth saying outright
+        // rather than working out: a rotation also moves the middles, and a
+        // cube read back with its middles somewhere new is not the cube the
+        // solver thinks it is being handed.
+        guard !move.isWholeCubeTurn, let current = stage?.kind else { return nil }
+        guard let after = try? displayCube.applying(move).cubeState(),
+              let ahead = try? BeginnerSolver.solve(after.state, whiteFace: after.whiteFace),
+              let reached = ahead.stages.first(where: { !$0.steps.isEmpty })?.kind,
+              reached.howFarThrough < current.howFarThrough else { return nil }
+        return reached.whatItTakesApart
     }
 
     /// The same thing without saying so.
