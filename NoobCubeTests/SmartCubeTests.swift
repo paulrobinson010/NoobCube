@@ -517,4 +517,26 @@ final class CubeAlignmentTests: XCTestCase {
         return .init(w: (m[1][0] - m[0][1]) / s, x: (m[0][2] + m[2][0]) / s,
                      y: (m[1][2] + m[2][1]) / s, z: 0.25 * s)
     }
+
+    /// When nothing has narrowed the grip yet, the app reads a turn with the
+    /// first candidate. That has to be the cube's own frame — the frame the
+    /// plan and the picture are both written in — or a turn with no move on
+    /// screen to compare against is read as some arbitrary way of holding it.
+    func testTheFirstWayOfHoldingItIsTheCubesOwnFrame() {
+        XCTAssertEqual(CubeAlignment.allGrips.count, 24)
+        XCTAssertEqual(CubeAlignment.allGrips.first?.isEmpty, true,
+                       "the identity grip must come first")
+
+        let opened = CubeAlignment.allGrips.map { CubeAlignment.identity.regripped(by: $0) }
+        XCTAssertEqual(opened.first?.appFace, CubeAlignment.identity.appFace)
+        for face in Face.allCases {
+            XCTAssertEqual(CubeAlignment.identity.appMove(for: Move(MoveBase(rawValue: face.letter)!)),
+                           Move(MoveBase(rawValue: face.letter)!),
+                           "the cube's own frame must rename nothing")
+        }
+        // And all twenty-four are different ways of holding it, not repeats.
+        XCTAssertEqual(Set(opened.map { alignment in
+            Face.allCases.map { alignment.appFace[$0]?.letter ?? "?" }.joined()
+        }).count, 24)
+    }
 }

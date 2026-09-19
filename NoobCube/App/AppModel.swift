@@ -201,15 +201,24 @@ final class AppModel: ObservableObject {
             smartCube.narrow(to: fitting.map { smartCube.grips[$0] })
             turnsThatFittedNothing = 0
 
-        } else if smartCube.isStillWorkingOutTheGrip {
-            // Nothing fits and the grip is not known well enough to say what
-            // they turned. Guessing would mean telling a child they turned the
-            // wrong thing on no evidence at all — but the cube has moved, and
-            // the screen has not, so from here the two are out of step until
-            // the grip settles and the screen can be put right from the cube.
+        } else if smartCube.isStillWorkingOutTheGrip, asked != nil {
+            // We asked for a move, they made a different one, and the grip is
+            // not settled enough to say which. Guessing would mean telling a
+            // child they turned the wrong thing on no evidence at all — but the
+            // cube has moved and the screen has not, so the two are out of step
+            // until the grip settles and the screen can be put right from it.
+            //
+            // Only when something was actually asked for. With no move on
+            // screen there is nothing to narrow against, so every turn used to
+            // fall in here and be swallowed: the cube turned, the screen sat
+            // still, and nothing ever settled. Those are now read with the
+            // first candidate, which is the cube's own frame — the frame the
+            // picture is drawn in — and the app keeps up.
+            //
+            // Silently either way. Which way round the cube is being held is
+            // the app's problem, not the child's, and narrating it at them is
+            // asking a five year old to care about the plumbing.
             screenIsBehindTheCube = true
-            narrator.say("I\u{2019}m still learning how you\u{2019}re holding your cube. "
-                         + "Have a go at the move I asked for.")
             return
 
         } else {
@@ -225,8 +234,6 @@ final class AppModel: ObservableObject {
                 smartCube.reopenTheGrip()
                 session.forgetTheMistake()
                 screenIsBehindTheCube = true
-                narrator.say("Sorry — I was looking at your cube the wrong way "
-                             + "round. Keep going and I\u{2019}ll catch up.")
                 return
             }
         }
@@ -240,7 +247,6 @@ final class AppModel: ObservableObject {
         // screen is put right from it rather than left quietly wrong.
         if screenIsBehindTheCube, !smartCube.isStillWorkingOutTheGrip {
             screenIsBehindTheCube = false
-            narrator.say("Got it — that\u{2019}s how you\u{2019}re holding it.")
             return catchUpWithTheCube()
         }
 
@@ -264,32 +270,32 @@ final class AppModel: ObservableObject {
 
     /// Work the plan out afresh from the cube's own position.
     ///
-    /// Only possible once the grip is known *and* the cube's own position has
-    /// been put right by a scan. Either missing, and the camera is the way back
-    /// rather than a guess — planning a solve from a position the cube has got
-    /// wrong is how a correct scan ends up replaced by a wrong one.
+    /// Never a dead end. A cube's face numbers are welded to its plastic, so
+    /// the position it reports is right whatever else is unknown, and a plan
+    /// can always be built from it. If which way round it is being held has not
+    /// been settled yet, the plan is simply written in the cube's own frame —
+    /// the same frame the picture on screen is drawn in, so the two agree with
+    /// each other whatever the child's hands are doing, and the sensor or the
+    /// next turn or two puts the rest right.
+    ///
+    /// It used to give up here and say so, which left a child looking at a
+    /// screen with no move on it being told the app was working something out.
+    /// The camera is now only for a cube that has stopped talking altogether.
     func replanFromSmartCube() {
         guard let session, let cubeState = smartCube.cubeState else { return }
-
-        // A cube that is still telling us its turns is not lost, whatever it
-        // has just done. If the grip is not settled yet, the next turn or two
-        // will settle it and the screen is put right then — sending a child
-        // back to the camera because they fumbled two turns in a row is the
-        // app giving up on a cube that is working perfectly well.
-        guard smartCube.alignment != nil, smartCube.positionIsTrustworthy else {
-            guard smartCube.isFollowing else {
-                narrator.say("Let me look at your cube again.")
-                rescan()
-                return
-            }
-            screenIsBehindTheCube = true
-            narrator.say("Let me work out how you\u{2019}re holding it. "
-                         + "Carry on turning.")
+        guard smartCube.isFollowing else {
+            narrator.say("Let me look at your cube again.")
+            rescan()
             return
         }
-        // Said the way the child is holding it, not the way the cube thinks of
-        // itself, so the plan talks about the faces they can actually see.
-        let alignment = (smartCube.alignment ?? .identity)
+
+        // Said the way the child is holding it when that is known, and in the
+        // cube's own frame when it is not. Identity is not a guess here: the
+        // plan and the picture are both written in that frame, so they agree
+        // by construction, and the grip stays open so a child holding it some
+        // other way is noticed rather than argued with.
+        let settled = smartCube.alignment
+        let alignment = (settled ?? .identity)
             .regripped(by: session.wholeCubeTurnsSoFar)
         let state = alignment.appState(of: cubeState)
         let scanned = ScannedCube(colours: state.facelets.map { CubeColour.defaultColour(for: $0) })
@@ -298,8 +304,16 @@ final class AppModel: ObservableObject {
             let plan = try BeginnerSolver.solve(state, whiteFace: whiteFace)
             scan = scanned
             // The cube is where it is, so the grip the plan starts from is the
-            // one it has now; anything the old plan had turned is history.
-            smartCube.reground(to: alignment)
+            // one it has now; anything the old plan had turned is history. When
+            // it was never settled, every way of holding it stays open — the
+            // plan is in the cube's frame, and which way the child is actually
+            // holding it is still to be found out.
+            if settled != nil {
+                smartCube.reground(to: alignment)
+            } else {
+                smartCube.openEveryGrip(trustingPosition: true)
+            }
+            screenIsBehindTheCube = false
             session.replacePlan(plan, scan: scanned)
             session.cubeIsFollowing = smartCube.isFollowing
         } catch {
@@ -307,20 +321,22 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// Say out loud how the cube and the scan got on, because a cube that
-    /// cannot be lined up is the one thing the child would otherwise only
-    /// discover by being told they are wrong over and over.
+    /// Say whether the cube can be followed, and nothing more.
+    ///
+    /// A cube whose own idea of itself disagrees with the picture used to be
+    /// announced as a half-failure the child had to work around. It is not one:
+    /// its face numbers are welded to the plastic, so its turns are perfectly
+    /// good and the only thing missing is which way up it is being held — which
+    /// its motion sensor says, and which its next turn or two would settle
+    /// anyway. The one case genuinely worth mentioning is a cube that has not
+    /// said where it is at all, because then there is nothing to follow.
     private func announceAlignment(_ match: CubeAlignment.Match?) {
-        switch match {
-        case .found, .tooSymmetricToTell:
-            narrator.say("Your cube is connected, so I can feel every turn you make.")
-        case .cubeDisagrees:
-            narrator.say("Your cube and the picture don\u{2019}t agree, so I\u{2019}ll "
-                         + "wait for you to tell me each move.")
-        case nil:
+        guard match != nil else {
             narrator.say("Your cube hasn\u{2019}t told me where it is yet, so I\u{2019}ll "
                          + "wait for you to tell me each move.")
+            return
         }
+        narrator.say("Your cube is connected, so I can feel every turn you make.")
     }
 
     /// The cube is solved — either because the child said so, or because the
