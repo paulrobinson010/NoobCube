@@ -133,8 +133,26 @@ struct CubeAlignment: Equatable, Sendable {
     /// the surviving set.
     static func possibilities(cube: CubeState, scanned: CubeState) -> [CubeAlignment] {
         let hits = allGrips.filter { regripping(cube, by: $0) == scanned }
-        return hits.isEmpty ? allGrips.map { CubeAlignment(grip: $0) }
-                            : hits.map { CubeAlignment(grip: $0) }
+        let candidates = hits.isEmpty ? allGrips : hits
+        return likeliestFirst(candidates.map { CubeAlignment(grip: $0) })
+    }
+
+    /// The same candidates, with the way they were asked to hold it at the front.
+    ///
+    /// Which one is first is not a detail. When a turn cannot be narrowed —
+    /// nothing has been asked for yet, or they turned something else — it is
+    /// read with the first, and the list used to begin with the cube's own
+    /// frame. That is half a turn from the hand holding it, so every such turn
+    /// came out as the opposite side.
+    ///
+    /// It bites hardest in the one place a child is most likely to be: they
+    /// connect a cube, the picture does not match, so they show it to the
+    /// camera — and a cube whose own idea of itself was wrong is exactly the
+    /// case where no grip fits and all twenty-four come back.
+    static func likeliestFirst(_ candidates: [CubeAlignment]) -> [CubeAlignment] {
+        let asked = asTheChildIsAskedToHoldIt.appFace
+        return candidates.filter { $0.appFace == asked }
+             + candidates.filter { $0.appFace != asked }
     }
 
     /// Work out how the cube is being held, from what it says it looks like

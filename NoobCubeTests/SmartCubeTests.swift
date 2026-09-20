@@ -553,9 +553,8 @@ final class CubeAlignmentTests: XCTestCase {
     /// which is the fallback that used to be the cube's own frame.
     func testTheFirstWayOfHoldingItIsTheWayTheyWereAsked() {
         let asked = CubeAlignment.asTheChildIsAskedToHoldIt
-        let every = CubeAlignment.allGrips.map { CubeAlignment.identity.regripped(by: $0) }
-        let ordered = every.filter { $0.appFace == asked.appFace }
-                    + every.filter { $0.appFace != asked.appFace }
+        let ordered = CubeAlignment.likeliestFirst(
+            CubeAlignment.allGrips.map { CubeAlignment.identity.regripped(by: $0) })
         XCTAssertEqual(ordered.count, 24)
         XCTAssertEqual(ordered.first?.appFace, asked.appFace)
         XCTAssertEqual(Set(ordered.map { alignment in
@@ -568,4 +567,32 @@ final class CubeAlignmentTests: XCTestCase {
                        Move(.D, .counterClockwise))
     }
 
+
+    /// The case a child is most likely to be in: they connect a cube, the
+    /// picture does not match, so they show it to the camera. A cube whose own
+    /// idea of itself is wrong is exactly the case where no grip fits and all
+    /// twenty-four come back — and the first of those is what a turn is read
+    /// with until something narrows it.
+    func testACubeThatDisagreesWithTheScanIsStillReadTheWayTheyHoldIt() {
+        var generator = SeededGenerator(seed: 83)
+        let asked = CubeAlignment.asTheChildIsAskedToHoldIt
+        for _ in 0..<20 {
+            let scanned = CubeState.solved.applying(randomScramble(using: &generator))
+            // What the cube would say if its own idea of itself were right...
+            let agreeing = asked.cubeState(of: scanned)
+            // ...and what it says instead, having drifted.
+            let drifted = agreeing.applying(Move(.R))
+
+            XCTAssertEqual(CubeAlignment.matching(cube: drifted, scanned: scanned),
+                           .cubeDisagrees)
+            let candidates = CubeAlignment.possibilities(cube: drifted, scanned: scanned)
+            XCTAssertEqual(candidates.count, 24)
+            XCTAssertEqual(candidates.first?.appFace, asked.appFace,
+                           "a turn with nothing to narrow it would be read the wrong way")
+            for face in MoveBase.allCases where !face.isRotation {
+                XCTAssertEqual(candidates.first?.appMove(for: Move(face)),
+                               asked.appMove(for: Move(face)))
+            }
+        }
+    }
 }

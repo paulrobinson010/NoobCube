@@ -175,14 +175,12 @@ final class SmartCubeManager: NSObject, ObservableObject {
     /// something the cube can tell you — only the turns can, and they settle it
     /// after two of them.
     func openEveryGrip(trustingPosition: Bool = false) {
-        let asked = CubeAlignment.asTheChildIsAskedToHoldIt
-        let every = CubeAlignment.allGrips.map { CubeAlignment.identity.regripped(by: $0) }
         // The way they were asked to hold it comes first, so a turn read before
         // anything has narrowed the set is read that way rather than as though
-        // the cube's own frame were the child's. It was the second of those,
-        // and it is wrong on four faces out of six.
-        grips = every.filter { $0.appFace == asked.appFace }
-             + every.filter { $0.appFace != asked.appFace }
+        // the cube's own frame were the child's — see
+        // ``CubeAlignment/likeliestFirst(_:)``.
+        grips = CubeAlignment.likeliestFirst(
+            CubeAlignment.allGrips.map { CubeAlignment.identity.regripped(by: $0) })
         if trustingPosition { positionIsTrustworthy = true }
     }
 

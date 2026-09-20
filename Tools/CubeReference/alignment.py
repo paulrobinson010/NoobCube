@@ -49,6 +49,19 @@ def faces_after(grip):
     return {turned[CENTRE[f]]: f for f in cube.FACES}
 
 
+def likeliest_first(candidates):
+    """The way they were asked to hold it, at the front.
+
+    Which one is first is not a detail: a turn that cannot be narrowed — before
+    anything has been asked for, or when they turn something else — is read
+    with the first one.
+    """
+    asked, _ = as_the_child_is_asked_to_hold_it()
+    want = faces_after(asked)
+    return ([g for g in candidates if faces_after(g) == want]
+            + [g for g in candidates if faces_after(g) != want])
+
+
 def possibilities(cube_state, scanned):
     """Every way the cube could be held: one when it agrees, all 24 when not.
 
@@ -56,7 +69,7 @@ def possibilities(cube_state, scanned):
     well, so the grip is learned from those instead of given up on.
     """
     hits = [g for g in GRIPS if regripping(cube_state, g) == scanned]
-    return hits or list(GRIPS)
+    return likeliest_first(hits or list(GRIPS))
 
 
 def matching(cube_state, scanned):
@@ -294,9 +307,45 @@ def check_the_frame_the_child_holds_it_in(trials=200, seed=5):
     print('ALL PASS')
 
 
+def check_a_cube_that_disagrees_is_still_read_right(trials=200, seed=3):
+    """The case a child is most likely to be in.
+
+    They connect a cube, the picture does not match, so they show it to the
+    camera. A cube whose own idea of itself is wrong is exactly the case where
+    no grip fits and all twenty-four come back — and the first of those is what
+    a turn is read with until something narrows it. It used to be the cube's
+    own frame, which is half a turn from the hand holding it, so every such
+    turn came out as the opposite side.
+    """
+    rng = random.Random(seed)
+    asked, _ = as_the_child_is_asked_to_hold_it()
+    checked = 0
+    for _ in range(trials):
+        scanned = cube.apply(cube.SOLVED, scramble(rng))
+        agreeing = regripping(scanned, asked)
+        drifted = cube.apply(agreeing, [rng.choice(['R', 'U', "F'", 'L2'])])
+
+        how, _ = matching(drifted, scanned)
+        assert how == 'disagrees', how
+        candidates = possibilities(drifted, scanned)
+        assert len(candidates) == 24
+        assert faces_after(candidates[0]) == faces_after(asked), \
+            'the way they were asked to hold it must be read first'
+        for face in cube.FACES:
+            assert app_move(candidates[0], face) == app_move(asked, face)
+            checked += 1
+
+    print('a cube that disagrees with the scan, read with the first candidate')
+    print('  turns read the way they are holding it  %d' % checked)
+    print('  a turn of the cube red face is a turn of their left')
+    print('ALL PASS')
+
+
 if __name__ == '__main__':
     check()
     check_through_a_solve()
     check_learning_the_grip()
     print()
     check_the_frame_the_child_holds_it_in()
+    print()
+    check_a_cube_that_disagrees_is_still_read_right()
