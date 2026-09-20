@@ -9,6 +9,7 @@ struct SmartCubeView: View {
     var onCalibrateSolved: () -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @State private var isChecking = false
 
     var body: some View {
         NavigationStack {
@@ -20,8 +21,6 @@ struct SmartCubeView: View {
                 } else {
                     cubeList
                 }
-
-                details
 
                 Spacer(minLength: 0)
             }
@@ -38,6 +37,7 @@ struct SmartCubeView: View {
         }
         .onAppear { manager.startScanning() }
         .onDisappear { manager.stopScanning() }
+        .sheet(isPresented: $isChecking) { SmartCubeCheckView(manager: manager) }
     }
 
     private var statusCard: some View {
@@ -120,6 +120,9 @@ struct SmartCubeView: View {
 
                 Button("Or it's solved right now") { onCalibrateSolved() }
                     .buttonStyle(BigButtonStyle(isProminent: false))
+
+                Button("Check my turns") { isChecking = true }
+                    .buttonStyle(BigButtonStyle(tint: Theme.muted, isProminent: false))
             } else {
                 ProgressView()
                     .tint(Theme.attention)
@@ -134,32 +137,6 @@ struct SmartCubeView: View {
         }
     }
 
-
-    /// What the cube said and what the app made of it.
-    ///
-    /// Tucked away and closed by default — a parent has no use for it and a
-    /// child less — but it stays, because every time this has gone wrong the
-    /// symptom could not say which of four links was broken and this could.
-    @ViewBuilder
-    private var details: some View {
-        if !manager.diagnostics.isEmpty {
-            DisclosureGroup("What I saw") {
-                VStack(alignment: .leading, spacing: 3) {
-                    ForEach(Array(manager.diagnostics.enumerated()), id: \.offset) { _, line in
-                        Text(line)
-                            .font(.system(size: 12, design: .monospaced))
-                            .foregroundStyle(Theme.muted)
-                            .textSelection(.enabled)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.top, 6)
-            }
-            .font(.brand(size: 15, weight: .semibold))
-            .tint(Theme.attention)
-            .cardBackground()
-        }
-    }
 
     private var statusTitle: String {
         switch manager.status {

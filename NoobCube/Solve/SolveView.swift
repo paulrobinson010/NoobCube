@@ -7,6 +7,7 @@ struct SolveView: View {
     /// Tapping "look at my cube again" hands back to the camera.
     var onRescan: () -> Void
     var onFinish: () -> Void
+    var onHome: () -> Void
 
     @State private var showingSteps = false
     @State private var showingWhy = false
@@ -92,7 +93,8 @@ struct SolveView: View {
             ScreenHeader(title: session.stage?.kind.title ?? "All done!",
                          subtitle: session.stageLabel,
                          narrator: narrator,
-                         onRescan: onRescan)
+                         onRescan: onRescan,
+                         onHome: onHome)
 
             StageChecklistStrip(stages: session.plan.stages,
                                 currentKind: session.stage?.kind,
@@ -229,9 +231,7 @@ struct SolveView: View {
                 case .turnTheWholeCube:
                     turnTheWholeCube
                 case .tapWhenDone:
-                    nextButton(isEnabled: session.currentMove != nil) {
-                        session.confirmCurrentMove()
-                    }
+                    stepControls
                 case .watching:
                     watchingPrompt("Go on then — I'm watching.")
                 }
@@ -340,6 +340,49 @@ struct SolveView: View {
         }
         .buttonStyle(BigButtonStyle())
         .disabled(session.isBusy || !isEnabled)
+    }
+
+    /// Next, and — when the step has more than one move left — a smaller play
+    /// button beside it that does the tapping.
+    ///
+    /// Eight rightys is eight taps, and eight chances to lose your place. This
+    /// runs them a move at a time with a couple of seconds to copy each one,
+    /// and Next counts the seconds down rather than sitting there inert.
+    private var stepControls: some View {
+        HStack(spacing: 10) {
+            Button {
+                session.isPlayingThrough
+                    ? session.stopPlayingThrough()
+                    : session.confirmCurrentMove()
+            } label: {
+                Label(session.isPlayingThrough
+                      ? "\(session.secondsUntilNextMove)" : "Next",
+                      systemImage: session.isPlayingThrough
+                      ? "timer" : "arrow.right.circle.fill")
+            }
+            .buttonStyle(BigButtonStyle())
+            .disabled(session.isBusy || session.currentMove == nil
+                      || session.isPlayingThrough)
+
+            if session.canPlayThroughStep || session.isPlayingThrough {
+                Button {
+                    session.isPlayingThrough
+                        ? session.stopPlayingThrough()
+                        : session.playThroughTheStep()
+                } label: {
+                    Image(systemName: session.isPlayingThrough
+                          ? "stop.fill" : "play.fill")
+                        .font(.system(size: 22, weight: .bold))
+                        .frame(width: Theme.minimumTapTarget,
+                               height: Theme.minimumTapTarget)
+                }
+                .buttonStyle(BigButtonStyle(tint: Theme.done, isProminent: false))
+                .frame(width: Theme.minimumTapTarget + 16)
+                .accessibilityLabel(session.isPlayingThrough
+                                    ? "Stop playing the moves"
+                                    : "Play the rest of these moves")
+            }
+        }
     }
 
 }

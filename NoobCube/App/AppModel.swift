@@ -290,13 +290,12 @@ final class AppModel: ObservableObject {
             return
         }
 
-        // Said the way the child is holding it when that is known, and in the
-        // cube's own frame when it is not. Identity is not a guess here: the
-        // plan and the picture are both written in that frame, so they agree
-        // by construction, and the grip stays open so a child holding it some
-        // other way is noticed rather than argued with.
-        let settled = smartCube.alignment
-        let alignment = (settled ?? .identity)
+        // There is always a plan to be had, so this never gives up. The cube's
+        // position is absolute — its face numbers are welded to its plastic —
+        // and where its faces sit relative to the picture is a constant read
+        // off the middles, not something that might be unknown. A child who
+        // makes three mistakes in a row still gets shown what to do next.
+        let alignment = (smartCube.alignment ?? .asTheChildIsAskedToHoldIt)
             .regripped(by: session.wholeCubeTurnsSoFar)
         let state = alignment.appState(of: cubeState)
         let scanned = ScannedCube(colours: state.facelets.map { CubeColour.defaultColour(for: $0) })
@@ -309,11 +308,7 @@ final class AppModel: ObservableObject {
             // it was never settled, every way of holding it stays open — the
             // plan is in the cube's frame, and which way the child is actually
             // holding it is still to be found out.
-            if settled != nil {
-                smartCube.reground(to: alignment)
-            } else {
-                smartCube.openEveryGrip(trustingPosition: true)
-            }
+            smartCube.reground(to: alignment)
             screenIsBehindTheCube = false
             session.replacePlan(plan, scan: scanned)
             session.cubeIsFollowing = smartCube.isFollowing

@@ -297,6 +297,11 @@ final class SmartCubeManager: NSObject, ObservableObject {
     // MARK: - Scanning and connecting
 
     func startScanning() {
+        // Already connected: there is nothing to look for, and looking anyway
+        // used to overwrite "Connected to your cube" with "Looking for cubes"
+        // and leave it there. Coming back to this screen is not a reason to
+        // forget the cube in your hand.
+        guard !isConnected else { return }
         if central == nil {
             central = CBCentralManager(delegate: self, queue: .main)
         } else {
@@ -343,6 +348,7 @@ final class SmartCubeManager: NSObject, ObservableObject {
     /// for as long as the cube is connected and thrown away when it is not.
     private func forgetTheDialect() {
         dialect.forget()
+        lastRawTurn = nil
         orientation.forget()
         lastQuaternion = nil
         sensorGrip = nil
@@ -352,7 +358,7 @@ final class SmartCubeManager: NSObject, ObservableObject {
     }
 
     private func beginScanIfPossible() {
-        guard let central, central.state == .poweredOn else { return }
+        guard let central, central.state == .poweredOn, !isConnected else { return }
         discovered.removeAll()
         status = .scanning
         // GAN cubes do not always advertise their service UUID, so everything
@@ -501,7 +507,12 @@ final class SmartCubeManager: NSObject, ObservableObject {
     /// the cube calls its faces is nobody else's business.
     @Published private(set) var lastMove: Move?
 
+    /// Every turn exactly as the cube sent it, before the app makes anything
+    /// of it. The turn check listens to this; everything else wants the move.
+    @Published private(set) var lastRawTurn: GANProtocol.Turn?
+
     private func received(_ turn: GANProtocol.Turn) {
+        lastRawTurn = turn
         if let move = dialect.move(forLabel: turn.label, clockwise: turn.clockwise) {
             return act(on: turn, as: move)
         }

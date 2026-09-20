@@ -10,13 +10,15 @@ struct ReadyView: View {
     let scene: CubeSceneController
     @ObservedObject var narrator: Narrator
     var onStart: () -> Void
+    var onHome: () -> Void
 
     @State private var hasFolded = false
 
     var body: some View {
         VStack(spacing: 16) {
             ScreenHeader(title: hasFolded ? "Hold it like this" : "Here's your cube",
-                         narrator: narrator)
+                         narrator: narrator,
+                         onHome: onHome)
                 .padding(.horizontal, 20)
                 .padding(.top, 12)
 

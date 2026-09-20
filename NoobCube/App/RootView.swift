@@ -26,7 +26,8 @@ struct RootView: View {
                     ReadyView(scan: scan,
                               scene: model.scene,
                               narrator: model.narrator,
-                              onStart: { model.beginSolving() })
+                              onStart: { model.beginSolving() },
+                              onHome: { model.finishSolve() })
                         .transition(.opacity)
                 }
 
@@ -35,7 +36,8 @@ struct RootView: View {
                     SolveView(session: session,
                               narrator: model.narrator,
                               onRescan: { model.rescan() },
-                              onFinish: { model.finishSolve() })
+                              onFinish: { model.finishSolve() },
+                              onHome: { model.finishSolve() })
                         .transition(.opacity)
                 }
             }

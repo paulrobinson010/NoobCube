@@ -42,6 +42,9 @@ struct ScreenHeader: View {
     /// other small round buttons rather than down among the big ones: it is a
     /// way out, not somewhere to go.
     var onRescan: (() -> Void)? = nil
+    /// Back to the start. Every screen past the welcome needs one, or there is
+    /// no way out but force-quitting.
+    var onHome: (() -> Void)? = nil
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
@@ -72,6 +75,15 @@ struct ScreenHeader: View {
                         .foregroundStyle(Theme.muted)
                 }
                 .accessibilityLabel("Look at my cube again")
+            }
+
+            if let onHome {
+                Button(action: onHome) {
+                    Image(systemName: "house.circle.fill")
+                        .font(.system(size: 34))
+                        .foregroundStyle(Theme.muted)
+                }
+                .accessibilityLabel("Back to the start")
             }
 
             NarratorControls(narrator: narrator)

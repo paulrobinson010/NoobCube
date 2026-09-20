@@ -196,6 +196,69 @@ final class SolveSession: ObservableObject {
     // MARK: - Doing moves
 
     /// Confirm the current move: animate it, then move on to the next.
+    // MARK: - Playing a step through
+
+    /// How long a child gets to copy each move before the next one.
+    static let secondsPerMove = 2
+
+    /// Running through the rest of this step by itself, a move at a time.
+    ///
+    /// A step can be eight moves of righty, and tapping Next eight times is
+    /// eight chances to lose your place. This does the tapping: the move
+    /// happens, then two seconds to copy it, then the next.
+    @Published private(set) var isPlayingThrough = false
+
+    /// Seconds left before the next one, for the button to count down with.
+    @Published private(set) var secondsUntilNextMove = 0
+
+    private var playThrough: Task<Void, Never>?
+
+    /// Whether there is more than one move left in this step, which is the
+    /// only time playing through is worth offering.
+    var canPlayThroughStep: Bool {
+        guard let step = currentStep, currentMove != nil else { return false }
+        return step.moves.count - moveIndexWithinStep > 1
+    }
+
+    func playThroughTheStep() {
+        guard !isPlayingThrough, canPlayThroughStep else { return }
+        isPlayingThrough = true
+        let startedOn = stepStartsAt
+        playThrough = Task { [weak self] in
+            while let self, self.isPlayingThrough, !Task.isCancelled {
+                // Out the moment the step changes, so it never runs on into
+                // the next one, and never past the end of the plan.
+                guard self.currentMove != nil, self.stepStartsAt == startedOn else { break }
+                for left in stride(from: Self.secondsPerMove, through: 1, by: -1) {
+                    self.secondsUntilNextMove = left
+                    try? await Task.sleep(nanoseconds: 1_000_000_000)
+                    if Task.isCancelled || !self.isPlayingThrough { break }
+                }
+                guard self.isPlayingThrough, !Task.isCancelled else { break }
+                guard !self.isBusy else { continue }
+                self.confirmCurrentMove()
+                while self.isBusy, !Task.isCancelled {
+                    try? await Task.sleep(nanoseconds: 60_000_000)
+                }
+            }
+            self?.stopPlayingThrough()
+        }
+    }
+
+    func stopPlayingThrough() {
+        isPlayingThrough = false
+        secondsUntilNextMove = 0
+        playThrough?.cancel()
+        playThrough = nil
+    }
+
+    /// Where in the plan the step being worked on starts, so playing through
+    /// can tell that it has moved on to a different one.
+    private var stepStartsAt: Int {
+        guard let found = stage?.step(atMove: moveIndex) else { return moveIndex }
+        return found.start
+    }
+
     func confirmCurrentMove() {
         guard !isBusy, let move = currentMove else { return }
         isBusy = true
@@ -230,6 +293,7 @@ final class SolveSession: ObservableObject {
     }
 
     func startStage() {
+        stopPlayingThrough()
         moveIndex = 0
         wrongTurn = nil
         displayCube = colours(upToStage: stageIndex)
@@ -378,6 +442,8 @@ final class SolveSession: ObservableObject {
     /// screen would quietly stop matching the cube in their hands, and every
     /// instruction after it would be wrong.
     func handleSmartCubeTurn(_ move: Move) {
+        // They are doing it themselves after all.
+        stopPlayingThrough()
         guard !isBusy else {
             waitingTurns.append(move)
             return
