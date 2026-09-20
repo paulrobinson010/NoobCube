@@ -595,4 +595,57 @@ final class CubeAlignmentTests: XCTestCase {
             }
         }
     }
+
+    // MARK: - The middles are the answer
+
+    /// A cube's middles never move relative to one another, so the face the
+    /// cube calls R is its red one for ever. Where the camera found red is
+    /// therefore the whole answer — whatever the cube believes about where its
+    /// pieces are, and however the child is holding it.
+    func testTheMiddlesGiveTheAnswerHoweverItIsHeld() {
+        for grip in CubeAlignment.allGrips {
+            let held = CubeAlignment.identity.regripped(by: grip)
+            // What the camera would see, holding it that way round.
+            var middles: [Face: CubeColour] = [:]
+            for face in Face.allCases {
+                guard let seenOn = held.appFace[face] else { return XCTFail("no map") }
+                middles[seenOn] = CubeColour.onTheCubesOwnFace(face)
+            }
+            XCTAssertEqual(CubeAlignment.matching(centresSeen: middles)?.appFace,
+                           held.appFace, "the middles did not give back the way it was held")
+        }
+    }
+
+    /// And it works where lining up by position gives up: a cube whose own idea
+    /// of where its pieces are has drifted. Which is the reason anyone reaches
+    /// for the camera, so it was failing in the one case it was needed.
+    func testTheMiddlesWorkWhereMatchingThePositionGivesUp() {
+        var generator = SeededGenerator(seed: 29)
+        let asked = CubeAlignment.asTheChildIsAskedToHoldIt
+        var middles: [Face: CubeColour] = [:]
+        for face in Face.allCases {
+            guard let seenOn = asked.appFace[face] else { return XCTFail("no map") }
+            middles[seenOn] = CubeColour.onTheCubesOwnFace(face)
+        }
+
+        for _ in 0..<20 {
+            let scanned = CubeState.solved.applying(randomScramble(using: &generator))
+            let drifted = asked.cubeState(of: scanned).applying(Move(.R))
+
+            XCTAssertEqual(CubeAlignment.matching(cube: drifted, scanned: scanned),
+                           .cubeDisagrees, "this test needs a cube that disagrees")
+            XCTAssertEqual(CubeAlignment.matching(centresSeen: middles)?.appFace,
+                           asked.appFace)
+        }
+    }
+
+    /// A scan that could not name all six middles has to say so rather than
+    /// answer anyway.
+    func testAnIncompleteSetOfMiddlesHasNoAnswer() {
+        var middles: [Face: CubeColour] = [.U: .yellow, .F: .green]
+        XCTAssertNil(CubeAlignment.matching(centresSeen: middles))
+        // Two sides claiming the same colour is not a cube either.
+        for face in Face.allCases { middles[face] = .green }
+        XCTAssertNil(CubeAlignment.matching(centresSeen: middles))
+    }
 }

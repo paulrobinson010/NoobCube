@@ -77,12 +77,13 @@ final class AppModel: ObservableObject {
             session?.onLost = { [weak self] in self?.replanFromSmartCube() }
             session?.onSolved = { [weak self] in self?.smartCubeIsSolved() }
 
-            // A smart cube knows which way it has been turned but not which
-            // way up it is being held, so the scan is what lines the two up.
-            // After this it can follow along by itself and nothing else in the
-            // solve needs confirming.
+            // The camera has just seen which colour is on which side. A cube's
+            // middles never move, so that is all it takes to know where the
+            // cube's own faces have got to — no searching, no learning, and it
+            // does not matter how the child is holding it.
             if smartCube.isConnected {
-                announceAlignment(smartCube.align(toScan: state))
+                announceAlignment(smartCube.align(toScan: state,
+                                                  middles: finishedScan.centres))
             }
             session?.cubeIsFollowing = smartCube.isFollowing
             screen = .ready

@@ -124,12 +124,44 @@ final class SmartCubeManager: NSObject, ObservableObject {
     /// Returns nil when the cube has not said where it is yet, which is not the
     /// same as disagreeing and must not be reported as though it were.
     @discardableResult
-    func align(toScan scanned: CubeState) -> CubeAlignment.Match? {
-        guard let cubeState else {
+    func align(toScan scanned: CubeState,
+               middles: [Face: CubeColour]) -> CubeAlignment.Match? {
+        guard cubeState != nil else {
             note("No position from the cube yet, so nothing to line up against")
             grips = []
             return nil
         }
+
+        // Off the middles, which never move. Where the cube's pieces have got
+        // to has no bearing on which of its faces is the red one, so this works
+        // whether or not the cube's own idea of itself is right — and a cube
+        // whose idea of itself is wrong is precisely why the camera was reached
+        // for.
+        if let held = CubeAlignment.matching(centresSeen: middles) {
+            grips = [held]
+            cubeState = held.cubeState(of: scanned)
+            positionIsTrustworthy = true
+            calibrateOrientation(against: held)
+            note("Lined up off the middles: " + held.appFace
+                    .sorted { $0.key.rawValue < $1.key.rawValue }
+                    .map { "\($0.key.letter)->\($0.value.letter)" }
+                    .joined(separator: " "))
+            return .found(held)
+        }
+
+        // Only if the camera could not name all six middles. Then there is
+        // nothing certain to go on and the turns have to settle it.
+        note("The camera did not name all six middles, so the turns will settle it")
+        return alignByPosition(scanned)
+    }
+
+    /// The old way: line the cube's own position up against the scan.
+    ///
+    /// Kept for a scan that could not name every middle. It cannot tell a cube
+    /// whose position has drifted from one that is being held differently, so
+    /// it is the fallback rather than the method.
+    private func alignByPosition(_ scanned: CubeState) -> CubeAlignment.Match? {
+        guard let cubeState else { return nil }
         let match = CubeAlignment.matching(cube: cubeState, scanned: scanned)
         grips = CubeAlignment.possibilities(cube: cubeState, scanned: scanned)
         switch match {

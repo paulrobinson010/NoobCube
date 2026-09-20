@@ -49,6 +49,52 @@ def faces_after(grip):
     return {turned[CENTRE[f]]: f for f in cube.FACES}
 
 
+def from_the_middles(centres_seen):
+    """Where the cube's own faces have got to, read straight off the middles.
+
+    Not a search and not a guess. A cube's middles never move relative to one
+    another, so the face the cube calls R is its red one for ever, and the
+    answer is whichever face the camera found red on.
+
+    It matters that this does not look at where the *pieces* are. Lining up by
+    position fails exactly when the cube's idea of where its pieces are has
+    drifted — which is the reason anyone reaches for the camera — so it failed
+    in the one case it was needed.
+    """
+    where = {colour: face for face, colour in centres_seen.items()}
+    if len(where) != len(cube.FACES):
+        return None
+    want = {f: where[CUBE_FRAME[f]] for f in cube.FACES}
+    return next((g for g in GRIPS if faces_after(g) == want), None)
+
+
+def check_the_middles_are_enough(trials=500, seed=11):
+    """However the cube is held, and whatever it believes about itself."""
+    rng = random.Random(seed)
+    gave_up = right = 0
+    for _ in range(trials):
+        # However they happened to hold it for the scan.
+        held = rng.choice(GRIPS)
+        centres = {faces_after(held)[f]: CUBE_FRAME[f] for f in cube.FACES}
+        truth = from_the_middles(centres)
+        assert faces_after(truth) == faces_after(held)
+
+        # And a cube whose own idea of itself has drifted.
+        scanned = cube.apply(cube.SOLVED, scramble(rng))
+        drifted = cube.apply(regripping(scanned, truth),
+                             [rng.choice(['R', 'U', "F'", 'L2', 'B', 'D2'])])
+
+        how, _ = matching(drifted, scanned)
+        gave_up += how == 'disagrees'
+        right += faces_after(from_the_middles(centres)) == faces_after(truth)
+
+    print('cubes whose reported position was wrong  %d' % trials)
+    print('  lining up by position gave up          %d' % gave_up)
+    print('  lining up off the middles was right    %d' % right)
+    assert gave_up == trials and right == trials
+    print('ALL PASS')
+
+
 def likeliest_first(candidates):
     """The way they were asked to hold it, at the front.
 
@@ -349,3 +395,5 @@ if __name__ == '__main__':
     check_the_frame_the_child_holds_it_in()
     print()
     check_a_cube_that_disagrees_is_still_read_right()
+    print()
+    check_the_middles_are_enough()

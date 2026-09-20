@@ -117,6 +117,36 @@ struct CubeAlignment: Equatable, Sendable {
         case cubeDisagrees
     }
 
+    /// Where the cube's own faces have got to, read straight off the middles.
+    ///
+    /// **This is not a search and not a guess.** A cube's middles never move
+    /// relative to one another, so the face the cube calls R is its red one,
+    /// for ever, and the answer is simply whichever face the camera found red
+    /// on. Two sets of middles, one bijection, done.
+    ///
+    /// It matters that this does not look at where the *pieces* are. Lining up
+    /// by position fails exactly when the cube's own idea of where its pieces
+    /// are has drifted — which is the reason a child reaches for the camera in
+    /// the first place, so it failed in the one case it was needed. Then
+    /// twenty-four candidates came back to be whittled down by turns, and the
+    /// turns in the meantime were read with whichever happened to be first.
+    ///
+    /// Checked over 500 cubes with a wrong reported position, held every way
+    /// round, in `Tools/CubeReference/alignment.py`: the middles gave the right
+    /// answer every time and position matching gave up every time.
+    static func matching(centresSeen: [Face: CubeColour]) -> CubeAlignment? {
+        var wanted: [Face: Face] = [:]
+        for face in Face.allCases {
+            let colour = CubeColour.onTheCubesOwnFace(face)
+            guard let seenOn = centresSeen.first(where: { $0.value == colour })?.key else {
+                return nil
+            }
+            wanted[face] = seenOn
+        }
+        guard Set(wanted.values).count == Face.allCases.count else { return nil }
+        return allGrips.lazy.map { CubeAlignment(grip: $0) }.first { $0.appFace == wanted }
+    }
+
     /// Every way the cube could be being held, given what it says about itself
     /// and what the camera saw.
     ///
