@@ -131,4 +131,35 @@ struct SmartCubeView: View {
                 .buttonStyle(BigButtonStyle(tint: Theme.muted, isProminent: false))
         }
     }
+
+
+    private var statusTitle: String {
+        switch manager.status {
+        case .idle: return "Looking for cubes"
+        case .bluetoothOff: return "Bluetooth is off"
+        case .unauthorised: return "Bluetooth isn't allowed"
+        case .scanning: return "Looking for cubes"
+        case .connecting(let name): return "Connecting to \(name)"
+        case .connected(let name): return "Connected to \(name)"
+        case .unsupported: return "Cube not supported"
+        case .failed: return "Something went wrong"
+        }
+    }
+
+    private var statusDetail: String {
+        switch manager.status {
+        case .bluetoothOff:
+            return "Turn Bluetooth on in Settings, then come back."
+        case .unauthorised:
+            return "Let NoobCube use Bluetooth in Settings to connect your cube."
+        case .connected:
+            return manager.hasSaidWhatItLooksLike
+                ? "Turn your cube and I'll follow along."
+                : "Waiting for your cube to say where it is."
+        case .unsupported(let detail), .failed(let detail):
+            return detail + " You can still use the camera instead."
+        default:
+            return "Make sure your smart cube is awake and nearby."
+        }
+    }
 }
