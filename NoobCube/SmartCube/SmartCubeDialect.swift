@@ -38,10 +38,34 @@ struct SmartCubeDialect: Equatable, Sendable {
         var clockwiseIsReversed: Bool
     }
 
-    private(set) var meanings: [Int: Meaning] = [:]
+    fileprivate(set) var meanings: [Int: Meaning] = [:]
 
     /// Nothing known yet. Every label has to be asked about once.
     static let unknown = SmartCubeDialect()
+
+    /// What these cubes have actually turned out to do.
+    ///
+    ///     0  U  white     3  D  yellow
+    ///     1  R  red       4  L  orange
+    ///     2  F  green     5  B  blue
+    ///
+    /// Confirmed twice by asking a cube, turn by turn, each named by colour.
+    /// Seeding it means the first turn on each face is read straight away
+    /// rather than held back while the cube is asked where it is — which is a
+    /// round trip per face, and until it came back the app could not say what
+    /// had been turned at all.
+    ///
+    /// Still only a starting point: a position report that disagrees with the
+    /// running tally is noticed and said out loud, so a cube that numbers
+    /// itself differently is not read wrongly in silence.
+    static let asTheseCubesNumberThem: SmartCubeDialect = {
+        var dialect = SmartCubeDialect()
+        let faces: [MoveBase] = [.U, .R, .F, .D, .L, .B]
+        for (label, face) in faces.enumerated() {
+            dialect.meanings[label] = Meaning(face: face, clockwiseIsReversed: false)
+        }
+        return dialect
+    }()
 
     var isEmpty: Bool { meanings.isEmpty }
 

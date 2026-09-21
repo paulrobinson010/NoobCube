@@ -648,4 +648,47 @@ final class CubeAlignmentTests: XCTestCase {
         for face in Face.allCases { middles[face] = .green }
         XCTAssertNil(CubeAlignment.matching(centresSeen: middles))
     }
+
+    /// The numbering a cube actually uses, confirmed twice by asking one —
+    /// eight turns, each named by colour so how it was held could not come
+    /// into the answer:
+    ///
+    ///     #0 white  #1 red  #2 green  #3 yellow  #4 orange  #5 blue
+    ///
+    /// Seeded rather than learned, so the first turn on each face is read
+    /// straight away instead of waiting a round trip for the cube to say where
+    /// it is.
+    func testTheDialectStartsFromTheNumberingTheseCubesUse() {
+        let dialect = SmartCubeDialect.asTheseCubesNumberThem
+        XCTAssertFalse(dialect.isEmpty)
+
+        let expected: [(Int, MoveBase, CubeColour)] = [
+            (0, .U, .white), (1, .R, .red), (2, .F, .green),
+            (3, .D, .yellow), (4, .L, .orange), (5, .B, .blue),
+        ]
+        for (label, base, colour) in expected {
+            XCTAssertEqual(dialect.move(forLabel: label, clockwise: true), Move(base),
+                           "#\(label) should be \(base.rawValue)")
+            XCTAssertEqual(dialect.move(forLabel: label, clockwise: false),
+                           Move(base, .counterClockwise),
+                           "#\(label) the other way should be \(base.rawValue)'")
+            // And that face is the colour the check said it was.
+            guard let face = Face(rawValue: label) else { return XCTFail("no face \(label)") }
+            XCTAssertEqual(CubeColour.onTheCubesOwnFace(face), colour)
+            XCTAssertEqual(face.letter, base.rawValue)
+        }
+        // Nothing beyond the six.
+        XCTAssertNil(dialect.move(forLabel: 6, clockwise: true))
+    }
+
+    /// A cube that turns out to number itself differently is still learned
+    /// from, so the seed is a starting point rather than an assumption.
+    func testTheSeedCanStillBeCorrected() {
+        var dialect = SmartCubeDialect.asTheseCubesNumberThem
+        XCTAssertEqual(dialect.move(forLabel: 1, clockwise: true), Move(.R))
+        dialect.learn(label: 1, clockwise: true, was: Move(.B, .counterClockwise))
+        XCTAssertEqual(dialect.move(forLabel: 1, clockwise: true),
+                       Move(.B, .counterClockwise))
+        XCTAssertEqual(dialect.move(forLabel: 1, clockwise: false), Move(.B))
+    }
 }

@@ -347,7 +347,7 @@ final class SmartCubeManager: NSObject, ObservableObject {
     /// What a cube's labels mean belongs to that cube's firmware, so it is kept
     /// for as long as the cube is connected and thrown away when it is not.
     private func forgetTheDialect() {
-        dialect.forget()
+        dialect = .asTheseCubesNumberThem
         lastRawTurn = nil
         orientation.forget()
         lastQuaternion = nil
@@ -490,7 +490,7 @@ final class SmartCubeManager: NSObject, ObservableObject {
     // MARK: - Reading a turn
 
     /// What this cube's own words for its faces turned out to mean.
-    private(set) var dialect = SmartCubeDialect.unknown
+    private(set) var dialect = SmartCubeDialect.asTheseCubesNumberThem
 
     /// Turns whose label the cube has not been asked about yet.
     ///

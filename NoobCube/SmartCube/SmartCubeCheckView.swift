@@ -53,10 +53,22 @@ struct SmartCubeCheckView: View {
                             .font(.brand(size: 17, weight: .medium))
                             .foregroundStyle(Theme.muted)
                     } else {
-                        CubeSceneView(controller: scene)
-                            .frame(height: 240)
+                        // The instruction first. It used to sit under a cube
+                        // that filled the screen, so the one thing you needed
+                        // to read was the one thing you had to scroll for.
                         if isDone { finished } else { asking }
                         if let last = answers.last { whatHappened(last) }
+
+                        VStack(spacing: 6) {
+                            CubeSceneView(controller: scene)
+                                .frame(height: 220)
+                            Text("White on top, green at the front — the way the "
+                                 + "cube numbers its own faces, not the way you "
+                                 + "are asked to hold it.")
+                                .font(.brand(size: 13, weight: .medium))
+                                .foregroundStyle(Theme.muted)
+                                .multilineTextAlignment(.center)
+                        }
                     }
                 }
                 .padding(20)
@@ -144,10 +156,15 @@ struct SmartCubeCheckView: View {
                 if let spun = spunColour(answer) {
                     Circle().fill(swatch(spun)).frame(width: 34, height: 34)
                 } else {
-                    Text("—").foregroundStyle(Theme.muted)
+                    Text("?").font(.brand(size: 22, weight: .heavy))
+                        .foregroundStyle(Theme.muted)
                 }
             }
-            if let spun = spunColour(answer), spun != answer.asked {
+            if answer.readAs == nil {
+                Text("couldn't name it")
+                    .font(.brand(size: 14, weight: .bold))
+                    .foregroundStyle(Theme.muted)
+            } else if let spun = spunColour(answer), spun != answer.asked {
                 Text("not the same")
                     .font(.brand(size: 14, weight: .bold))
                     .foregroundStyle(Theme.attention)
@@ -253,8 +270,13 @@ struct SmartCubeCheckView: View {
         let wrongWay = answers.filter { $0.clockwise != $0.sentClockwise }
         lines.append("direction: " + (wrongWay.isEmpty ? "same as ours"
                                       : "\(wrongWay.count) of \(answers.count) reversed"))
-        let spunWrong = answers.filter { spunColour($0) != $0.asked }
+        let unread = answers.filter { $0.readAs == nil }
+        let spunWrong = answers.filter { $0.readAs != nil && spunColour($0) != $0.asked }
         lines.append("app turned the wrong side: \(spunWrong.count) of \(answers.count)")
+        if !unread.isEmpty {
+            lines.append("app could not name the turn: \(unread.count)"
+                         + " (not the same as turning the wrong side)")
+        }
         lines.append("faces seen: \(colourForLabel.count) of 6")
         return lines.joined(separator: "\n")
     }
