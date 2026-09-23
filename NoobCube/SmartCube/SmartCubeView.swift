@@ -10,21 +10,25 @@ struct SmartCubeView: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var isChecking = false
+    @State private var isReadingTheLog = false
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 16) {
-                statusCard
+            // Scrolls, because a connected cube now has more under it than a
+            // phone is tall: the picture, four ways on, and the move log.
+            ScrollView {
+                VStack(spacing: 16) {
+                    statusCard
 
-                if manager.isConnected {
-                    connectedControls
-                } else {
-                    cubeList
+                    if manager.isConnected {
+                        connectedControls
+                    } else {
+                        cubeList
+                    }
                 }
-
-                Spacer(minLength: 0)
+                .padding(20)
+                .frame(maxWidth: .infinity)
             }
-            .padding(20)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Theme.background.ignoresSafeArea())
             .navigationTitle("Smart cube")
@@ -38,6 +42,7 @@ struct SmartCubeView: View {
         .onAppear { manager.startScanning() }
         .onDisappear { manager.stopScanning() }
         .sheet(isPresented: $isChecking) { SmartCubeCheckView(manager: manager) }
+        .sheet(isPresented: $isReadingTheLog) { TurnLogView(manager: manager) }
     }
 
     private var statusCard: some View {
@@ -123,6 +128,8 @@ struct SmartCubeView: View {
 
                 Button("Check my turns") { isChecking = true }
                     .buttonStyle(BigButtonStyle(tint: Theme.muted, isProminent: false))
+
+                moveLog
             } else {
                 ProgressView()
                     .tint(Theme.attention)
@@ -137,6 +144,41 @@ struct SmartCubeView: View {
         }
     }
 
+
+    /// The move log: on, off, and what it has caught.
+    ///
+    /// A check screen can only test the cube against a script. This catches
+    /// what happens in a real solve, where the plan, the way it is being held
+    /// and the child all get a say — which is the only place "it turns the
+    /// wrong side" has ever been reported.
+    private var moveLog: some View {
+        VStack(spacing: 10) {
+            Toggle(isOn: $manager.isLogging) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Keep a move log")
+                        .font(.brand(size: 16, weight: .bold))
+                        .foregroundStyle(.white)
+                    Text("Writes down every turn, and asks which colour you "
+                         + "turned so the three can be compared.")
+                        .font(.brand(size: 13, weight: .medium))
+                        .foregroundStyle(Theme.muted)
+                }
+            }
+            .tint(Theme.done)
+
+            if manager.isLogging, !manager.turnLog.entries.isEmpty {
+                Button {
+                    isReadingTheLog = true
+                } label: {
+                    Label("Read the log (\(manager.turnLog.entries.count) turns)",
+                          systemImage: "list.bullet.rectangle")
+                }
+                .buttonStyle(BigButtonStyle(isProminent: false))
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .cardBackground()
+    }
 
     private var statusTitle: String {
         switch manager.status {

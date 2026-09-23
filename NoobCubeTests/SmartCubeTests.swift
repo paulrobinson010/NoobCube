@@ -794,3 +794,89 @@ final class CubeAlignmentTests: XCTestCase {
                           CubeAlignment.asTheChildIsAskedToHoldIt.appFace)
     }
 }
+
+/// The move log has one job: say which of the three suspects is at fault.
+final class TurnLogTests: XCTestCase {
+
+    /// The picture as the child is asked to hold it: yellow up, white down,
+    /// green at the front, orange on the right.
+    private var asAsked: [Face: CubeColour] {
+        var byFace: [Face: CubeColour] = [:]
+        for face in Face.allCases { byFace[face] = CubeColour.defaultColour(for: face) }
+        return byFace
+    }
+
+    private func logged(cubeMove: Move, appMove: Move, turned: CubeColour) -> TurnLog {
+        var log = TurnLog()
+        for (face, colour) in asAsked { log.picturedAs[colour] = face }
+        let id = log.arrived(label: 1, clockwise: true)
+        log.amend(id) { entry in
+            entry.cubeMove = cubeMove
+            entry.appMove = appMove
+            entry.outcome = "read"
+        }
+        log.theyTurned(turned, at: id)
+        return log
+    }
+
+    /// The cube calls its orange side L, for ever, because it numbers its faces
+    /// white up and green front. A child holding it yellow up has that same
+    /// orange side on their right, so the app calls it R. Both are right and
+    /// the log must not say otherwise — this is the half turn that every
+    /// "it turned the opposite side" has been about.
+    func testATurnThatIsRightAllTheWayIsCalledRight() {
+        let log = logged(cubeMove: Move(.L), appMove: Move(.R), turned: .orange)
+        XCTAssertEqual(log.entries.first?.verdict, .rightAllTheWay)
+    }
+
+    /// The cube was right and the app left the name alone, so it named the
+    /// side opposite the one that moved. That is the way round it thinks the
+    /// cube is being held, and nothing else.
+    func testRenamingItAsTheOppositeSideBlamesTheGrip() {
+        let log = logged(cubeMove: Move(.L), appMove: Move(.L), turned: .orange)
+        XCTAssertEqual(log.entries.first?.verdict, .heldWrongWayRound)
+    }
+
+    /// The child turned orange, which is the cube's own L for ever, and the
+    /// cube said U. No way of holding it can make that right.
+    func testANumberThatIsNotTheSideTurnedBlamesTheCube() {
+        let log = logged(cubeMove: Move(.U), appMove: Move(.D), turned: .orange)
+        XCTAssertEqual(log.entries.first?.verdict, .cubeNamedTheWrongFace)
+    }
+
+    /// A turn nobody has answered for cannot be blamed on anything.
+    func testATurnWithNoAnswerIsNotBlamedOnAnybody() {
+        var log = TurnLog()
+        let id = log.arrived(label: 3, clockwise: false)
+        log.amend(id) { $0.cubeMove = Move(.D) }
+        XCTAssertEqual(log.entries.first?.verdict, .unanswered)
+    }
+
+    /// A turn the app never got a move out of is the "not all turns are
+    /// happening" symptom, and has to be countable.
+    func testATurnNothingWasDoneAboutIsCounted() {
+        var log = TurnLog()
+        log.arrived(label: 2, clockwise: true)
+        XCTAssertEqual(log.entries.count, 1)
+        XCTAssertNil(log.entries[0].outcome)
+        XCTAssertTrue(log.summaryLines.contains { $0.contains("nothing was done about") })
+    }
+
+    /// The report is what gets pasted into a message, so it has to hold every
+    /// turn and the header that says what the numbers meant.
+    func testTheReportHoldsEveryTurn() {
+        var log = TurnLog()
+        log.dialectSaid = "#0=U #1=R"
+        for label in 0..<4 { log.arrived(label: label, clockwise: label.isMultiple(of: 2)) }
+        let report = log.report
+        XCTAssertTrue(report.contains("#0=U #1=R"))
+        for label in 0..<4 { XCTAssertTrue(report.contains("#\(label)")) }
+    }
+
+    /// Only so many are kept, or a long session would grow without limit.
+    func testTheLogDoesNotGrowForEver() {
+        var log = TurnLog()
+        for _ in 0..<(TurnLog.kept + 25) { log.arrived(label: 1, clockwise: true) }
+        XCTAssertEqual(log.entries.count, TurnLog.kept)
+    }
+}

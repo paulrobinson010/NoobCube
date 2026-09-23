@@ -168,7 +168,13 @@ final class AppModel: ObservableObject {
     }
 
     private func handleSmartCubeTurn(_ cubeMove: Move) {
-        guard screen == .solving, let session, smartCube.isFollowing else { return }
+        guard screen == .solving, let session, smartCube.isFollowing else {
+            smartCube.logReading(nil, asked: nil,
+                                 outcome: screen == .solving
+                                 ? "ignored: the cube is not being followed"
+                                 : "ignored: not on the solving screen")
+            return
+        }
         session.cubeIsFollowing = true
 
         // The cube names its own faces. Whichever of them is on the right is
@@ -187,7 +193,11 @@ final class AppModel: ObservableObject {
         let spins = session.pendingWholeCubeTurns
         let spinsSoFar = session.wholeCubeTurnsSoFar + spins
         let here = smartCube.grips.map { $0.regripped(by: spinsSoFar) }
-        guard !here.isEmpty else { return }
+        guard !here.isEmpty else {
+            smartCube.logReading(nil, asked: nil,
+                                 outcome: "ignored: no way of holding it is open")
+            return
+        }
 
         // The move we asked for is what narrows an unknown grip: only the ways
         // of holding the cube that make this turn *be* that move survive. They
@@ -220,6 +230,9 @@ final class AppModel: ObservableObject {
             // the app's problem, not the child's, and narrating it at them is
             // asking a five year old to care about the plumbing.
             screenIsBehindTheCube = true
+            smartCube.logReading(here[0].appMove(for: cubeMove), asked: asked,
+                                 outcome: "held back: it fits none of the "
+                                 + "\(here.count) ways the cube might be held")
             return
 
         } else {
@@ -235,12 +248,19 @@ final class AppModel: ObservableObject {
                 smartCube.reopenTheGrip()
                 session.forgetTheMistake()
                 screenIsBehindTheCube = true
+                smartCube.logReading(here[0].appMove(for: cubeMove), asked: asked,
+                                     outcome: "three in a row fitted nothing, so the "
+                                     + "way it is held was thrown away and re-opened")
                 return
             }
         }
 
         let reading = fitting.first.map { here[$0] } ?? here[0]
-        guard let move = reading.appMove(for: cubeMove) else { return }
+        guard let move = reading.appMove(for: cubeMove) else {
+            smartCube.logReading(nil, asked: asked,
+                                 outcome: "ignored: \(cubeMove.notation) is not a face turn")
+            return
+        }
         smartCube.noteTurn(cubeMove, readAs: move, whenAskedFor: asked)
 
         // The grip has just come down to one and the screen missed some turns
@@ -248,6 +268,9 @@ final class AppModel: ObservableObject {
         // screen is put right from it rather than left quietly wrong.
         if screenIsBehindTheCube, !smartCube.isStillWorkingOutTheGrip {
             screenIsBehindTheCube = false
+            smartCube.logReading(move, asked: asked,
+                                 outcome: "the screen had fallen behind, so the plan was "
+                                 + "worked out again from where the cube says it is")
             return catchUpWithTheCube()
         }
 
@@ -256,6 +279,20 @@ final class AppModel: ObservableObject {
         } else {
             session.takeTheTurnAsDone(andThen: move)
         }
+        smartCube.logReading(move, asked: asked, outcome: session.lastReaction)
+    }
+
+    /// The child has said which colour side they just turned.
+    ///
+    /// The one fact the app cannot get for itself, and the one that tells the
+    /// three suspects apart: the number the cube sent, what the app made of it,
+    /// and what it asked for. Taken together in ``TurnLog`` they name the
+    /// culprit rather than describing the symptom.
+    func theyTurnedByHand(_ colour: CubeColour) {
+        // Read live, not from the scan: a whole-cube turn moves every colour to
+        // a different side of the picture without the plan changing at all.
+        if let session { smartCube.picture(session.displayCube.centres) }
+        smartCube.theyTurned(colour)
     }
 
     /// The screen has fallen behind the cube in the child's hands.

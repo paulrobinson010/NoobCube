@@ -43,6 +43,11 @@ final class SolveSession: ObservableObject {
     @Published private(set) var stepStartCube: ScannedCube
     @Published private(set) var isBusy = false
 
+    /// What was made of the last turn a connected cube reported, in a few
+    /// words. Written down for ``TurnLog`` and nothing else: the child is told
+    /// what happened out loud, not in prose on a line.
+    private(set) var lastReaction = "nothing"
+
     /// A turn the child made that was not the one asked for, in the app's
     /// words. While this is set the only thing wanted is that turn undone.
     @Published private(set) var wrongTurn: Move?
@@ -416,8 +421,20 @@ final class SolveSession: ObservableObject {
             onSolved?()
         } else {
             phase = .coaching
-            help = .undecided
-            announceStage()
+            // Keeping how they said they wanted to be helped.
+            //
+            // This used to be thrown away, and a connected cube re-plans every
+            // time a turn cannot be matched — so a child walking through a
+            // solve was dropped back to "show me each move or I'll do it
+            // myself" over and over, which is exactly the "it keeps going back
+            // to the start solving screen" that was reported. Choosing to be
+            // walked through is a thing they said about themselves, not about
+            // the plan, so a new plan has no business forgetting it.
+            if help == .moveByMove {
+                startStage()
+            } else {
+                announceStage()
+            }
         }
     }
 
@@ -445,19 +462,28 @@ final class SolveSession: ObservableObject {
         // They are doing it themselves after all.
         stopPlayingThrough()
         guard !isBusy else {
+            lastReaction = "queued: something was still animating"
             waitingTurns.append(move)
             return
         }
 
         if let wrong = wrongTurn {
-            guard move == wrong.inverse else { return giveUpAndReplan() }
+            guard move == wrong.inverse else {
+                lastReaction = "turned again while already off the path, so the plan "
+                    + "was worked out afresh"
+                return giveUpAndReplan()
+            }
             wrongTurn = nil
+            lastReaction = "put the mistake back"
             narrator.say("That's it. Carry on.")
             playTheirTurn(move) { [weak self] in self?.presentCurrentMove() }
             return
         }
 
-        guard let expected = currentMove else { return giveUpAndReplan() }
+        guard let expected = currentMove else {
+            lastReaction = "no move was on screen, so the plan was worked out afresh"
+            return giveUpAndReplan()
+        }
 
         // Nothing has been asked of them yet.
         //
@@ -474,6 +500,7 @@ final class SolveSession: ObservableObject {
         // comment.
         if help == .undecided {
             if !expected.isWholeCubeTurn, move == expected {
+                lastReaction = "nothing had been asked yet and it matched, so it counted"
                 help = .wholeStage
                 confirmCurrentMove()
                 return
@@ -485,12 +512,14 @@ final class SolveSession: ObservableObject {
             // move, so the way back is one turn, and it is worth offering
             // before the plan accepts it.
             if let backwards = stageThisWouldGoBackTo(after: move) {
+                lastReaction = "would take the \(backwards) apart, so it asked for it back"
                 wrongTurn = move
                 narrator.say("Careful — that takes your \(backwards) apart. "
                              + "\(move.inverse.spokenInstruction) to put it back.")
                 playTheirTurn(move) { [weak self] in self?.showTheWayBack() }
                 return
             }
+            lastReaction = "nothing had been asked yet, so the plan was re-made quietly"
             return playTheirTurn(move) { [weak self] in self?.replanQuietly() }
         }
 
@@ -498,6 +527,7 @@ final class SolveSession: ObservableObject {
         // ``takeTheTurnAsDone(andThen:)``, because the mapping of the turn that
         // dismissed them depends on their having happened.
         guard !expected.isWholeCubeTurn, move == expected else {
+            lastReaction = "called wrong: asked for \(expected.notation), read \(move.notation)"
             wrongTurn = move
             narrator.say("Not that one. \(move.inverse.spokenInstruction) to put it back.")
             playTheirTurn(move) { [weak self] in self?.showTheWayBack() }
@@ -506,6 +536,7 @@ final class SolveSession: ObservableObject {
 
         // Turning the cube is the child saying they are ready, so a step being
         // explained gets on with it rather than waiting for a tap as well.
+        lastReaction = "right — moved on"
         confirmCurrentMove()
     }
 
@@ -608,6 +639,7 @@ final class SolveSession: ObservableObject {
     /// leaves them stuck in front of an instruction they have already followed.
     func takeTheTurnAsDone(andThen move: Move) {
         guard !isBusy else {
+            lastReaction = "queued: something was still animating"
             waitingTurns.append(move)
             return
         }

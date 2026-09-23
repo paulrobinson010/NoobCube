@@ -35,6 +35,8 @@ struct RootView: View {
                 if let session = model.session {
                     SolveView(session: session,
                               narrator: model.narrator,
+                              smartCube: model.smartCube,
+                              onTurnedByHand: { model.theyTurnedByHand($0) },
                               onRescan: { model.rescan() },
                               onFinish: { model.finishSolve() },
                               onHome: { model.finishSolve() })

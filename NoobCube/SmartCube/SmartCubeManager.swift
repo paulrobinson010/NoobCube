@@ -119,6 +119,103 @@ final class SmartCubeManager: NSObject, ObservableObject {
         #endif
     }
 
+    // MARK: - The move log
+
+    /// Every turn, at every stage it passes through. See ``TurnLog``.
+    @Published var turnLog = TurnLog()
+
+    /// Whether the log is being kept, and the child asked what they turned.
+    ///
+    /// Off by default and remembered, because it puts a question in front of a
+    /// five year old that is there for the grown-up's benefit, not theirs.
+    @Published var isLogging: Bool = UserDefaults.standard.bool(forKey: Self.loggingKey) {
+        didSet { UserDefaults.standard.set(isLogging, forKey: Self.loggingKey) }
+    }
+
+    private static let loggingKey = "NoobCube.keepAMoveLog"
+
+    /// The turn currently being written down, so the app can come back and add
+    /// what it made of it after the fact.
+    private var turnBeingLogged: Int?
+
+    /// Write down a turn as it arrives, before anything is made of it. A turn
+    /// the app then swallows is the most interesting kind, so it has to be
+    /// here before the swallowing.
+    private func logArrival(of turn: GANProtocol.Turn) {
+        guard isLogging else { return }
+        turnLog.dialectSaid = dialectInWords
+        turnBeingLogged = turnLog.arrived(label: turn.label, clockwise: turn.clockwise)
+    }
+
+    /// What the cube's number turned out to mean, in its own frame.
+    private func logCubeMove(_ move: Move, for turn: GANProtocol.Turn) {
+        guard isLogging else { return }
+        // A turn held back while the cube was asked about the label is written
+        // down on arrival and filled in here, possibly several messages later.
+        let id = turnLog.entries.last(where: {
+            $0.label == turn.label && $0.clockwise == turn.clockwise && $0.cubeMove == nil
+        })?.id ?? turnBeingLogged
+        guard let id else { return }
+        let held = heldInWords
+        let open = grips.count
+        turnLog.amend(id) { entry in
+            entry.cubeMove = move
+            entry.heldAs = held
+            entry.gripsOpen = open
+        }
+    }
+
+    /// What the app made of the turn, and what it then did about it. Called by
+    /// the app, which is where a turn stops being the cube's business.
+    func logReading(_ appMove: Move?, asked: Move?, outcome: String) {
+        guard isLogging else { return }
+        // The oldest turn nothing has been said about yet, not the newest.
+        // Turns are written down as the cube sends them and read a hop later,
+        // so two arriving together would otherwise both land on the second.
+        guard let id = turnLog.entries.first(where: {
+            $0.cubeMove != nil && $0.outcome == nil
+        })?.id else { return }
+        let held = heldInWords
+        let open = grips.count
+        turnLog.amend(id) { entry in
+            entry.appMove = appMove
+            entry.asked = asked
+            entry.outcome = outcome
+            entry.heldAs = held
+            entry.gripsOpen = open
+        }
+    }
+
+    /// The child has said which colour side they turned.
+    func theyTurned(_ colour: CubeColour) {
+        guard let waiting = turnLog.waitingForAnAnswer else { return }
+        turnLog.theyTurned(colour, at: waiting.id)
+    }
+
+    /// How the picture on screen is painted, so the log can say whether the
+    /// side the child named is the side the app read.
+    func picture(_ centres: [Face: CubeColour]) {
+        var byColour: [CubeColour: Face] = [:]
+        for (face, colour) in centres { byColour[colour] = face }
+        turnLog.picturedAs = byColour
+    }
+
+    func clearTheLog() { turnLog.clear() }
+
+    var dialectInWords: String {
+        (0...5).map { label in
+            guard let meaning = dialect.meanings[label] else { return "#\(label)=?" }
+            return "#\(label)=\(meaning.face.rawValue)"
+                + (meaning.clockwiseIsReversed ? "(reversed)" : "")
+        }.joined(separator: " ")
+    }
+
+    var heldInWords: String {
+        guard let alignment else { return "\(grips.count) ways still open" }
+        return alignment.appFace.sorted { $0.key.rawValue < $1.key.rawValue }
+            .map { "\($0.key.letter)->\($0.value.letter)" }.joined(separator: " ")
+    }
+
     /// Work out which way round the cube is being held, by holding what it
     /// says it looks like against what the camera saw.
     /// Returns nil when the cube has not said where it is yet, which is not the
@@ -567,6 +664,7 @@ final class SmartCubeManager: NSObject, ObservableObject {
 
     private func received(_ turn: GANProtocol.Turn) {
         lastRawTurn = turn
+        logArrival(of: turn)
         if let move = dialect.move(forLabel: turn.label, clockwise: turn.clockwise) {
             return act(on: turn, as: move)
         }
@@ -585,6 +683,7 @@ final class SmartCubeManager: NSObject, ObservableObject {
     }
 
     private func act(on turn: GANProtocol.Turn, as move: Move) {
+        logCubeMove(move, for: turn)
         // Keep the cube's own position up to date before saying a turn
         // happened, so anything reacting to the turn sees the cube as it is
         // now rather than as it was a move ago.

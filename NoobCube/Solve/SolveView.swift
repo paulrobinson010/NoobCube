@@ -4,6 +4,10 @@ import SwiftUI
 struct SolveView: View {
     @ObservedObject var session: SolveSession
     @ObservedObject var narrator: Narrator
+    /// Only for the move log, which is off unless someone turns it on.
+    @ObservedObject var smartCube: SmartCubeManager
+    /// The child said which colour side they just turned.
+    var onTurnedByHand: (CubeColour) -> Void
     /// Tapping "look at my cube again" hands back to the camera.
     var onRescan: () -> Void
     var onFinish: () -> Void
@@ -52,6 +56,12 @@ struct SolveView: View {
                     .padding(.top, 8)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            if smartCube.isLogging, smartCube.isConnected {
+                TurnLogStrip(manager: smartCube, onTurned: onTurnedByHand)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 6)
+            }
 
             controls
                 .padding(.horizontal, 20)
