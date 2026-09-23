@@ -158,19 +158,20 @@ struct SmartCubeView: View {
                     Text("Keep a move log")
                         .font(.brand(size: 16, weight: .bold))
                         .foregroundStyle(.white)
-                    Text("Writes down every turn, and asks which colour you "
-                         + "turned so the three can be compared.")
+                    Text("Writes down every turn and every change of step, "
+                         + "and asks which colour you turned.")
                         .font(.brand(size: 13, weight: .medium))
                         .foregroundStyle(Theme.muted)
                 }
             }
             .tint(Theme.done)
 
-            if manager.isLogging, !manager.turnLog.entries.isEmpty {
+            if manager.isLogging, !manager.turnLog.isEmpty {
                 Button {
                     isReadingTheLog = true
                 } label: {
-                    Label("Read the log (\(manager.turnLog.entries.count) turns)",
+                    Label("Read the log (\(manager.turnLog.entries.count) turns, "
+                          + "\(manager.turnLog.moments.count) changes)",
                           systemImage: "list.bullet.rectangle")
                 }
                 .buttonStyle(BigButtonStyle(isProminent: false))

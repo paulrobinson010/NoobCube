@@ -223,7 +223,7 @@ struct SolveView: View {
                 VStack(spacing: 12) {
                     Button("Show me each move") {
                         session.help = .moveByMove
-                        session.startStage()
+                        session.startStage(because: "they asked to be shown each move")
                     }
                     .buttonStyle(BigButtonStyle())
 
@@ -262,7 +262,7 @@ struct SolveView: View {
 
                     Button("Actually, show me each move") {
                         session.help = .moveByMove
-                        session.startStage()
+                        session.startStage(because: "they changed their mind mid-stage")
                     }
                     .buttonStyle(BigButtonStyle(isProminent: false))
                 }

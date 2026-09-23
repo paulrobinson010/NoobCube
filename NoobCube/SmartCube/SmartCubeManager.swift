@@ -186,6 +186,18 @@ final class SmartCubeManager: NSObject, ObservableObject {
         }
     }
 
+    /// Something changed in the plan rather than on the cube: a new step, a new
+    /// stage, a plan thrown away and worked out again.
+    ///
+    /// These sit between the turns in the report, which is the only place they
+    /// make sense. A turn read as the wrong side and a step that changed under
+    /// it a moment earlier are not two faults, and reading the turns on their
+    /// own could never have shown that.
+    func logMoment(_ what: String, why: String) {
+        guard isLogging else { return }
+        turnLog.happened(what, why: why)
+    }
+
     /// The child has said which colour side they turned.
     func theyTurned(_ colour: CubeColour) {
         guard let waiting = turnLog.waitingForAnAnswer else { return }

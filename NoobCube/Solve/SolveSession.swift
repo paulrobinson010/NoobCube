@@ -34,7 +34,15 @@ final class SolveSession: ObservableObject {
     @Published private(set) var stageIndex: Int
     @Published private(set) var moveIndex: Int = 0
     @Published private(set) var phase: Phase = .coaching
-    @Published var help: Help = .undecided
+    @Published var help: Help = .undecided {
+        didSet {
+            guard help != oldValue else { return }
+            logMoment?("how they want helping: \(help.rawValue)",
+                       oldValue == .undecided
+                       ? "they chose"
+                       : "changed from \(oldValue.rawValue)")
+        }
+    }
     @Published private(set) var displayCube: ScannedCube
     /// The cube as it was when the current step was explained.
     ///
@@ -58,6 +66,10 @@ final class SolveSession: ObservableObject {
 
     /// Turns that arrived while the cube on screen was mid-animation.
     private var waitingTurns: [Move] = []
+
+    /// Write down a change to the plan, and why. Set by the app so this knows
+    /// nothing about smart cubes; nil when nobody is keeping a log.
+    var logMoment: ((String, String) -> Void)?
 
     /// Called when the cube has been turned somewhere the plan no longer
     /// covers, so the plan has to be worked out again from what the cube says.
@@ -167,6 +179,15 @@ final class SolveSession: ObservableObject {
     /// Stages with nothing to do are already solved, so they are skipped.
     private static func nextWorkableStage(in plan: SolvePlan, from index: Int) -> Int? {
         plan.stages.indices.dropFirst(index).first { !plan.stages[$0].isDone }
+    }
+
+    /// Where the plan has got to, in one line, for the log.
+    var whereWeAre: String {
+        guard let stage else { return "nothing left to do" }
+        let step = currentStep.map { ", \(heading(of: $0))" } ?? ""
+        let move = currentMove.map { " — asking for \($0.notation)" } ?? ""
+        return "\(stageLabel ?? "step ?") \(stage.kind.title)\(step)"
+            + " (move \(moveIndex + 1) of \(stage.moves.count))\(move)"
     }
 
     // MARK: - Speaking
@@ -297,13 +318,14 @@ final class SolveSession: ObservableObject {
         announceCurrentMove()
     }
 
-    func startStage() {
+    func startStage(because reason: String = "the stage was started") {
         stopPlayingThrough()
         moveIndex = 0
         wrongTurn = nil
         displayCube = colours(upToStage: stageIndex)
         scene.reset(to: displayCube.colours)
         phase = .coaching
+        logMoment?("stage: \(whereWeAre)", reason)
         if help == .moveByMove {
             introduceStep()
         } else {
@@ -325,6 +347,9 @@ final class SolveSession: ObservableObject {
     /// rest of it, and every step is a move.
     func introduceStep() {
         stepStartCube = displayCube
+        logMoment?("step: \(currentStep.map(heading(of:)) ?? "none")"
+                   + (currentMove.map { " — asking for \($0.notation)" } ?? ""),
+                   reasonForThisStep ?? "the piece being worked on changed")
         presentCurrentMove()
     }
 
@@ -376,36 +401,45 @@ final class SolveSession: ObservableObject {
     private func finishStage() {
         scene.hideTurnArrow()
         scene.clearHighlight()
+        let finished = stage?.kind.title ?? "the stage"
         guard let next = Self.nextWorkableStage(in: plan, from: stageIndex + 1) else {
+            logMoment?("finished", "every move in the plan has been made")
             phase = .finished
             narrator.say("You did it! The whole cube is finished. Well done!")
             onSolved?()
             return
         }
         stageIndex = next
+        // A genuinely new stage, so they are asked again how they want helping.
+        // Not to be confused with a re-plan, which has no business forgetting
+        // what they already said.
         help = .undecided
         narrator.say("Nice one, that step is done. \(plan.stages[next].kind.title) is next.")
-        startStage()
+        startStage(because: "\(finished) finished, its last move made")
     }
 
     /// The child says they have done the whole stage themselves.
     func declareStageDoneByHand() {
+        logMoment?("offering a re-scan", "they said they did the stage themselves")
         phase = .offerRescan
         narrator.say("Great. Let me look at your cube again to see how you got on.")
     }
 
     func skipToNextStage() {
         guard let next = Self.nextWorkableStage(in: plan, from: stageIndex + 1) else {
+            logMoment?("finished", "no stage left to skip to")
             phase = .finished
             return
         }
         stageIndex = next
         help = .undecided
-        startStage()
+        startStage(because: "they chose to carry on without another look")
     }
 
     /// Replace the plan after a re-scan, keeping the same session on screen.
-    func replacePlan(_ newPlan: SolvePlan, scan newScan: ScannedCube) {
+    func replacePlan(_ newPlan: SolvePlan, scan newScan: ScannedCube,
+                     because reason: String = "a new plan arrived") {
+        logMoment?("plan replaced, \(newPlan.moveCount) moves", reason)
         plan = newPlan
         wrongTurn = nil
         waitingTurns.removeAll()
@@ -431,8 +465,9 @@ final class SolveSession: ObservableObject {
             // walked through is a thing they said about themselves, not about
             // the plan, so a new plan has no business forgetting it.
             if help == .moveByMove {
-                startStage()
+                startStage(because: "the new plan, carrying on move by move")
             } else {
+                logMoment?("stage: \(whereWeAre)", "the new plan")
                 announceStage()
             }
         }
@@ -544,6 +579,8 @@ final class SolveSession: ObservableObject {
     /// tracking now, so the plan is worked out afresh from where it actually is
     /// rather than argued with.
     private func giveUpAndReplan() {
+        logMoment?("asking for a fresh plan, out loud",
+                   "turned again while already off the path, at \(whereWeAre)")
         wrongTurn = nil
         waitingTurns.removeAll()
         narrator.say("Let me work out where your cube is now.")
@@ -580,6 +617,8 @@ final class SolveSession: ObservableObject {
     /// new, the plan follows it there, and none of that is the child's
     /// business.
     private func replanQuietly() {
+        logMoment?("asking for a fresh plan, quietly",
+                   "they turned before anything had been asked of them")
         wrongTurn = nil
         waitingTurns.removeAll()
         onLost?()
@@ -646,6 +685,9 @@ final class SolveSession: ObservableObject {
         let spins = pendingWholeCubeTurns
         guard !spins.isEmpty else { return handleSmartCubeTurn(move) }
 
+        logMoment?("took \(spins.count) whole-cube turn(s) as already done",
+                   "they turned a layer, so they had plainly turned it round first")
+
         // Whether they turned it and got the next move right, or turned it and
         // got the next move wrong, they turned it. Only the words differ.
         if move == moveAfterWholeCubeTurns {
@@ -675,6 +717,8 @@ final class SolveSession: ObservableObject {
     /// Forget a mistake without acting on it, for when it turns out the app
     /// was wrong about what the child did rather than the other way round.
     func forgetTheMistake() {
+        logMoment?("the mistake was dropped",
+                   "the app was wrong about what they did, not the child")
         wrongTurn = nil
         waitingTurns.removeAll()
         presentCurrentMove()

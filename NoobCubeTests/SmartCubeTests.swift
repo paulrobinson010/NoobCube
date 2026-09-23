@@ -873,6 +873,35 @@ final class TurnLogTests: XCTestCase {
         for label in 0..<4 { XCTAssertTrue(report.contains("#\(label)")) }
     }
 
+    /// A step changing between two turns is often the whole explanation for
+    /// the second, so the two have to come back in the order they happened.
+    func testTurnsAndPlanChangesComeBackInOrder() {
+        var log = TurnLog()
+        log.happened("stage: Step 1 of 8", why: "the solve began")
+        let first = log.arrived(label: 1, clockwise: true)
+        log.amend(first) { $0.outcome = "right — moved on" }
+        log.happened("step: the white and red edge", why: "the piece changed")
+        let second = log.arrived(label: 2, clockwise: false)
+        log.amend(second) { $0.outcome = "called wrong" }
+
+        let rows = log.report.split(separator: "\n").map(String.init)
+        func at(_ needle: String) -> Int? { rows.firstIndex { $0.contains(needle) } }
+        guard let began = at("the solve began"), let one = at("right — moved on"),
+              let changed = at("the piece changed"), let two = at("called wrong")
+        else { return XCTFail("the report is missing rows") }
+        XCTAssertTrue(began < one && one < changed && changed < two)
+    }
+
+    /// Every change says why, because "the step changed" on its own explains
+    /// nothing at all.
+    func testEveryPlanChangeSaysWhy() {
+        var log = TurnLog()
+        log.happened("plan replaced, 42 moves", why: "worked out again from the cube")
+        XCTAssertTrue(log.report.contains("plan replaced, 42 moves"))
+        XCTAssertTrue(log.report.contains("worked out again from the cube"))
+        XCTAssertEqual(log.moments.count, 1)
+    }
+
     /// Only so many are kept, or a long session would grow without limit.
     func testTheLogDoesNotGrowForEver() {
         var log = TurnLog()

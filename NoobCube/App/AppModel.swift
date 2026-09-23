@@ -72,10 +72,12 @@ final class AppModel: ObservableObject {
             // cube actually is. Stages already finished come back empty, so the
             // child is never sent back over work they have done.
             let plan = try BeginnerSolver.solve(state, whiteFace: whiteFace)
-            session = SolveSession(plan: plan, scan: finishedScan,
-                                   scene: scene, narrator: narrator)
-            session?.onLost = { [weak self] in self?.replanFromSmartCube() }
-            session?.onSolved = { [weak self] in self?.smartCubeIsSolved() }
+            let fresh = SolveSession(plan: plan, scan: finishedScan,
+                                     scene: scene, narrator: narrator)
+            follow(fresh)
+            session = fresh
+            smartCube.logMoment("new plan from the camera, \(plan.moveCount) moves",
+                                "the camera looked at the cube")
 
             // The camera has just seen which colour is on which side. A cube's
             // middles never move, so that is all it takes to know where the
@@ -95,23 +97,38 @@ final class AppModel: ObservableObject {
     }
 
     func beginSolving() {
+        smartCube.logMoment("started solving", "they pressed the button")
         scene.clearHighlight()
         session?.cubeIsFollowing = smartCube.isFollowing
         screen = .solving
-        session?.startStage()
+        session?.startStage(because: "the solve began")
     }
 
     /// The child wants the app to look at the cube again, part way through.
     func rescan() {
+        smartCube.logMoment("back to the camera", "the app asked for another look")
         scene.stopIdleSpin()
         narrator.say("Let's have another look at your cube.")
         screen = .scanning
     }
 
     func finishSolve() {
+        smartCube.logMoment("back to the start", "they left the solve")
         session = nil
         scan = nil
         showWelcome()
+    }
+
+    /// Hook a freshly made session up to everything that watches it.
+    ///
+    /// One place, because a session made in one screen and a session made in
+    /// another were drifting apart: the move log was wired to one of them.
+    private func follow(_ session: SolveSession) {
+        session.onLost = { [weak self] in self?.replanFromSmartCube() }
+        session.onSolved = { [weak self] in self?.smartCubeIsSolved() }
+        session.logMoment = { [weak self] what, why in
+            self?.smartCube.logMoment(what, why: why)
+        }
     }
 
     // MARK: - Smart cube
@@ -347,7 +364,9 @@ final class AppModel: ObservableObject {
             // holding it is still to be found out.
             smartCube.reground(to: alignment)
             screenIsBehindTheCube = false
-            session.replacePlan(plan, scan: scanned)
+            session.replacePlan(plan, scan: scanned,
+                                because: "worked out again from where the cube says it is, "
+                                + "holding it \(smartCube.heldInWords)")
             session.cubeIsFollowing = smartCube.isFollowing
         } catch {
             errorMessage = error.localizedDescription
@@ -421,9 +440,11 @@ final class AppModel: ObservableObject {
             let plan = try BeginnerSolver.solve(asTheyHoldIt, whiteFace: whiteFace)
             smartCube.reground(to: held)
             scan = scanned
-            session = SolveSession(plan: plan, scan: scanned, scene: scene, narrator: narrator)
-            session?.onLost = { [weak self] in self?.replanFromSmartCube() }
-            session?.onSolved = { [weak self] in self?.smartCubeIsSolved() }
+            let fresh = SolveSession(plan: plan, scan: scanned, scene: scene, narrator: narrator)
+            follow(fresh)
+            session = fresh
+            smartCube.logMoment("new plan from the cube itself, \(plan.moveCount) moves",
+                                "holding it \(smartCube.heldInWords)")
             session?.cubeIsFollowing = smartCube.isFollowing
             scene.stopIdleSpin()
             screen = .ready

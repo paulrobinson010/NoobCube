@@ -104,11 +104,28 @@ struct TurnLog: Equatable {
         }
     }
 
+    /// Something that happened to the plan rather than to the cube.
+    ///
+    /// A turn on its own does not say why the app then did what it did. The
+    /// step changed, or the stage did, or the whole plan was thrown away and
+    /// worked out again — and which of those happened, and why, is half of
+    /// reading a log at all. They are numbered from the same counter as the
+    /// turns, so the report can put them back in the order they happened.
+    struct Moment: Identifiable, Equatable {
+        let id: Int
+        let at: Date
+        /// What changed.
+        let what: String
+        /// Why it changed.
+        let why: String
+    }
+
     /// How many turns are kept. A whole solve is well under this, and the point
     /// of the log is to be read after one.
     static let kept = 200
 
     private(set) var entries: [Entry] = []
+    private(set) var moments: [Moment] = []
     private var nextID = 1
 
     /// Which app face each colour is sitting on, as the picture is drawn. Set
@@ -129,6 +146,14 @@ struct TurnLog: Equatable {
         entries.append(Entry(id: id, at: Date(), label: label, clockwise: clockwise))
         if entries.count > Self.kept { entries.removeFirst(entries.count - Self.kept) }
         return id
+    }
+
+    /// Write down a change to the plan, and why it happened.
+    mutating func happened(_ what: String, why: String) {
+        let id = nextID
+        nextID += 1
+        moments.append(Moment(id: id, at: Date(), what: what, why: why))
+        if moments.count > Self.kept { moments.removeFirst(moments.count - Self.kept) }
     }
 
     mutating func amend(_ id: Int, _ change: (inout Entry) -> Void) {
@@ -154,8 +179,12 @@ struct TurnLog: Equatable {
 
     mutating func clear() {
         entries = []
+        moments = []
         nextID = 1
     }
+
+    /// Whether anything at all has been written down.
+    var isEmpty: Bool { entries.isEmpty && moments.isEmpty }
 
     // MARK: - Reading it back
 
@@ -180,8 +209,28 @@ struct TurnLog: Equatable {
         }
         lines.append("")
         lines.append("  #  cube sent  means  app read  asked  you turned  verdict  what happened")
-        for (offset, entry) in entries.enumerated() {
-            lines.append(Self.line(offset + 1, entry))
+
+        // Turns and the plan's own changes, back in the order they happened.
+        // Reading them apart is how "it turned the wrong side" and "it went
+        // back to the start" stayed two separate mysteries: they are one
+        // sequence, and a step changing between two turns is often the whole
+        // explanation for the second.
+        var turnNumber = 0
+        var turns = entries[...]
+        var changes = moments[...]
+        while !turns.isEmpty || !changes.isEmpty {
+            let turnID = turns.first?.id ?? Int.max
+            let changeID = changes.first?.id ?? Int.max
+            if turnID <= changeID, let entry = turns.first {
+                turnNumber += 1
+                lines.append(Self.line(turnNumber, entry))
+                turns = turns.dropFirst()
+            } else if let change = changes.first {
+                lines.append("      -> \(change.what)  (\(change.why))")
+                changes = changes.dropFirst()
+            } else {
+                break
+            }
         }
         lines.append("")
         lines.append(contentsOf: summaryLines)
@@ -190,7 +239,7 @@ struct TurnLog: Equatable {
 
     var summaryLines: [String] {
         let counts = countsByVerdict
-        var lines: [String] = ["\(entries.count) turns"]
+        var lines: [String] = ["\(entries.count) turns, \(moments.count) changes to the plan"]
         let answered = entries.filter { $0.turnedByHand != nil }.count
         lines.append("\(answered) of them you said a colour for")
         if let wrong = counts[.cubeNamedTheWrongFace], wrong > 0 {
