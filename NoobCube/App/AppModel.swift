@@ -96,6 +96,9 @@ final class AppModel: ObservableObject {
         session?.cubeIsFollowing = smartCube.isFollowing
         screen = .solving
         session?.startStage(because: "the solve began")
+        // A cube can be turned on the screen before this one, where nothing is
+        // following it; the picture starts from the cube, not from the plan.
+        holdThePictureToTheCube()
     }
 
     /// The child wants the app to look at the cube again, part way through.
@@ -123,6 +126,46 @@ final class AppModel: ObservableObject {
         session.logMoment = { [weak self] what, why in
             self?.smartCube.logMoment(what, why: why)
         }
+        session.onSettled = { [weak self] in self?.holdThePictureToTheCube() }
+    }
+
+    // MARK: - The picture is the cube
+
+    /// The cube in the child's hands, drawn in the picture's colours.
+    ///
+    /// Read off the cube's own position rather than built up turn by turn:
+    /// its face numbers are welded to its plastic, and each of its faces is a
+    /// colour the picture has on one of its sides.
+    private func theCubeAsItReallyIs(for session: SolveSession) -> ScannedCube? {
+        guard let cubeState = smartCube.cubeState,
+              let held = CubeAlignment.matching(centresSeen: session.displayCube.centres)
+        else { return nil }
+        return held.painted(cubeState)
+    }
+
+    /// Make sure the picture is the cube, and put it right if it is not.
+    ///
+    /// With a smart cube connected there is no excuse for the two ever
+    /// differing: the cube says exactly where it is. But the picture is drawn a
+    /// turn at a time, as animations, and anything that slips — a turn sent
+    /// twice, a turn lost, a re-plan built at the wrong moment — used to stay
+    /// in the picture for the rest of the solve, a jumble that no longer
+    /// matched anything. So whenever everything has been drawn, the picture is
+    /// checked against the cube, and the cube wins. The plan goes with it,
+    /// because a plan worked out for the wrong cube is no use either.
+    ///
+    /// Then the cube is asked where it is, so the app's own copy is checked
+    /// against the cube's word too — see ``SmartCubeManager/onPositionCorrected``.
+    private func holdThePictureToTheCube(andAsk ask: Bool = true) {
+        guard screen == .solving, let session, smartCube.isFollowing,
+              !session.isBusy, let real = theCubeAsItReallyIs(for: session) else { return }
+        if real != session.displayCube {
+            let off = zip(real.colours, session.displayCube.colours).filter { $0 != $1 }.count
+            smartCube.logMoment("the picture had drifted from the cube, \(off) squares out",
+                                why: "redrawn from where the cube says it is")
+            replanFromSmartCube()
+        }
+        if ask { smartCube.askWhereItIs() }
     }
 
     // MARK: - Smart cube
@@ -167,6 +210,14 @@ final class AppModel: ObservableObject {
         // cube's business and ``SmartCubeDialect``'s; by the time it reaches
         // here it is a turn in the cube's own frame.
         smartCube.onTurn = { [weak self] move in self?.handleSmartCubeTurn(move) }
+        // The cube's word on where it is disagreed with the app's copy; the copy
+        // has been put right, so the picture is held to it. Not asked again —
+        // that is the answer.
+        smartCube.onPositionCorrected = { [weak self] in
+            self?.smartCube.logMoment("the cube's own position differed from the app's copy",
+                                      why: "the cube's word was taken")
+            self?.holdThePictureToTheCube(andAsk: false)
+        }
         smartCubeGripObserver = smartCube.$sensorGrip
             .compactMap { $0 }
             .sink { [weak self] held in
@@ -258,7 +309,10 @@ final class AppModel: ObservableObject {
         let held = CubeAlignment.matching(centresSeen: session.displayCube.centres)
             ?? smartCube.alignment
         let state = held.appState(of: cubeState)
-        let scanned = ScannedCube(colours: state.facelets.map { CubeColour.defaultColour(for: $0) })
+        // In the picture's own colours, not the usual ones: after the plan has
+        // turned the cube round they are different, and this is where a re-plan
+        // used to draw a muddled cube.
+        let scanned = held.painted(cubeState)
         let whiteFace = scanned.face(withCentre: .white) ?? .D
         do {
             let plan = try BeginnerSolver.solve(state, whiteFace: whiteFace)
@@ -332,8 +386,7 @@ final class AppModel: ObservableObject {
         // picture still hold, and the cube supplies where its pieces are now.
         let held = smartCube.alignment
         let asTheyHoldIt = held.appState(of: state)
-        let scanned = ScannedCube(
-            colours: asTheyHoldIt.facelets.map { CubeColour.defaultColour(for: $0) })
+        let scanned = held.painted(state)
         let whiteFace = scanned.face(withCentre: .white) ?? .D
         do {
             let plan = try BeginnerSolver.solve(asTheyHoldIt, whiteFace: whiteFace)

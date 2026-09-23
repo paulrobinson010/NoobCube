@@ -679,8 +679,16 @@ final class SolveSession: ObservableObject {
         onLost?()
     }
 
+    /// Called when everything the child has done has been drawn: nothing
+    /// animating, nothing waiting. The moment the picture is meant to be
+    /// exactly the cube in their hands, so the moment to check that it is.
+    var onSettled: (() -> Void)?
+
     private func drainTurnsThatArrivedWhileBusy() {
-        guard !waitingTurns.isEmpty else { return }
+        guard !waitingTurns.isEmpty else {
+            if !isBusy { onSettled?() }
+            return
+        }
         let next = waitingTurns.removeFirst()
         handleSmartCubeTurn(next)
     }

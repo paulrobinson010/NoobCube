@@ -268,7 +268,13 @@ final class SmartCubeManager: NSObject, ObservableObject {
             return false
         }
         alignment = held
-        cubeState = held.cubeState(of: scanned)
+        let seen = held.cubeState(of: scanned)
+        if cubeState != seen {
+            theCubesOwnWordHolds = false
+            note("The camera and the cube disagree; the camera wins, and the cube's "
+                 + "own idea of where it is is set aside")
+        }
+        cubeState = seen
         positionIsTrustworthy = true
         // Worth keeping: a cube only has to be pictured once.
         Self.rememberedMiddles = middles
@@ -281,6 +287,7 @@ final class SmartCubeManager: NSObject, ObservableObject {
     /// can be told about without looking at it, and the way back when its own
     /// idea of itself has drifted.
     func startFromSolved() {
+        if cubeState != .solved { theCubesOwnWordHolds = false }
         cubeState = .solved
         // Where it is. Nothing else changes: what to call each of its faces
         // comes from the colours on screen, and a solved cube has not moved
@@ -361,9 +368,7 @@ final class SmartCubeManager: NSObject, ObservableObject {
     /// its own faces. They are half a turn apart, and the one worth showing is
     /// the one they can hold up against what is in their hands.
     var trackedColours: [CubeColour?]? {
-        cubeState.map { state in
-            alignment.appState(of: state).facelets.map { CubeColour.defaultColour(for: $0) }
-        }
+        cubeState.map { alignment.painted($0).colours }
     }
 
     private var central: CBCentralManager?
@@ -482,12 +487,37 @@ final class SmartCubeManager: NSObject, ObservableObject {
         case .moves(let turns):
             guard hasSeenPosition || generation == .gen2 else { return }
             for turn in turns {
+                // These cubes send a turn again when they are not sure it got
+                // through, and quick turns are exactly when that happens. The
+                // turn check always threw the repeats away by their serial
+                // number; this, the path that actually follows a solve, did
+                // not — so a repeated turn was applied twice to the app's copy
+                // of the cube, and every re-plan after it drew the cube from a
+                // copy with a turn in it that the child never made.
+                if let last = lastMoveSerial {
+                    let ahead = (turn.serial - last) & 0xFF
+                    guard ahead != 0, ahead < 128 else {
+                        note("Turn #\(turn.serial) sent again; already counted")
+                        continue
+                    }
+                    if ahead > 1 {
+                        // And the other way: one went missing in between. The
+                        // cube knows where it is even if the app lost a turn,
+                        // so it is asked rather than guessed at.
+                        note("\(ahead - 1) turn(s) went missing before #\(turn.serial); "
+                             + "asking the cube where it is")
+                        lastMoveSerial = turn.serial
+                        received(turn)
+                        requestState()
+                        continue
+                    }
+                }
                 lastMoveSerial = turn.serial
                 received(turn)
             }
-        case .facelets(_, let state):
+        case .facelets(let serial, let state):
             hasSeenPosition = true
-            positionArrived(state)
+            positionArrived(state, serial: serial)
         case .orientation(let quaternion):
             orientationArrived(quaternion)
         case .battery(let percent):
@@ -635,7 +665,28 @@ final class SmartCubeManager: NSObject, ObservableObject {
     /// cube's own position has taken it in. See ``act(on:as:)``.
     var onTurn: (@MainActor (Move) -> Void)?
 
-    private func positionArrived(_ state: CubeState) {
+    /// Called when the cube reports a position the app's copy had drifted
+    /// from. The copy has already been put right by then.
+    var onPositionCorrected: (@MainActor () -> Void)?
+
+    /// Ask the cube where it is. Its answer is what the app's copy is held to.
+    func askWhereItIs() {
+        guard theCubesOwnWordHolds else { return }
+        requestState()
+    }
+
+    /// Whether the app's copy of the cube came from the cube itself.
+    ///
+    /// Usually it did, and then the cube's word on where it is beats any tally.
+    /// But twice the app knowingly overrides it: when the camera has just seen
+    /// the cube as it really is ("my cube looks different"), and when the child
+    /// says it is solved. In both, the cube's own memory is what was wrong, and
+    /// nothing tells the cube — so asking it afterwards would pull the copy
+    /// straight back to the wrong answer. Until the copy is next taken from the
+    /// cube, only its turns count, not its opinion of where it is.
+    private var theCubesOwnWordHolds = true
+
+    private func positionArrived(_ state: CubeState, serial: Int? = nil) {
         guard !turnsAwaitingTheirMeaning.isEmpty else {
             // Nothing outstanding, so this is the cube saying where it is. A
             // position the cube reports is better evidence than a tally built
@@ -643,10 +694,26 @@ final class SmartCubeManager: NSObject, ObservableObject {
             // let a misread turn go unnoticed for a whole solve.
             if cubeState == nil {
                 cubeState = state
+                theCubesOwnWordHolds = true
+                if let serial { lastMoveSerial = serial & 0xFF }
                 lineUpFromTheLastPicture()
-            } else if cubeState != state {
+                return
+            }
+            guard theCubesOwnWordHolds else { return }
+            // Only a report of where the cube is *now*. It is asked after every
+            // turn, and a child turning quickly can make another before the
+            // answer arrives — an answer from before that turn is out of date,
+            // and taking it would undo a turn they really made. The report
+            // carries the cube's own turn count, which says which it is.
+            if let serial, let last = lastMoveSerial {
+                let ahead = ((serial & 0xFF) - last) & 0xFF
+                guard ahead < 128 else { return }
+                lastMoveSerial = serial & 0xFF
+            }
+            if cubeState != state {
                 note("Cube says it is somewhere else; taking its word for it")
                 cubeState = state
+                onPositionCorrected?()
             }
             return
         }

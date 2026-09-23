@@ -135,6 +135,69 @@ def from_the_middles(centres_seen):
     return next((g for g in GRIPS if faces_after(g) == want), None)
 
 
+def picture_centres(grip):
+    """The colour of each side of the picture, held this way round."""
+    return {faces_after(grip)[f]: CUBE_FRAME[f] for f in cube.FACES}
+
+
+def painted(grip, cube_state):
+    """The cube's own position drawn in the picture's own colours."""
+    centres = picture_centres(grip)
+    return [centres[f] for f in regripping(cube_state, grip)]
+
+
+def painted_the_old_way(grip, cube_state):
+    """With the colours a cube has when held yellow up, green at the front."""
+    return [CHILD_FRAME[f] for f in regripping(cube_state, grip)]
+
+
+def turn_colours(colours, seq):
+    """A picture of coloured squares, turned; colours have no names to rename."""
+    for m in seq:
+        perm = cube.MOVES[m]
+        colours = [colours[perm[i]] for i in range(54)]
+    return colours
+
+
+def check_a_replan_draws_the_cube_it_is_given(trials=300, seed=19):
+    """A re-plan must draw the cube in the child's hands, whatever the plan did.
+
+    The picture starts the way the child is asked to hold the cube. The plan
+    then turns it round -- "turn the cube so orange faces you" -- and the
+    picture's sides change colour with it. A re-plan after that was painting
+    the cube with the colours of the *usual* way round, so it drew a cube with
+    its colours swapped about: a muddle, from a position that was right.
+    """
+    rng = random.Random(seed)
+    asked, _ = as_the_child_is_asked_to_hold_it()
+    same = muddled_before = 0
+    for _ in range(trials):
+        in_their_hands = cube.apply(cube.SOLVED, scramble(rng))
+        picture = painted(asked, in_their_hands)
+        assert painted_the_old_way(asked, in_their_hands) == picture, \
+            'held the usual way, the two ways of painting agree'
+
+        # The plan turns the whole cube round, a turn or two.
+        spins = [rng.choice(['y', "y'", 'y2', 'x', "x'", 'z'])
+                 for _ in range(rng.randint(1, 2))]
+        picture = turn_colours(picture, spins)
+
+        # Then something asks for a fresh plan, from the cube's own position.
+        centres = {f: picture[CENTRE[f]] for f in cube.FACES}
+        held = from_the_middles(centres)
+        assert held is not None
+        assert painted(held, in_their_hands) == picture, \
+            'a re-plan must draw exactly the picture the child is looking at'
+        same += 1
+        if painted_the_old_way(held, in_their_hands) != picture:
+            muddled_before += 1
+    print('re-plans after the picture was turned round  %d' % trials)
+    print('  drawn exactly as the cube is               %d' % same)
+    print('  that the old painting would have muddled   %d' % muddled_before)
+    assert muddled_before > 0
+    print('ALL PASS')
+
+
 def check_the_middles_are_enough(trials=500, seed=11):
     """However the cube is held, and whatever it believes about itself."""
     rng = random.Random(seed)
@@ -468,3 +531,5 @@ if __name__ == '__main__':
     check_the_grips_are_all_different()
     print()
     check_the_grips_are_told_apart_by_their_middles()
+    print()
+    check_a_replan_draws_the_cube_it_is_given()

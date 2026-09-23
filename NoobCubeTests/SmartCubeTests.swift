@@ -914,3 +914,48 @@ final class HalfTurnTests: XCTestCase {
         XCTAssertFalse(Move(.y, .half).isHalfTurn(of: Move(.y)))
     }
 }
+
+/// With a smart cube connected, the picture is the cube — however the app got
+/// there, re-plans included.
+final class PictureIsTheCubeTests: XCTestCase {
+
+    /// Held the way the child is asked, the usual colours are the right ones.
+    func testHeldAsAskedThePictureHasTheUsualColours() {
+        let centres = CubeAlignment.asTheChildIsAskedToHoldIt.pictureCentres
+        for face in Face.allCases {
+            XCTAssertEqual(centres[face], CubeColour.defaultColour(for: face))
+        }
+    }
+
+    /// The plan turns the cube round, then something asks for a fresh plan.
+    /// The fresh picture must be exactly the one the child was looking at;
+    /// painting it with the usual colours drew a cube with its colours swapped.
+    func testARePlanAfterTheCubeWasTurnedRoundDrawsTheSameCube() {
+        var generator = SeededGenerator(seed: 19)
+        let asked = CubeAlignment.asTheChildIsAskedToHoldIt
+        for spins in [[Move(.y)], [Move(.y, .counterClockwise)], [Move(.y, .half)],
+                      [Move(.x)], [Move(.z), Move(.y)]] {
+            let inTheirHands = CubeState.solved.applying(randomScramble(using: &generator))
+            let picture = asked.painted(inTheirHands).applying(spins)
+            guard let held = CubeAlignment.matching(centresSeen: picture.centres) else {
+                return XCTFail("a turned picture still has six middles")
+            }
+            XCTAssertEqual(held.painted(inTheirHands), picture,
+                           "a re-plan after \(spins.map(\.notation)) drew a different cube")
+        }
+    }
+
+    /// And the old way really was wrong, or the test above proves nothing.
+    func testTheUsualColoursAreWrongOnceTheCubeIsTurnedRound() {
+        var generator = SeededGenerator(seed: 23)
+        let inTheirHands = CubeState.solved.applying(randomScramble(using: &generator))
+        let picture = CubeAlignment.asTheChildIsAskedToHoldIt.painted(inTheirHands)
+            .applying([Move(.y)])
+        guard let held = CubeAlignment.matching(centresSeen: picture.centres) else {
+            return XCTFail("a turned picture still has six middles")
+        }
+        let theOldWay = ScannedCube(colours: held.appState(of: inTheirHands).facelets
+            .map { CubeColour.defaultColour(for: $0) })
+        XCTAssertNotEqual(theOldWay, picture)
+    }
+}

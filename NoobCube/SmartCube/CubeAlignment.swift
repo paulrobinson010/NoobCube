@@ -95,6 +95,32 @@ struct CubeAlignment: Equatable, Sendable {
         Self.regripping(cubeState, by: grip)
     }
 
+    /// The colour of each side of the picture, held this way round.
+    ///
+    /// Each of the cube's faces is a colour for ever, and this says which side
+    /// of the picture it is on. Painting a position with these rather than
+    /// with the colours a cube has when held the usual way is the difference
+    /// between a right picture and a muddled one once the picture has been
+    /// turned round — see ``painted(_:)``.
+    var pictureCentres: [Face: CubeColour] {
+        var centres: [Face: CubeColour] = [:]
+        for (cubeFace, appFace) in self.appFace {
+            centres[appFace] = CubeColour.onTheCubesOwnFace(cubeFace)
+        }
+        return centres
+    }
+
+    /// The cube's own position, drawn the way the app is holding it.
+    ///
+    /// Every sticker is painted the colour of the side it belongs to *in this
+    /// picture*. Painting with the usual colours instead — yellow on top,
+    /// green at the front — is only right until the plan turns the cube round;
+    /// after that, a re-plan drew a cube with its colours swapped about.
+    func painted(_ cubeState: CubeState) -> ScannedCube {
+        let centres = pictureCentres
+        return ScannedCube(colours: appState(of: cubeState).facelets.map { centres[$0] })
+    }
+
     /// A position the app knows about, said the way the cube thinks of itself.
     ///
     /// The camera is the one thing that can see the cube as it really is, so
