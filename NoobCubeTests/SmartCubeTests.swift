@@ -746,4 +746,51 @@ final class CubeAlignmentTests: XCTestCase {
         XCTAssertEqual(spin.appFace[.D], .D)
         XCTAssertNotEqual(spin.appFace[.F], .F)
     }
+
+    // MARK: - Picturing a cube once
+
+    /// The middles the camera saw are the whole of what a picture tells you
+    /// that the cube cannot tell you itself. Kept between runs, so a cube only
+    /// has to be pictured once.
+    func testTheMiddlesSurviveBeingPutAwayAndFetchedBack() {
+        let before = SmartCubeManager.rememberedMiddles
+        defer { SmartCubeManager.rememberedMiddles = before }
+
+        var middles: [Face: CubeColour] = [:]
+        for face in Face.allCases { middles[face] = CubeColourScheme.scanningLayout[face] }
+        SmartCubeManager.rememberedMiddles = middles
+        XCTAssertEqual(SmartCubeManager.rememberedMiddles, middles)
+
+        // And they still say how the cube is being held.
+        XCTAssertEqual(CubeAlignment.matching(centresSeen: middles)?.appFace,
+                       CubeAlignment.asTheChildIsAskedToHoldIt.appFace)
+
+        SmartCubeManager.rememberedMiddles = nil
+        XCTAssertNil(SmartCubeManager.rememberedMiddles)
+    }
+
+    /// Half a picture is no picture: it must come back as nothing rather than
+    /// as a cube with faces missing.
+    func testHalfAPictureIsNotKept() {
+        let before = SmartCubeManager.rememberedMiddles
+        defer { SmartCubeManager.rememberedMiddles = before }
+
+        SmartCubeManager.rememberedMiddles = [.U: .yellow, .F: .green]
+        XCTAssertNil(SmartCubeManager.rememberedMiddles)
+    }
+
+    /// A cube held some other way is remembered that way, not straightened out.
+    func testACubeHeldSomeOtherWayIsRememberedAsItWas() {
+        let before = SmartCubeManager.rememberedMiddles
+        defer { SmartCubeManager.rememberedMiddles = before }
+
+        guard let sideways = CubeColourScheme.orientation(top: .red, front: .white) else {
+            return XCTFail("no such way to hold a cube")
+        }
+        SmartCubeManager.rememberedMiddles = sideways
+        XCTAssertEqual(SmartCubeManager.rememberedMiddles, sideways)
+        XCTAssertNotNil(CubeAlignment.matching(centresSeen: sideways))
+        XCTAssertNotEqual(CubeAlignment.matching(centresSeen: sideways)?.appFace,
+                          CubeAlignment.asTheChildIsAskedToHoldIt.appFace)
+    }
 }

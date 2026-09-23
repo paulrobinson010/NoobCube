@@ -141,6 +141,8 @@ final class SmartCubeManager: NSObject, ObservableObject {
             grips = [held]
             cubeState = held.cubeState(of: scanned)
             positionIsTrustworthy = true
+            // Worth keeping: a cube only has to be pictured once.
+            Self.rememberedMiddles = middles
             calibrateOrientation(against: held)
             note("Lined up off the middles: " + held.appFace
                     .sorted { $0.key.rawValue < $1.key.rawValue }
@@ -206,14 +208,13 @@ final class SmartCubeManager: NSObject, ObservableObject {
     /// its own frame, and how that frame sits in a child's hands is not
     /// something the cube can tell you — only the turns can, and they settle it
     /// after two of them.
-    func openEveryGrip(trustingPosition: Bool = false) {
+    func openEveryGrip() {
         // The way they were asked to hold it comes first, so a turn read before
         // anything has narrowed the set is read that way rather than as though
         // the cube's own frame were the child's — see
         // ``CubeAlignment/likeliestFirst(_:)``.
         grips = CubeAlignment.likeliestFirst(
             CubeAlignment.allGrips.map { CubeAlignment.identity.regripped(by: $0) })
-        if trustingPosition { positionIsTrustworthy = true }
     }
 
     /// Throw the grip away and work it out again from the turns.
@@ -272,14 +273,67 @@ final class SmartCubeManager: NSObject, ObservableObject {
         (1...100).contains(percent) ? percent : nil
     }
 
+    // MARK: - Remembering what the camera saw
+
+    /// The middles the camera last saw, kept between runs of the app.
+    ///
+    /// A cube's middles never move, so this is the whole of what a picture
+    /// tells you that the cube cannot tell you itself: which colour is on which
+    /// of its faces. The cube supplies where its pieces are every time it
+    /// connects; this supplies what colour they are. Together those are the
+    /// picture, which is why it only ever has to be taken once.
+    ///
+    /// Six letters and six colour names, so it costs nothing to keep.
+    private static let rememberedMiddlesKey = "NoobCube.middlesLastSeen"
+
+    static var rememberedMiddles: [Face: CubeColour]? {
+        get {
+            guard let stored = UserDefaults.standard.dictionary(
+                forKey: rememberedMiddlesKey) as? [String: String] else { return nil }
+            var middles: [Face: CubeColour] = [:]
+            for face in Face.allCases {
+                guard let name = stored[face.letter],
+                      let colour = CubeColour(rawValue: name) else { return nil }
+                middles[face] = colour
+            }
+            return middles
+        }
+        set {
+            guard let newValue, newValue.count == Face.allCases.count else {
+                return UserDefaults.standard.removeObject(forKey: rememberedMiddlesKey)
+            }
+            var stored: [String: String] = [:]
+            for (face, colour) in newValue { stored[face.letter] = colour.rawValue }
+            UserDefaults.standard.set(stored, forKey: rememberedMiddlesKey)
+        }
+    }
+
+    /// Line up from the last picture, without taking another one.
+    ///
+    /// Called when a cube says where it is and nothing has lined it up yet —
+    /// coming back from the home screen, or opening the app again. If the cube
+    /// has been turned since, its own position says so; if it has been reset,
+    /// it says that too, and "My cube looks different" is there for it.
+    @discardableResult
+    func lineUpFromTheLastPicture() -> Bool {
+        guard grips.isEmpty, cubeState != nil,
+              let middles = Self.rememberedMiddles,
+              let held = CubeAlignment.matching(centresSeen: middles) else { return false }
+        grips = [held]
+        positionIsTrustworthy = true
+        calibrateOrientation(against: held)
+        note("Lined up from the picture you took before")
+        return true
+    }
+
     /// Colours matching `cubeState`, laid out the way the child is asked to
     /// hold the cube — yellow on top — rather than the way the cube numbers
     /// its own faces. They are half a turn apart, and the one worth showing is
     /// the one they can hold up against what is in their hands.
     var trackedColours: [CubeColour?]? {
-        cubeState.map { state in
-            CubeAlignment.asTheChildIsAskedToHoldIt.appState(of: state)
-                .facelets.map { CubeColour.defaultColour(for: $0) }
+        let held = alignment ?? .asTheChildIsAskedToHoldIt
+        return cubeState.map { state in
+            held.appState(of: state).facelets.map { CubeColour.defaultColour(for: $0) }
         }
     }
 
@@ -549,6 +603,7 @@ final class SmartCubeManager: NSObject, ObservableObject {
             // let a misread turn go unnoticed for a whole solve.
             if cubeState == nil || grips.isEmpty {
                 cubeState = state
+                lineUpFromTheLastPicture()
             } else if cubeState != state {
                 note("Cube says it is somewhere else; taking its word for it")
                 cubeState = state

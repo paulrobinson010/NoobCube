@@ -372,14 +372,17 @@ final class AppModel: ObservableObject {
         // so the plan and the picture are said that way round instead, and the
         // half turn between the two is exactly what "it turns the opposite
         // side" was.
-        let held = CubeAlignment.asTheChildIsAskedToHoldIt
+        // Whatever the last picture said, if there was one. A cube only has to
+        // be pictured once: its middles never move, so the colours from that
+        // picture still hold, and the cube supplies where its pieces are now.
+        let held = smartCube.alignment ?? .asTheChildIsAskedToHoldIt
         let asTheyHoldIt = held.appState(of: state)
         let scanned = ScannedCube(
             colours: asTheyHoldIt.facelets.map { CubeColour.defaultColour(for: $0) })
         let whiteFace = scanned.face(withCentre: .white) ?? .D
         do {
             let plan = try BeginnerSolver.solve(asTheyHoldIt, whiteFace: whiteFace)
-            smartCube.openEveryGrip(trustingPosition: true)
+            smartCube.reground(to: held)
             scan = scanned
             session = SolveSession(plan: plan, scan: scanned, scene: scene, narrator: narrator)
             session?.onLost = { [weak self] in self?.replanFromSmartCube() }
