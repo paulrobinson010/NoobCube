@@ -23,7 +23,6 @@ final class AppModel: ObservableObject {
     let smartCube: SmartCubeManager
     private(set) lazy var scanCoordinator = ScanCoordinator(camera: camera, narrator: narrator)
 
-    private var smartCubeObserver: AnyCancellable?
     private var smartCubeGripObserver: AnyCancellable?
     private var smartCubeStatusObserver: AnyCancellable?
 
@@ -167,11 +166,7 @@ final class AppModel: ObservableObject {
         // The move, not the message. What the cube calls its faces is the
         // cube's business and ``SmartCubeDialect``'s; by the time it reaches
         // here it is a turn in the cube's own frame.
-        smartCubeObserver = smartCube.$lastMove
-            .compactMap { $0 }
-            .sink { [weak self] move in
-                Task { @MainActor in self?.handleSmartCubeTurn(move) }
-            }
+        smartCube.onTurn = { [weak self] move in self?.handleSmartCubeTurn(move) }
         smartCubeGripObserver = smartCube.$sensorGrip
             .compactMap { $0 }
             .sink { [weak self] held in

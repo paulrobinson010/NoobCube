@@ -876,3 +876,41 @@ final class TurnLogTests: XCTestCase {
         XCTAssertEqual(log.entries.count, TurnLog.kept)
     }
 }
+
+/// A smart cube reports a half turn as the two quarter turns a hand makes.
+final class HalfTurnTests: XCTestCase {
+
+    /// Either way round is a half turn, as long as both quarters agree.
+    func testEitherQuarterStartsAHalfTurn() {
+        XCTAssertTrue(Move(.R, .half).isHalfTurn(of: Move(.R)))
+        XCTAssertTrue(Move(.R, .half).isHalfTurn(of: Move(.R, .counterClockwise)))
+        XCTAssertTrue(Move(.U, .half).isHalfTurn(of: Move(.U, .counterClockwise)))
+    }
+
+    /// Another face is not half of it, and nor is a quarter turn asked for.
+    func testOnlyTheSameFaceCounts() {
+        XCTAssertFalse(Move(.R, .half).isHalfTurn(of: Move(.L)))
+        XCTAssertFalse(Move(.R, .half).isHalfTurn(of: Move(.U)))
+        XCTAssertFalse(Move(.R).isHalfTurn(of: Move(.R)),
+                       "a quarter turn asked for is simply matched, not halved")
+        XCTAssertFalse(Move(.R, .half).isHalfTurn(of: Move(.R, .half)))
+    }
+
+    /// Two quarters the same way make the half turn exactly; drawing the half
+    /// turn on top of the first quarter would leave the picture a quarter out.
+    func testTwoQuartersTheSameWayAreTheHalfTurn() {
+        for amount in [MoveAmount.clockwise, .counterClockwise] {
+            let quarter = Move(.F, amount)
+            XCTAssertEqual(CubeState.solved.applying([quarter, quarter]),
+                           CubeState.solved.applying(Move(.F, .half)))
+            XCTAssertNotEqual(CubeState.solved.applying([quarter, Move(.F, .half)]),
+                              CubeState.solved.applying(Move(.F, .half)),
+                              "the whole half turn after a quarter is a quarter too far")
+        }
+    }
+
+    /// A whole-cube turn is never reported by the cube, so it is never halved.
+    func testWholeCubeTurnsAreNotHalved() {
+        XCTAssertFalse(Move(.y, .half).isHalfTurn(of: Move(.y)))
+    }
+}

@@ -114,6 +114,16 @@ struct Move: Hashable, Codable, Sendable {
 
     var inverse: Move { Move(base, amount.inverse) }
 
+    /// Whether `quarter` is one of the two quarter turns this half turn is made
+    /// of. Either way round will do: R then R, or R' then R', both make R2.
+    ///
+    /// A smart cube can only ever report quarter turns, because that is what a
+    /// hand makes, so this is how a half turn is recognised arriving.
+    func isHalfTurn(of quarter: Move) -> Bool {
+        amount == .half && base.isFaceTurn
+            && quarter.base == base && quarter.amount != .half
+    }
+
     /// Every turn of a single face: six faces, three amounts each.
     static let everyFaceTurn: [Move] = MoveBase.allCases
         .filter { !$0.isRotation }

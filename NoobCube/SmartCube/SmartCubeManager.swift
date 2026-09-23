@@ -617,7 +617,23 @@ final class SmartCubeManager: NSObject, ObservableObject {
         }
         lastTurn = turn
         lastMove = move
+        // Straight to the app, before the next turn is even looked at.
+        //
+        // This used to go out through a published property and a hop back onto
+        // the main actor, which left a gap: the cube's own position had already
+        // moved on, but the screen had not yet heard about the turn. Two quick
+        // turns landed in that gap together, and if the first caused the plan
+        // to be worked out again — from a position that already included the
+        // second — the second was then drawn on top of it. One turn, drawn
+        // twice, and a picture that no longer matched the cube in their hands.
+        // Handled here, in order, the position and the screen can never be a
+        // turn apart.
+        onTurn?(move)
     }
+
+    /// Called with every turn, in the order the cube made them, the moment the
+    /// cube's own position has taken it in. See ``act(on:as:)``.
+    var onTurn: (@MainActor (Move) -> Void)?
 
     private func positionArrived(_ state: CubeState) {
         guard !turnsAwaitingTheirMeaning.isEmpty else {

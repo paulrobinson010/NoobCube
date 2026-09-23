@@ -60,6 +60,16 @@ final class SolveSession: ObservableObject {
     /// words. While this is set the only thing wanted is that turn undone.
     @Published private(set) var wrongTurn: Move?
 
+    /// The first quarter of a half turn, done.
+    ///
+    /// A smart cube reports a half turn as the two quarter turns it physically
+    /// is, one at a time, because that is what a hand does. So "turn the right
+    /// side twice" arrives as R, and then R — and the first of those used to be
+    /// compared with R2, called wrong, and asked for back. Now it is halfway:
+    /// the picture turns with them and asks for once more. Either direction
+    /// will do, as long as the second goes the same way as the first.
+    @Published private(set) var halfWayThrough: Move?
+
     /// Whether a connected cube is doing the confirming, so nothing on screen
     /// asks to be tapped for a turn the cube can see for itself.
     @Published var cubeIsFollowing = false
@@ -287,11 +297,16 @@ final class SolveSession: ObservableObject {
 
     func confirmCurrentMove() {
         guard !isBusy, let move = currentMove else { return }
+        // Only what is left of it. Halfway through a half turn the picture has
+        // already made the first quarter, and playing the whole half turn on
+        // top would leave it a quarter turn out from the cube in their hands.
+        let turn = halfWayThrough ?? move
+        halfWayThrough = nil
         isBusy = true
         let wasStep = currentStep
-        scene.animate(move, duration: 0.42) { [weak self] in
+        scene.animate(turn, duration: 0.42) { [weak self] in
             guard let self else { return }
-            self.displayCube = self.displayCube.applying(move)
+            self.displayCube = self.displayCube.applying(turn)
             self.moveIndex += 1
             self.isBusy = false
             if self.currentMove == nil {
@@ -314,14 +329,20 @@ final class SolveSession: ObservableObject {
             return
         }
         scene.hideJourney()
-        scene.showTurnArrow(for: move)
-        announceCurrentMove()
+        if let half = halfWayThrough {
+            scene.showTurnArrow(for: half)
+            narrator.say("Once more. \(half.spokenInstruction)")
+        } else {
+            scene.showTurnArrow(for: move)
+            announceCurrentMove()
+        }
     }
 
     func startStage(because reason: String = "the stage was started") {
         stopPlayingThrough()
         moveIndex = 0
         wrongTurn = nil
+        halfWayThrough = nil
         displayCube = colours(upToStage: stageIndex)
         scene.reset(to: displayCube.colours)
         phase = .coaching
@@ -442,6 +463,7 @@ final class SolveSession: ObservableObject {
         logMoment?("plan replaced, \(newPlan.moveCount) moves", reason)
         plan = newPlan
         wrongTurn = nil
+        halfWayThrough = nil
         waitingTurns.removeAll()
         scan = newScan
         moveIndex = 0
@@ -556,6 +578,39 @@ final class SolveSession: ObservableObject {
             }
             lastReaction = "nothing had been asked yet, so the plan was re-made quietly"
             return playTheirTurn(move) { [weak self] in self?.replanQuietly() }
+        }
+
+        // A half turn, a quarter at a time.
+        if let half = halfWayThrough {
+            if move == half {
+                // The second quarter, the same way as the first: done. Only
+                // this quarter is drawn — the first already was.
+                lastReaction = "second half of \(expected.notation) — moved on"
+                logMoment?("\(expected.notation) finished", "the second quarter went the same way")
+                confirmCurrentMove()
+                return
+            }
+            if move == half.inverse {
+                // Undid the first quarter. Back to the start of the move, which
+                // is not a mistake: nothing is out of place.
+                lastReaction = "undid the first half of \(expected.notation)"
+                logMoment?("back to the start of \(expected.notation)",
+                           "the first quarter was turned back")
+                halfWayThrough = nil
+                playTheirTurn(move) { [weak self] in self?.presentCurrentMove() }
+                return
+            }
+            // Anything else is a wrong turn from the halfway point, and putting
+            // it back returns them there, still halfway.
+        } else if expected.isHalfTurn(of: move) {
+            lastReaction = "first half of \(expected.notation) — asked for once more"
+            logMoment?("halfway through \(expected.notation)",
+                       "a smart cube reports a half turn as two quarters")
+            // Set now rather than when the picture catches up, so a second
+            // quarter arriving mid-animation is read as the second quarter.
+            halfWayThrough = move
+            playTheirTurn(move) { [weak self] in self?.presentCurrentMove() }
+            return
         }
 
         // Whole-cube turns are dealt with before we get here, by

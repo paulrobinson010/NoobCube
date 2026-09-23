@@ -91,7 +91,10 @@ struct SolveView: View {
     @ViewBuilder
     private var demoCorner: some View {
         if session.showsStepDemo, let move = session.currentMove {
-            StepDemoView(moves: [move], colours: session.displayCube.colours)
+            // Halfway through a half turn the picture has already made the
+            // first quarter, so the demo shows the quarter that is left.
+            StepDemoView(moves: [session.halfWayThrough ?? move],
+                         colours: session.displayCube.colours)
                 .padding(.trailing, 18)
                 .padding(.bottom, 2)
                 .transition(.scale.combined(with: .opacity))
@@ -177,6 +180,14 @@ struct SolveView: View {
                 Text("You solved it! 🎉")
                     .font(.brand(size: 30, weight: .heavy))
                     .foregroundStyle(Theme.done)
+            } else if session.help == .moveByMove, let half = session.halfWayThrough {
+                // Halfway through a half turn: the rest of it, not all of it.
+                Text("Once more")
+                    .font(.brand(size: 30, weight: .heavy))
+                    .foregroundStyle(.white)
+                Text(half.spokenInstruction)
+                    .font(.brand(size: 18, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.85))
             } else if session.help == .moveByMove, let move = session.currentMove {
                 Text(move.childLabel)
                     .font(.brand(size: 30, weight: .heavy))
