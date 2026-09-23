@@ -44,9 +44,39 @@ def faces_after(grip):
 
     Read straight off the middles: turn a solved cube by the grip and whatever
     letter is sitting in a place is the face that moved there.
+
+    **A raw `apply`, never `apply_regrip`.** Regripping renames the faces after
+    a rotation so that a solved cube still reads as solved — which is right for
+    solving and fatal here, because then a solved cube turned any way round
+    comes back solved, every centre reads as its own face, and this map is the
+    identity for all twenty-four grips. The Swift did exactly that for a long
+    time, so no turn was ever renamed and every one came out as the opposite
+    side. ``check_the_grips_are_all_different`` is here so that cannot happen
+    again quietly.
     """
     turned = cube.apply(cube.SOLVED, grip)
     return {turned[CENTRE[f]]: f for f in cube.FACES}
+
+
+def check_the_grips_are_all_different():
+    """Twenty-four ways of holding a cube, twenty-four different face maps.
+
+    If they ever collapse into one, every turn is read in the cube's own frame
+    and nothing built on top of them means anything — not matching off the
+    middles, not the way the child is asked to hold it, none of it.
+    """
+    maps = [tuple(faces_after(g)[f] for f in cube.FACES) for g in GRIPS]
+    identity = tuple(cube.FACES)
+    print('ways of holding a cube          %d' % len(maps))
+    print('  face maps that differ         %d' % len(set(maps)))
+    print('  of those, the identity        %d' % sum(1 for m in maps if m == identity))
+    assert len(set(maps)) == 24, 'the grips have collapsed into each other'
+    assert sum(1 for m in maps if m == identity) == 1
+    # And the one the app leans on is not the identity.
+    asked, _ = as_the_child_is_asked_to_hold_it()
+    assert faces_after(asked) != dict(zip(cube.FACES, cube.FACES))
+    print('  the way they are asked to hold it is not one of them')
+    print('ALL PASS')
 
 
 def from_the_middles(centres_seen):
@@ -397,3 +427,5 @@ if __name__ == '__main__':
     check_a_cube_that_disagrees_is_still_read_right()
     print()
     check_the_middles_are_enough()
+    print()
+    check_the_grips_are_all_different()

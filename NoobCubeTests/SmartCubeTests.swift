@@ -691,4 +691,59 @@ final class CubeAlignmentTests: XCTestCase {
                        Move(.B, .counterClockwise))
         XCTAssertEqual(dialect.move(forLabel: 1, clockwise: false), Move(.B))
     }
+
+    // MARK: - The map that was silently an identity
+
+    /// The bug behind every round of "it turns the opposite side".
+    ///
+    /// A grip's face map was read off a solved cube turned by the grip — but
+    /// `CubeState.applying` renames the faces after a rotation so a solved cube
+    /// still reads as solved. So the turned cube came back *solved*, every
+    /// centre read as its own face, and the map was the identity for all
+    /// twenty-four ways of holding a cube. No turn was ever renamed.
+    func testTheTwentyFourWaysOfHoldingItAreActuallyDifferent() {
+        let maps = CubeAlignment.allGrips.map { grip in
+            CubeAlignment.identity.regripped(by: grip).appFace
+        }
+        XCTAssertEqual(maps.count, 24)
+        let distinct = Set(maps.map { map in
+            Face.allCases.map { map[$0]?.letter ?? "?" }.joined()
+        })
+        XCTAssertEqual(distinct.count, 24, "every way of holding it must differ")
+
+        let identity = Face.allCases.map { $0.letter }.joined()
+        XCTAssertEqual(distinct.filter { $0 == identity }.count, 1,
+                       "exactly one of them is the identity, not all of them")
+    }
+
+    /// And the one that matters is not the identity: the cube numbers itself
+    /// white-on-top, the child is asked to hold it yellow-on-top, and that is
+    /// half a turn.
+    func testTheWayTheyAreAskedToHoldItIsNotTheIdentity() {
+        let asked = CubeAlignment.asTheChildIsAskedToHoldIt
+        XCTAssertNotEqual(asked.appFace, CubeAlignment.identity.appFace,
+                          "this collapsed to the identity when the map was broken")
+        XCTAssertEqual(asked.appMove(for: Move(.R)), Move(.L))
+        XCTAssertEqual(asked.appMove(for: Move(.U)), Move(.D))
+        XCTAssertEqual(asked.appMove(for: Move(.F)), Move(.F))
+    }
+
+    /// A rotation moves the middles; that is the whole point of a face map, and
+    /// it is exactly what relabelling hid.
+    func testARotationMovesTheMiddles() {
+        let half = CubeAlignment.identity.regripped(by: [Move(.x, .half), Move(.y, .half)])
+        XCTAssertEqual(half.appFace[.U], .D)
+        XCTAssertEqual(half.appFace[.D], .U)
+        XCTAssertEqual(half.appFace[.R], .L)
+        XCTAssertEqual(half.appFace[.L], .R)
+        XCTAssertEqual(half.appFace[.F], .F)
+        XCTAssertEqual(half.appFace[.B], .B)
+
+        // A quarter turn about the vertical leaves the top and bottom alone and
+        // moves the four sides round.
+        let spin = CubeAlignment.identity.regripped(by: [Move(.y)])
+        XCTAssertEqual(spin.appFace[.U], .U)
+        XCTAssertEqual(spin.appFace[.D], .D)
+        XCTAssertNotEqual(spin.appFace[.F], .F)
+    }
 }

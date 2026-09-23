@@ -198,10 +198,27 @@ struct CubeAlignment: Equatable, Sendable {
     /// the middles: turn a solved cube and whatever letter is sitting in a
     /// place is the face that moved there.
     private static func faces(after rotations: [Move]) -> [Face: Face] {
-        let turned = CubeState.solved.applying(rotations)
+        // Followed through the raw geometry, because ``CubeState/applying(_:)``
+        // renames the faces after a rotation so that a solved cube still reads
+        // as solved. That is right for solving and fatal here: it means a
+        // solved cube turned any way round comes back solved, every centre
+        // reads as its own face, and this map came out as the identity for all
+        // twenty-four ways of holding a cube.
+        //
+        // Which is the whole of "it turns the opposite side". With every map an
+        // identity, no turn was ever renamed, so every turn was read in the
+        // cube's own frame — half a turn from the hand holding it. It also
+        // quietly disabled everything built on top: no grip could be told from
+        // another, so matching off the middles found nothing and the way the
+        // child is asked to hold the cube collapsed to the identity too.
+        //
+        // The reference has always used a raw permutation here, so the two were
+        // checking different things and the 25,920 turns it renamed correctly
+        // said nothing about this.
         var map: [Face: Face] = [:]
         for face in Face.allCases {
-            map[turned[face.centreIndex]] = face
+            let landing = CubeGeometry.follow(sticker: face.centreIndex, through: rotations)
+            map[face] = Face.allCases.first { $0.centreIndex == landing } ?? face
         }
         return map
     }
