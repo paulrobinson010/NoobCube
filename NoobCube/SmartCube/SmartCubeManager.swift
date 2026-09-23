@@ -128,11 +128,18 @@ final class SmartCubeManager: NSObject, ObservableObject {
     ///
     /// Off by default and remembered, because it puts a question in front of a
     /// five year old that is there for the grown-up's benefit, not theirs.
-    @Published var isLogging: Bool = UserDefaults.standard.bool(forKey: Self.loggingKey) {
+    @Published var isLogging: Bool = SmartCubeManager.wasLoggingLastTime {
         didSet { UserDefaults.standard.set(isLogging, forKey: Self.loggingKey) }
     }
 
     private static let loggingKey = "NoobCube.keepAMoveLog"
+
+    /// Read through a static rather than inline above, because a stored
+    /// property's initial value may not mention `Self` and spelling the class
+    /// out there leaves the observer block looking like a trailing closure.
+    private static var wasLoggingLastTime: Bool {
+        UserDefaults.standard.bool(forKey: loggingKey)
+    }
 
     /// The turn currently being written down, so the app can come back and add
     /// what it made of it after the fact.

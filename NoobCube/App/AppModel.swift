@@ -77,7 +77,7 @@ final class AppModel: ObservableObject {
             follow(fresh)
             session = fresh
             smartCube.logMoment("new plan from the camera, \(plan.moveCount) moves",
-                                "the camera looked at the cube")
+                                why: "the camera looked at the cube")
 
             // The camera has just seen which colour is on which side. A cube's
             // middles never move, so that is all it takes to know where the
@@ -97,7 +97,7 @@ final class AppModel: ObservableObject {
     }
 
     func beginSolving() {
-        smartCube.logMoment("started solving", "they pressed the button")
+        smartCube.logMoment("started solving", why: "they pressed the button")
         scene.clearHighlight()
         session?.cubeIsFollowing = smartCube.isFollowing
         screen = .solving
@@ -106,14 +106,14 @@ final class AppModel: ObservableObject {
 
     /// The child wants the app to look at the cube again, part way through.
     func rescan() {
-        smartCube.logMoment("back to the camera", "the app asked for another look")
+        smartCube.logMoment("back to the camera", why: "the app asked for another look")
         scene.stopIdleSpin()
         narrator.say("Let's have another look at your cube.")
         screen = .scanning
     }
 
     func finishSolve() {
-        smartCube.logMoment("back to the start", "they left the solve")
+        smartCube.logMoment("back to the start", why: "they left the solve")
         session = nil
         scan = nil
         showWelcome()
@@ -444,7 +444,7 @@ final class AppModel: ObservableObject {
             follow(fresh)
             session = fresh
             smartCube.logMoment("new plan from the cube itself, \(plan.moveCount) moves",
-                                "holding it \(smartCube.heldInWords)")
+                                why: "holding it \(smartCube.heldInWords)")
             session?.cubeIsFollowing = smartCube.isFollowing
             scene.stopIdleSpin()
             screen = .ready
