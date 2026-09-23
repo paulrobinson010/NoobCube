@@ -242,55 +242,26 @@ final class CubeAlignmentTests: XCTestCase {
         }
     }
 
-    /// A cube whose own position has drifted is no longer a dead end.
+    /// A cube whose own position has drifted is not a problem at all.
     ///
-    /// Its turns are still perfectly good, so every way of holding it stays a
-    /// candidate and the child's own moves rule the wrong ones out.
-    func testADriftedCubeKeepsEveryGripAsACandidate() {
+    /// Where its pieces have got to has no bearing on which of its faces is
+    /// the red one, and the red one is all the app needs to know. This used to
+    /// be the case that opened twenty-four candidates to be whittled down by
+    /// the turns; there is nothing to whittle.
+    func testADriftedCubeIsStillReadCorrectly() {
         var generator = SeededGenerator(seed: 12)
         let scanned = CubeState.solved.applying(randomScramble(using: &generator))
-        let drifted = scanned.applying("R")
-        XCTAssertEqual(CubeAlignment.possibilities(cube: drifted, scanned: scanned).count, 24,
-                       "nothing is known yet, so nothing may be ruled out")
-        // And when it does agree, there is exactly one.
-        XCTAssertEqual(CubeAlignment.possibilities(cube: scanned, scanned: scanned).count, 1)
-    }
+        let asked = CubeAlignment.asTheChildIsAskedToHoldIt
 
-    /// The whole point of keeping the candidates: the move the app asked for
-    /// narrows them, and they all read the turn the same way meanwhile.
-    func testTheGripIsLearnedFromTheTurnsThatWereAskedFor() {
-        var generator = SeededGenerator(seed: 8)
-        let scanned = CubeState.solved.applying(randomScramble(using: &generator))
+        // The cube believes it is somewhere it is not.
+        let drifted = asked.cubeState(of: scanned).applying("R")
+        XCTAssertEqual(CubeAlignment.matching(cube: drifted, scanned: scanned),
+                       .cubeDisagrees, "its position really has drifted")
 
-        for truth in CubeAlignment.allGrips {
-            let held = truth.reduce(scanned) { $0.applying($1).relabelled() }
-            var candidates = CubeAlignment.possibilities(cube: held.applying("R"), scanned: scanned)
-            XCTAssertEqual(candidates.count, 24, "a drifted cube starts knowing nothing")
-
-            guard case .found(let real) =
-                    CubeAlignment.matching(cube: held, scanned: scanned) else {
-                return XCTFail("the test's own grip should be recoverable")
-            }
-
-            var turns = 0
-            for asked in [Move(.R), Move(.U, .counterClockwise), Move(.F, .half), Move(.L)] {
-                // What the cube calls the move the child was asked to make.
-                guard let theirs = real.appFace.first(where: { $0.value == asked.base.face })
-                        .map({ Move(MoveBase(rawValue: $0.key.letter)!, asked.amount) }) else {
-                    return XCTFail("every app face is some cube face")
-                }
-                let fitting = candidates.filter { $0.appMove(for: theirs) == asked }
-                XCTAssertFalse(fitting.isEmpty, "the true grip must always survive")
-                XCTAssertTrue(fitting.allSatisfy { $0.appMove(for: theirs) == asked },
-                              "every survivor must read the turn the same way")
-                candidates = fitting
-                turns += 1
-                if candidates.count == 1 { break }
-            }
-            XCTAssertEqual(candidates.count, 1, "the grip should come down to one")
-            XCTAssertEqual(candidates[0].appFace, real.appFace)
-            XCTAssertLessThanOrEqual(turns, 3, "and within three turns")
-        }
+        // And it makes no difference: the picture says what to call each face.
+        var centres: [Face: CubeColour] = [:]
+        for face in Face.allCases { centres[face] = CubeColour.defaultColour(for: face) }
+        XCTAssertEqual(CubeAlignment.matching(centresSeen: centres)?.appFace, asked.appFace)
     }
 
     /// A solved cube looks the same from every side, so no grip can be picked
@@ -556,51 +527,40 @@ final class CubeAlignmentTests: XCTestCase {
         }
     }
 
-    /// And it is what a turn is read with before anything has narrowed the set,
-    /// which is the fallback that used to be the cube's own frame.
-    func testTheFirstWayOfHoldingItIsTheWayTheyWereAsked() {
-        let asked = CubeAlignment.asTheChildIsAskedToHoldIt
-        let ordered = CubeAlignment.likeliestFirst(
-            CubeAlignment.allGrips.map { CubeAlignment.identity.regripped(by: $0) })
-        XCTAssertEqual(ordered.count, 24)
-        XCTAssertEqual(ordered.first?.appFace, asked.appFace)
-        XCTAssertEqual(Set(ordered.map { alignment in
-            Face.allCases.map { alignment.appFace[$0]?.letter ?? "?" }.joined()
-        }).count, 24, "all twenty-four must still be there, and different")
-
-        // A turn on the cube's red face is a turn on the child's left.
-        XCTAssertEqual(asked.appMove(for: Move(.R)), Move(.L))
-        XCTAssertEqual(asked.appMove(for: Move(.U, .counterClockwise)),
+    /// And it is what every turn is read with, because it is read off the
+    /// picture the child is looking at rather than out of a set of candidates.
+    func testATurnOfTheCubesRedFaceIsATurnOfTheirLeft() {
+        var centres: [Face: CubeColour] = [:]
+        for face in Face.allCases { centres[face] = CubeColour.defaultColour(for: face) }
+        guard let held = CubeAlignment.matching(centresSeen: centres) else {
+            return XCTFail("the picture the child is asked to hold must line up")
+        }
+        XCTAssertEqual(held.appFace, CubeAlignment.asTheChildIsAskedToHoldIt.appFace)
+        XCTAssertEqual(held.appMove(for: Move(.R)), Move(.L))
+        XCTAssertEqual(held.appMove(for: Move(.U, .counterClockwise)),
                        Move(.D, .counterClockwise))
+        XCTAssertEqual(held.appMove(for: Move(.F, .half)), Move(.F, .half))
     }
 
+    /// Turning the picture round is the only thing that changes the answer.
+    ///
+    /// Not the child's hands — a smart cube reports the same face whichever
+    /// way up it is being held, so how they hold it genuinely does not matter.
+    /// What does is the plan turning the picture on screen, and then the
+    /// answer is read off the picture's new colours like any other.
+    func testOnlyTurningThePictureChangesWhatAFaceIsCalled() {
+        var picture: [CubeColour?] = CubeState.solved.facelets
+            .map { CubeColour.defaultColour(for: $0) }
+        let before = CubeAlignment.matching(centresSeen: ScannedCube(colours: picture).centres)
+        XCTAssertEqual(before?.appFace, CubeAlignment.asTheChildIsAskedToHoldIt.appFace)
 
-    /// The case a child is most likely to be in: they connect a cube, the
-    /// picture does not match, so they show it to the camera. A cube whose own
-    /// idea of itself is wrong is exactly the case where no grip fits and all
-    /// twenty-four come back — and the first of those is what a turn is read
-    /// with until something narrows it.
-    func testACubeThatDisagreesWithTheScanIsStillReadTheWayTheyHoldIt() {
-        var generator = SeededGenerator(seed: 83)
-        let asked = CubeAlignment.asTheChildIsAskedToHoldIt
-        for _ in 0..<20 {
-            let scanned = CubeState.solved.applying(randomScramble(using: &generator))
-            // What the cube would say if its own idea of itself were right...
-            let agreeing = asked.cubeState(of: scanned)
-            // ...and what it says instead, having drifted.
-            let drifted = agreeing.applying(Move(.R))
-
-            XCTAssertEqual(CubeAlignment.matching(cube: drifted, scanned: scanned),
-                           .cubeDisagrees)
-            let candidates = CubeAlignment.possibilities(cube: drifted, scanned: scanned)
-            XCTAssertEqual(candidates.count, 24)
-            XCTAssertEqual(candidates.first?.appFace, asked.appFace,
-                           "a turn with nothing to narrow it would be read the wrong way")
-            for face in MoveBase.allCases where !face.isRotation {
-                XCTAssertEqual(candidates.first?.appMove(for: Move(face)),
-                               asked.appMove(for: Move(face)))
-            }
+        picture = ScannedCube(colours: picture).applying(Move(.y)).colours
+        guard let after = CubeAlignment.matching(centresSeen:
+                                                    ScannedCube(colours: picture).centres) else {
+            return XCTFail("a turned picture is still a picture")
         }
+        XCTAssertNotEqual(after.appFace, before?.appFace, "the picture moved, so this must")
+        XCTAssertEqual(after.appFace[.U], before?.appFace[.U], "but not the top")
     }
 
     // MARK: - The middles are the answer

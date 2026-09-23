@@ -23,11 +23,6 @@ final class AppModel: ObservableObject {
     let smartCube: SmartCubeManager
     private(set) lazy var scanCoordinator = ScanCoordinator(camera: camera, narrator: narrator)
 
-    /// Turns in a row that fitted no way of holding the cube. A child fumbling
-    /// gets some right; a wrong grip gets everything wrong, so a run of them is
-    /// evidence about the grip rather than about the child.
-    private var turnsThatFittedNothing = 0
-
     private var smartCubeObserver: AnyCancellable?
     private var smartCubeGripObserver: AnyCancellable?
     private var smartCubeStatusObserver: AnyCancellable?
@@ -194,102 +189,37 @@ final class AppModel: ObservableObject {
         }
         session.cubeIsFollowing = true
 
-        // The cube names its own faces. Whichever of them is on the right is
-        // what it calls R, and that need not be the side the child is being
-        // told is the right. Every whole-cube turn the plan has asked for since
-        // the scan moved the child's frame and left the cube's where it was, so
-        // the grip is caught up from the plan rather than tallied as it goes.
-        // A cube cannot feel itself being turned round in your hands, so that
-        // one instruction still offers a tap. But turning a layer at all is the
-        // child saying they have moved on, so it dismisses the instruction
-        // rather than being called a mistake — they plainly did turn it, or
-        // they would not be turning layers.
+        // Which side of the screen just turned, read straight off the colours.
         //
-        // Which means the turn has to be read in the frame they are holding it
-        // in *now*, with the rotation counted, not the one before it.
+        // The cube says exactly which of its own faces moved and which way.
+        // That face is a colour — the one it calls R is its red one, welded
+        // into the plastic — and the picture on screen has that colour on one
+        // of its sides. So the translation is a lookup, and how the child
+        // happens to be holding the cube never comes into it.
+        //
+        // There used to be twenty-four candidate ways of holding it here,
+        // narrowed by whether a turn matched the move being asked for, thrown
+        // away after three that did not, with turns swallowed in the meantime
+        // and the screen left to catch up. Every one of those paths showed up
+        // in the first move log taken, and not one of them was answering a
+        // question the cube had not already answered.
+        //
+        // Measured against the picture as it will be once the whole-cube turns
+        // the plan is waiting on have been played, because the move being
+        // asked for is written in that frame. A face turn moves no middles, so
+        // nothing else here can change the answer.
         let spins = session.pendingWholeCubeTurns
-        let spinsSoFar = session.wholeCubeTurnsSoFar + spins
-        let here = smartCube.grips.map { $0.regripped(by: spinsSoFar) }
-        guard !here.isEmpty else {
-            smartCube.logReading(nil, asked: nil,
-                                 outcome: "ignored: no way of holding it is open")
-            return
-        }
+        let picture = spins.isEmpty ? session.displayCube
+                                    : session.displayCube.applying(spins)
+        smartCube.lineUp(withPictureShowing: picture.centres)
 
-        // The move we asked for is what narrows an unknown grip: only the ways
-        // of holding the cube that make this turn *be* that move survive. They
-        // all agree on what the turn was — that is what put them in the set —
-        // so it can be acted on now, while the grip is still coming down.
         let asked = spins.isEmpty ? session.currentMove : session.moveAfterWholeCubeTurns
-        let fitting = asked.map { want in
-            here.indices.filter { here[$0].appMove(for: cubeMove) == want }
-        } ?? []
-
-        if !fitting.isEmpty {
-            smartCube.narrow(to: fitting.map { smartCube.grips[$0] })
-            turnsThatFittedNothing = 0
-
-        } else if smartCube.isStillWorkingOutTheGrip, asked != nil {
-            // We asked for a move, they made a different one, and the grip is
-            // not settled enough to say which. Guessing would mean telling a
-            // child they turned the wrong thing on no evidence at all — but the
-            // cube has moved and the screen has not, so the two are out of step
-            // until the grip settles and the screen can be put right from it.
-            //
-            // Only when something was actually asked for. With no move on
-            // screen there is nothing to narrow against, so every turn used to
-            // fall in here and be swallowed: the cube turned, the screen sat
-            // still, and nothing ever settled. Those are now read with the
-            // first candidate, which is the cube's own frame — the frame the
-            // picture is drawn in — and the app keeps up.
-            //
-            // Silently either way. Which way round the cube is being held is
-            // the app's problem, not the child's, and narrating it at them is
-            // asking a five year old to care about the plumbing.
-            screenIsBehindTheCube = true
-            smartCube.logReading(here[0].appMove(for: cubeMove), asked: asked,
-                                 outcome: "held back: it fits none of the "
-                                 + "\(here.count) ways the cube might be held")
-            return
-
-        } else {
-            // The grip is settled and yet nothing the child does fits it. One
-            // of those is a mistake. Three in a row is the grip being wrong —
-            // a child fumbling gets some of them right, and a grip is only ever
-            // as good as the position it was worked out from. So it is thrown
-            // away and learned again from the turns, which are better evidence
-            // than the cube's own idea of where it is.
-            turnsThatFittedNothing += 1
-            if turnsThatFittedNothing >= 3 {
-                turnsThatFittedNothing = 0
-                smartCube.reopenTheGrip()
-                session.forgetTheMistake()
-                screenIsBehindTheCube = true
-                smartCube.logReading(here[0].appMove(for: cubeMove), asked: asked,
-                                     outcome: "three in a row fitted nothing, so the "
-                                     + "way it is held was thrown away and re-opened")
-                return
-            }
-        }
-
-        let reading = fitting.first.map { here[$0] } ?? here[0]
-        guard let move = reading.appMove(for: cubeMove) else {
+        guard let move = smartCube.alignment.appMove(for: cubeMove) else {
             smartCube.logReading(nil, asked: asked,
                                  outcome: "ignored: \(cubeMove.notation) is not a face turn")
             return
         }
         smartCube.noteTurn(cubeMove, readAs: move, whenAskedFor: asked)
-
-        // The grip has just come down to one and the screen missed some turns
-        // while it was being worked out. The cube knows where it is, so the
-        // screen is put right from it rather than left quietly wrong.
-        if screenIsBehindTheCube, !smartCube.isStillWorkingOutTheGrip {
-            screenIsBehindTheCube = false
-            smartCube.logReading(move, asked: asked,
-                                 outcome: "the screen had fallen behind, so the plan was "
-                                 + "worked out again from where the cube says it is")
-            return catchUpWithTheCube()
-        }
 
         if spins.isEmpty {
             session.handleSmartCubeTurn(move)
@@ -312,30 +242,12 @@ final class AppModel: ObservableObject {
         smartCube.theyTurned(colour)
     }
 
-    /// The screen has fallen behind the cube in the child's hands.
-    ///
-    /// Only ever true while the grip is being worked out, because a turn that
-    /// cannot be named cannot be drawn. The cube itself never loses track, so
-    /// catching up is a matter of asking it where it is.
-    private var screenIsBehindTheCube = false
-
-    private func catchUpWithTheCube() {
-        replanFromSmartCube()
-    }
-
     /// Work the plan out afresh from the cube's own position.
     ///
     /// Never a dead end. A cube's face numbers are welded to its plastic, so
-    /// the position it reports is right whatever else is unknown, and a plan
-    /// can always be built from it. If which way round it is being held has not
-    /// been settled yet, the plan is simply written in the cube's own frame —
-    /// the same frame the picture on screen is drawn in, so the two agree with
-    /// each other whatever the child's hands are doing, and the sensor or the
-    /// next turn or two puts the rest right.
-    ///
-    /// It used to give up here and say so, which left a child looking at a
-    /// screen with no move on it being told the app was working something out.
-    /// The camera is now only for a cube that has stopped talking altogether.
+    /// the position it reports is right whatever else has gone on, and a plan
+    /// can always be built from it. The camera is only for a cube that has
+    /// stopped talking altogether.
     func replanFromSmartCube() {
         guard let session, let cubeState = smartCube.cubeState else { return }
         guard smartCube.isFollowing else {
@@ -344,29 +256,24 @@ final class AppModel: ObservableObject {
             return
         }
 
-        // There is always a plan to be had, so this never gives up. The cube's
-        // position is absolute — its face numbers are welded to its plastic —
-        // and where its faces sit relative to the picture is a constant read
-        // off the middles, not something that might be unknown. A child who
-        // makes three mistakes in a row still gets shown what to do next.
-        let alignment = (smartCube.alignment ?? .asTheChildIsAskedToHoldIt)
-            .regripped(by: session.wholeCubeTurnsSoFar)
-        let state = alignment.appState(of: cubeState)
+        // The picture as it stands is what the cube's faces are named against,
+        // so that is what the new plan is written in. Nothing is counted or
+        // composed: a whole-cube turn the old plan asked for is already in the
+        // picture, because the app is what turned it.
+        let held = CubeAlignment.matching(centresSeen: session.displayCube.centres)
+            ?? smartCube.alignment
+        let state = held.appState(of: cubeState)
         let scanned = ScannedCube(colours: state.facelets.map { CubeColour.defaultColour(for: $0) })
         let whiteFace = scanned.face(withCentre: .white) ?? .D
         do {
             let plan = try BeginnerSolver.solve(state, whiteFace: whiteFace)
             scan = scanned
-            // The cube is where it is, so the grip the plan starts from is the
-            // one it has now; anything the old plan had turned is history. When
-            // it was never settled, every way of holding it stays open — the
-            // plan is in the cube's frame, and which way the child is actually
-            // holding it is still to be found out.
-            smartCube.reground(to: alignment)
-            screenIsBehindTheCube = false
             session.replacePlan(plan, scan: scanned,
                                 because: "worked out again from where the cube says it is, "
-                                + "holding it \(smartCube.heldInWords)")
+                                + "reading turns against \(smartCube.heldInWords)")
+            // The picture has just been redrawn, so what to call each of the
+            // cube's faces is read off it again.
+            smartCube.lineUp(withPictureShowing: scanned.centres)
             session.cubeIsFollowing = smartCube.isFollowing
         } catch {
             errorMessage = error.localizedDescription
@@ -375,15 +282,12 @@ final class AppModel: ObservableObject {
 
     /// Say whether the cube can be followed, and nothing more.
     ///
-    /// A cube whose own idea of itself disagrees with the picture used to be
-    /// announced as a half-failure the child had to work around. It is not one:
-    /// its face numbers are welded to the plastic, so its turns are perfectly
-    /// good and the only thing missing is which way up it is being held — which
-    /// its motion sensor says, and which its next turn or two would settle
-    /// anyway. The one case genuinely worth mentioning is a cube that has not
-    /// said where it is at all, because then there is nothing to follow.
-    private func announceAlignment(_ match: CubeAlignment.Match?) {
-        guard match != nil else {
+    /// The one case worth mentioning is a cube that has not said where it is
+    /// at all, because then there is nothing to follow. Everything else is the
+    /// app's own business: the cube reports every turn absolutely, and what to
+    /// call each face is read off the colours on screen.
+    private func announceAlignment(_ lined: Bool) {
+        guard lined else {
             narrator.say("Your cube hasn\u{2019}t told me where it is yet, so I\u{2019}ll "
                          + "wait for you to tell me each move.")
             return
@@ -431,15 +335,15 @@ final class AppModel: ObservableObject {
         // Whatever the last picture said, if there was one. A cube only has to
         // be pictured once: its middles never move, so the colours from that
         // picture still hold, and the cube supplies where its pieces are now.
-        let held = smartCube.alignment ?? .asTheChildIsAskedToHoldIt
+        let held = smartCube.alignment
         let asTheyHoldIt = held.appState(of: state)
         let scanned = ScannedCube(
             colours: asTheyHoldIt.facelets.map { CubeColour.defaultColour(for: $0) })
         let whiteFace = scanned.face(withCentre: .white) ?? .D
         do {
             let plan = try BeginnerSolver.solve(asTheyHoldIt, whiteFace: whiteFace)
-            smartCube.reground(to: held)
             scan = scanned
+            smartCube.lineUp(withPictureShowing: scanned.centres)
             let fresh = SolveSession(plan: plan, scan: scanned, scene: scene, narrator: narrator)
             follow(fresh)
             session = fresh

@@ -757,15 +757,4 @@ final class SolveSession: ObservableObject {
         return .watching
     }
 
-    /// Every whole-cube turn the plan has made so far.
-    ///
-    /// Turning the whole cube leaves the cube's own frame where it was and
-    /// moves the app's, so a connected cube has to be lined up again after each
-    /// one. Counted from the plan rather than tallied as they happen, so
-    /// starting a stage over cannot leave the two out of step.
-    var wholeCubeTurnsSoFar: [Move] {
-        let before = plan.stages.prefix(stageIndex).flatMap(\.moves)
-        let during = stage.map { Array($0.moves.prefix(moveIndex)) } ?? []
-        return (before + during).filter(\.isWholeCubeTurn)
-    }
 }

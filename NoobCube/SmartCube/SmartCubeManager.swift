@@ -52,25 +52,27 @@ final class SmartCubeManager: NSObject, ObservableObject {
     /// be asked to solve it first.
     @Published private(set) var cubeState: CubeState?
 
-    /// The ways round the cube could be being held.
+    /// Which side of the picture on screen each of the cube's own faces is on.
     ///
-    /// One once it is known, and until then every way that is still possible.
-    /// The cube's "R" is whichever side of it happens to be on the right, and
-    /// nothing says that is the side the child is calling right — but the app
-    /// knows which move it asked for, so each turn rules out the ways of
-    /// holding it that would have made the turn something else.
-    @Published private(set) var grips: [CubeAlignment] = []
+    /// **Not a guess, and nothing the child's hands can change.** A smart
+    /// cube's faces are welded to its plastic and each one is a colour: the
+    /// face it calls R is its red one, for ever. The picture on screen has
+    /// those same six colours on its six sides. So this is one lookup off the
+    /// middles — red is red — and it holds until the picture itself is turned
+    /// round, which only the app does, when the plan says so.
+    ///
+    /// There used to be twenty-four candidates here, narrowed from the turns,
+    /// thrown away and re-opened whenever they disagreed, with the sensor
+    /// chipping in. All of it was machinery for a question nobody has to ask.
+    /// The cube says exactly which face turned and which way; the only thing
+    /// left to know is what that face is called on screen, and the colours
+    /// say that outright. Every "it turned the opposite side" lived in that
+    /// machinery, and none of it could tell you which way the child was
+    /// holding the cube anyway — because it does not matter.
+    @Published private(set) var alignment: CubeAlignment = .asTheChildIsAskedToHoldIt
 
-    /// The grip, once there is only one left it could be.
-    var alignment: CubeAlignment? { grips.count == 1 ? grips[0] : nil }
-
-    /// Whether the cube is worth listening to at all. It is, long before the
-    /// grip is settled: a turn every candidate reads the same way is a turn we
-    /// can act on.
-    var isFollowing: Bool { isConnected && !grips.isEmpty && cubeState != nil }
-
-    /// Whether the grip is still being worked out from the turns.
-    var isStillWorkingOutTheGrip: Bool { grips.count > 1 }
+    /// Whether the cube is worth listening to at all.
+    var isFollowing: Bool { isConnected && cubeState != nil }
 
     /// Whether the cube's own position is worth planning a solve from.
     ///
@@ -102,13 +104,8 @@ final class SmartCubeManager: NSObject, ObservableObject {
     /// symptom cannot tell them apart. This can.
     func noteTurn(_ said: Move, readAs ours: Move, whenAskedFor asked: Move?) {
         let label = lastTurn.map { "#\($0.label)\($0.clockwise ? "" : "'")" } ?? "#?"
-        let held = alignment.map { grip in
-            grip.appFace.sorted { $0.key.rawValue < $1.key.rawValue }
-                .map { "\($0.key.letter)\($0.value.letter)" }.joined()
-        } ?? "\(grips.count) still possible"
         note("turn \(label) -> \(said.notation) -> \(ours.notation)"
-             + "   asked \(asked?.notation ?? "-")   held \(held)"
-             + "   sensor \(sensorGrip == nil ? "no" : "yes")")
+             + "   asked \(asked?.notation ?? "-")   picture \(heldInWords)")
     }
 
     func note(_ line: String) {
@@ -164,11 +161,9 @@ final class SmartCubeManager: NSObject, ObservableObject {
         })?.id ?? turnBeingLogged
         guard let id else { return }
         let held = heldInWords
-        let open = grips.count
         turnLog.amend(id) { entry in
             entry.cubeMove = move
             entry.heldAs = held
-            entry.gripsOpen = open
         }
     }
 
@@ -183,13 +178,11 @@ final class SmartCubeManager: NSObject, ObservableObject {
             $0.cubeMove != nil && $0.outcome == nil
         })?.id else { return }
         let held = heldInWords
-        let open = grips.count
         turnLog.amend(id) { entry in
             entry.appMove = appMove
             entry.asked = asked
             entry.outcome = outcome
             entry.heldAs = held
-            entry.gripsOpen = open
         }
     }
 
@@ -229,134 +222,59 @@ final class SmartCubeManager: NSObject, ObservableObject {
         }.joined(separator: " ")
     }
 
-    var heldInWords: String {
-        guard let alignment else { return "\(grips.count) ways still open" }
-        return alignment.appFace.sorted { $0.key.rawValue < $1.key.rawValue }
+    var heldInWords: String { Self.inWords(alignment) }
+
+    private static func inWords(_ held: CubeAlignment) -> String {
+        held.appFace.sorted { $0.key.rawValue < $1.key.rawValue }
             .map { "\($0.key.letter)->\($0.value.letter)" }.joined(separator: " ")
     }
 
-    /// Work out which way round the cube is being held, by holding what it
-    /// says it looks like against what the camera saw.
-    /// Returns nil when the cube has not said where it is yet, which is not the
-    /// same as disagreeing and must not be reported as though it were.
+    /// Line the cube up with the picture the child is looking at.
+    ///
+    /// The whole of it. For every face the cube has, its colour is fixed; the
+    /// picture has that colour on one of its sides; that side is what the app
+    /// calls it. Two sets of middles, one bijection, done — and it works
+    /// whether the cube's own idea of where its pieces are is right or not,
+    /// because where its pieces are has no bearing on which of its faces is
+    /// the red one.
+    ///
+    /// Called with whatever the screen is currently showing, so a plan that
+    /// turns the picture round carries this with it and nothing has to be
+    /// composed or counted.
+    func lineUp(withPictureShowing centres: [Face: CubeColour]) {
+        guard let held = CubeAlignment.matching(centresSeen: centres) else { return }
+        guard held.appFace != alignment.appFace else { return }
+        alignment = held
+        calibrateOrientation(against: held)
+        note("Reading turns against the picture: " + Self.inWords(held))
+    }
+
+    /// The camera has just seen the cube as it really is.
+    ///
+    /// Two things come of that, and only two: the picture's colours, which say
+    /// what to call each of the cube's faces, and the cube's own position,
+    /// which is corrected to match rather than left to disagree.
+    ///
+    /// Returns whether the camera named all six middles, which is all it takes.
     @discardableResult
     func align(toScan scanned: CubeState,
-               middles: [Face: CubeColour]) -> CubeAlignment.Match? {
+               middles: [Face: CubeColour]) -> Bool {
         guard cubeState != nil else {
-            note("No position from the cube yet, so nothing to line up against")
-            grips = []
-            return nil
+            note("No position from the cube yet, so nothing to line up")
+            return false
         }
-
-        // Off the middles, which never move. Where the cube's pieces have got
-        // to has no bearing on which of its faces is the red one, so this works
-        // whether or not the cube's own idea of itself is right — and a cube
-        // whose idea of itself is wrong is precisely why the camera was reached
-        // for.
-        if let held = CubeAlignment.matching(centresSeen: middles) {
-            grips = [held]
-            cubeState = held.cubeState(of: scanned)
-            positionIsTrustworthy = true
-            // Worth keeping: a cube only has to be pictured once.
-            Self.rememberedMiddles = middles
-            calibrateOrientation(against: held)
-            note("Lined up off the middles: " + held.appFace
-                    .sorted { $0.key.rawValue < $1.key.rawValue }
-                    .map { "\($0.key.letter)->\($0.value.letter)" }
-                    .joined(separator: " "))
-            return .found(held)
+        guard let held = CubeAlignment.matching(centresSeen: middles) else {
+            note("The camera did not name all six middles")
+            return false
         }
-
-        // Only if the camera could not name all six middles. Then there is
-        // nothing certain to go on and the turns have to settle it.
-        note("The camera did not name all six middles, so the turns will settle it")
-        return alignByPosition(scanned)
-    }
-
-    /// The old way: line the cube's own position up against the scan.
-    ///
-    /// Kept for a scan that could not name every middle. It cannot tell a cube
-    /// whose position has drifted from one that is being held differently, so
-    /// it is the fallback rather than the method.
-    private func alignByPosition(_ scanned: CubeState) -> CubeAlignment.Match? {
-        guard let cubeState else { return nil }
-        let match = CubeAlignment.matching(cube: cubeState, scanned: scanned)
-        grips = CubeAlignment.possibilities(cube: cubeState, scanned: scanned)
-        switch match {
-        case .found(let found):
-            // The camera has just seen the cube as it really is, so whatever
-            // the cube believed is replaced rather than merely agreed with.
-            // Nothing can drift apart again from here.
-            self.cubeState = found.cubeState(of: scanned)
-            positionIsTrustworthy = true
-            calibrateOrientation(against: found)
-            note("Lined up with the scan: " + found.appFace
-                    .sorted { $0.key.rawValue < $1.key.rawValue }
-                    .map { "\($0.key.letter)->\($0.value.letter)" }
-                    .joined(separator: " "))
-        case .tooSymmetricToTell:
-            positionIsTrustworthy = true
-            note("Cube looks the same every way round, so any grip will do")
-        case .cubeDisagrees:
-            positionIsTrustworthy = false
-            // Not a dead end any more. Its turns are still good, so the grip
-            // gets worked out from them over the next move or two.
-            note("The cube's own position does not match the scan — "
-                 + "working the grip out from your turns instead")
-        }
-        return match
-    }
-
-    /// Take this grip as the one everything is now counted from.
-    ///
-    /// Used when the plan is worked out afresh: the new plan starts from the
-    /// cube exactly as it is being held, so the whole-cube turns the old plan
-    /// had already made are spent and must not be counted a second time.
-    func reground(to alignment: CubeAlignment) {
-        grips = [alignment]
+        alignment = held
+        cubeState = held.cubeState(of: scanned)
         positionIsTrustworthy = true
-    }
-
-    /// Every way the cube could be being held, with nothing ruled out.
-    ///
-    /// This is what "we do not know yet" looks like, and it is the only honest
-    /// thing to say before a turn has been seen. A cube reports its turns in
-    /// its own frame, and how that frame sits in a child's hands is not
-    /// something the cube can tell you — only the turns can, and they settle it
-    /// after two of them.
-    func openEveryGrip() {
-        // The way they were asked to hold it comes first, so a turn read before
-        // anything has narrowed the set is read that way rather than as though
-        // the cube's own frame were the child's — see
-        // ``CubeAlignment/likeliestFirst(_:)``.
-        grips = CubeAlignment.likeliestFirst(
-            CubeAlignment.allGrips.map { CubeAlignment.identity.regripped(by: $0) })
-    }
-
-    /// Throw the grip away and work it out again from the turns.
-    ///
-    /// For when the grip we settled on keeps disagreeing with what the child is
-    /// actually doing. A grip derived from a cube's own position is only as
-    /// good as that position, and if it turns out to be wrong there is no
-    /// reason to keep believing it — the turns themselves are better evidence,
-    /// and they are what settled it in the first place.
-    func reopenTheGrip() {
-        guard grips.count == 1 else { return }
-        openEveryGrip()
-        note("That grip kept being wrong — working it out from your turns again")
-    }
-
-    /// Rule out the ways of holding the cube that a turn has just disproved.
-    func narrow(to remaining: [CubeAlignment]) {
-        guard !remaining.isEmpty, remaining.count < grips.count else { return }
-        grips = remaining
-        if remaining.count == 1 {
-            calibrateOrientation(against: remaining[0])
-            note("Grip settled from your turns: " + remaining[0].appFace
-                    .sorted { $0.key.rawValue < $1.key.rawValue }
-                    .map { "\($0.key.letter)->\($0.value.letter)" }
-                    .joined(separator: " "))
-        }
+        // Worth keeping: a cube only has to be pictured once.
+        Self.rememberedMiddles = middles
+        calibrateOrientation(against: held)
+        note("Lined up off the middles: " + Self.inWords(held))
+        return true
     }
 
     /// The child says the cube is solved right now. The only position a cube
@@ -364,16 +282,12 @@ final class SmartCubeManager: NSObject, ObservableObject {
     /// idea of itself has drifted.
     func startFromSolved() {
         cubeState = .solved
-        // Where it is, yes. Which way round it is being held, no — and a solved
-        // cube is the one position from which that can never be read, because
-        // it looks exactly the same all twenty-four ways round. Saying
-        // "identity" here is a one-in-twenty-four guess dressed up as a fact,
-        // and because it leaves a single settled grip the app stops learning
-        // and starts telling the child they turned the wrong side instead.
-        openEveryGrip()
+        // Where it is. Nothing else changes: what to call each of its faces
+        // comes from the colours on screen, and a solved cube has not moved
+        // any of them.
         positionIsTrustworthy = true
         lastMoveSerial = nil
-        note("Told it is solved right now; which way round it is held is still open")
+        note("Told it is solved right now")
     }
 
     var isConnected: Bool { status.isConnected }
@@ -432,10 +346,10 @@ final class SmartCubeManager: NSObject, ObservableObject {
     /// it says that too, and "My cube looks different" is there for it.
     @discardableResult
     func lineUpFromTheLastPicture() -> Bool {
-        guard grips.isEmpty, cubeState != nil,
+        guard cubeState != nil,
               let middles = Self.rememberedMiddles,
               let held = CubeAlignment.matching(centresSeen: middles) else { return false }
-        grips = [held]
+        alignment = held
         positionIsTrustworthy = true
         calibrateOrientation(against: held)
         note("Lined up from the picture you took before")
@@ -447,9 +361,8 @@ final class SmartCubeManager: NSObject, ObservableObject {
     /// its own faces. They are half a turn apart, and the one worth showing is
     /// the one they can hold up against what is in their hands.
     var trackedColours: [CubeColour?]? {
-        let held = alignment ?? .asTheChildIsAskedToHoldIt
-        return cubeState.map { state in
-            held.appState(of: state).facelets.map { CubeColour.defaultColour(for: $0) }
+        cubeState.map { state in
+            alignment.appState(of: state).facelets.map { CubeColour.defaultColour(for: $0) }
         }
     }
 
@@ -506,7 +419,6 @@ final class SmartCubeManager: NSObject, ObservableObject {
         cipher = nil
         generation = nil
         cubeState = nil
-        grips = []
         positionIsTrustworthy = false
         hasSeenPosition = false
         lastMoveSerial = nil
@@ -630,18 +542,12 @@ final class SmartCubeManager: NSObject, ObservableObject {
     private func orientationArrived(_ quaternion: CubeOrientation.Quaternion) {
         lastQuaternion = quaternion
         guard orientation.isCalibrated else { return }
+        // Only ever reported, never used to name a turn. Which way up the cube
+        // is says nothing about which of its faces moved — the cube already
+        // said that — and this is here for the one thing it genuinely knows
+        // that the face sensors cannot: the whole cube being turned round.
         let held = orientation.grip(sensor: quaternion)
-        if held != sensorGrip {
-            sensorGrip = held
-            if let held, grips.count > 1 {
-                // The sensor knows, so there is nothing left to work out.
-                grips = [held]
-                note("Held as " + held.appFace
-                        .sorted { $0.key.rawValue < $1.key.rawValue }
-                        .map { "\($0.key.letter)->\($0.value.letter)" }
-                        .joined(separator: " ") + " (from the cube's own sensor)")
-            }
-        }
+        if held != sensorGrip { sensorGrip = held }
     }
 
     /// Pin the sensor's frame to the child's, from a moment the grip is known.
@@ -719,7 +625,7 @@ final class SmartCubeManager: NSObject, ObservableObject {
             // position the cube reports is better evidence than a tally built
             // on top of one, and disagreeing with it quietly is exactly what
             // let a misread turn go unnoticed for a whole solve.
-            if cubeState == nil || grips.isEmpty {
+            if cubeState == nil {
                 cubeState = state
                 lineUpFromTheLastPicture()
             } else if cubeState != state {
@@ -843,7 +749,6 @@ extension SmartCubeManager: CBCentralManagerDelegate {
                                     error: Error?) {
         Task { @MainActor in
             self.cubeState = nil
-            self.grips = []
             self.positionIsTrustworthy = false
             self.forgetTheDialect()
             self.status = .idle

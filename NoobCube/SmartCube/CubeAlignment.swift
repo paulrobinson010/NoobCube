@@ -1,24 +1,34 @@
 import Foundation
 
-/// Which way round a smart cube is, compared with the way the child is holding it.
+/// What to call each of a smart cube's faces on screen.
 ///
-/// A smart cube knows its own faces absolutely — each one has its own sensor —
-/// but it has no idea which way up the child is holding it. So when it says
-/// "R", it means *its* right, which may be the app's front, or its top, or
-/// anything else. Without this the app reads every turn as the wrong face, and
-/// a child doing exactly the right thing is told they are wrong.
+/// A smart cube knows its own faces absolutely — each one has a sensor, and
+/// each one is a colour. The face it calls R is its red one, welded into the
+/// plastic, for ever. So when a turn arrives there is no doubt about what
+/// physically moved.
 ///
-/// The camera settles it. After a scan the app knows what the cube really looks
-/// like, and the cube can be asked what *it* thinks it looks like. The two are
-/// the same cube under two grips, so trying all twenty-four grips and keeping
-/// the one that matches gives the answer outright.
+/// The only thing left to work out is what that face is called in the picture
+/// the child is looking at, and the picture has the same six colours on its
+/// six sides. Red is red. That makes this a lookup off the middles — see
+/// ``matching(centresSeen:)`` — and a constant until the app itself turns the
+/// picture round, which it only does when the plan says so.
 ///
-/// Checked by `Tools/CubeReference/alignment.py`, which is the same thing
-/// written twice: 1,440 grips recovered uniquely, 25,920 turns renamed into the
-/// app's words and checked against the turn actually made, and 12,960 re-grips
-/// composed through a whole-cube turn. A solved cube is caught as too
-/// symmetric to tell, and a cube whose own idea of itself has drifted is caught
-/// rather than guessed at.
+/// **How the child is holding the cube does not come into it.** That was the
+/// premise this file was built on and it was wrong from the start: there were
+/// twenty-four candidate ways of holding it, narrowed by whether each turn
+/// matched the move being asked for, thrown away and re-opened when they kept
+/// disagreeing, with a motion sensor casting a vote. Every round of "it turns
+/// the opposite side" came out of that machinery, and none of it was answering
+/// a question the cube had not already answered.
+///
+/// The rotation is still needed, because saying a whole position in the
+/// picture's terms means turning it — but which rotation is determined by the
+/// colours, not searched for.
+///
+/// Checked by `Tools/CubeReference/alignment.py`: 25,920 turns renamed into
+/// the app's words and checked against the turn actually made, and the middles
+/// giving the right answer for 500 cubes whose own reported position was wrong
+/// — the case where matching by position gave up every time.
 struct CubeAlignment: Equatable, Sendable {
 
     /// How the cube would have to be turned in your hands to be held the way
@@ -145,44 +155,6 @@ struct CubeAlignment: Equatable, Sendable {
         }
         guard Set(wanted.values).count == Face.allCases.count else { return nil }
         return allGrips.lazy.map { CubeAlignment(grip: $0) }.first { $0.appFace == wanted }
-    }
-
-    /// Every way the cube could be being held, given what it says about itself
-    /// and what the camera saw.
-    ///
-    /// One, when its own position agrees with the scan. All twenty-four when it
-    /// does not — because a cube whose own idea of itself has drifted still
-    /// reports turns perfectly well, and the grip can be learned from those
-    /// instead. The app knows which move it asked for, so only the ways of
-    /// holding the cube that make the reported turn *be* that move survive.
-    ///
-    /// Measured over 300 solves in `Tools/CubeReference`: the grip comes down
-    /// to one after a median of two turns, three at worst, and never failed to
-    /// settle. Every turn in the meantime is read correctly anyway, because all
-    /// the surviving candidates agree on what it was — that is what put them in
-    /// the surviving set.
-    static func possibilities(cube: CubeState, scanned: CubeState) -> [CubeAlignment] {
-        let hits = allGrips.filter { regripping(cube, by: $0) == scanned }
-        let candidates = hits.isEmpty ? allGrips : hits
-        return likeliestFirst(candidates.map { CubeAlignment(grip: $0) })
-    }
-
-    /// The same candidates, with the way they were asked to hold it at the front.
-    ///
-    /// Which one is first is not a detail. When a turn cannot be narrowed —
-    /// nothing has been asked for yet, or they turned something else — it is
-    /// read with the first, and the list used to begin with the cube's own
-    /// frame. That is half a turn from the hand holding it, so every such turn
-    /// came out as the opposite side.
-    ///
-    /// It bites hardest in the one place a child is most likely to be: they
-    /// connect a cube, the picture does not match, so they show it to the
-    /// camera — and a cube whose own idea of itself was wrong is exactly the
-    /// case where no grip fits and all twenty-four come back.
-    static func likeliestFirst(_ candidates: [CubeAlignment]) -> [CubeAlignment] {
-        let asked = asTheChildIsAskedToHoldIt.appFace
-        return candidates.filter { $0.appFace == asked }
-             + candidates.filter { $0.appFace != asked }
     }
 
     /// Work out how the cube is being held, from what it says it looks like

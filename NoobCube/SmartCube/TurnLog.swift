@@ -39,11 +39,8 @@ struct TurnLog: Equatable {
         /// The move the app had asked for, if any.
         var asked: Move? = nil
 
-        /// The way round the cube was taken to be held, as `UDRLFF…` pairs.
+        /// What each of the cube's faces was called on screen at the time.
         var heldAs: String? = nil
-
-        /// How many ways of holding it were still open when this was read.
-        var gripsOpen: Int? = nil
 
         /// What the app then did about it, in a few words.
         var outcome: String? = nil
