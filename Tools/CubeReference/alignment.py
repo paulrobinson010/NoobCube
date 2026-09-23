@@ -79,6 +79,43 @@ def check_the_grips_are_all_different():
     print('ALL PASS')
 
 
+def check_the_grips_are_told_apart_by_their_middles():
+    """How the twenty-four are told apart from one another, which is the whole
+    ballgame.
+
+    The app built this list by turning a solved cube each way and throwing away
+    the ways that gave the same result. But the app's own ``applying`` renames
+    the faces after a rotation, so that a solved cube still reads as solved --
+    right for solving, and fatal here. Every one of the twenty-four came back
+    *solved*, twenty-three were thrown away as duplicates, and the list held
+    exactly one way of holding a cube: the identity.
+
+    Everything downstream then quietly stopped working while looking fine. The
+    way the child is asked to hold the cube could not be found in a list that
+    did not contain it, so it fell back to the identity. Lining up off the
+    middles found nothing. Throwing the grip away and learning it again from
+    the turns re-opened a single candidate, so it was "settled" on the identity
+    the instant it was re-opened. And every turn was read in the cube's own
+    frame -- half a turn from the hand holding it, which is every "it turns the
+    opposite side" that was ever reported.
+
+    This twin has always used the raw ``apply`` here, so it could never have
+    caught it by agreeing or disagreeing. So the trap itself is the test.
+    """
+    naive = set()
+    for to_top in ([], ['x'], ['x2'], ["x'"], ['z'], ["z'"]):
+        for spin in ([], ['y'], ['y2'], ["y'"]):
+            naive.add(cube.apply_regrip(cube.SOLVED, to_top + spin))
+    print('told apart by where the middles land            %d' % len(GRIPS))
+    print('  told apart by a solved cube turned and renamed  %d' % len(naive))
+    assert len(GRIPS) == 24, len(GRIPS)
+    assert len(naive) == 1, (
+        'renaming after a rotation should make all 24 look identical; if this '
+        'ever stops being true the warning below is stale')
+    print('  so a solved cube can never tell two of them apart')
+    print('ALL PASS')
+
+
 def from_the_middles(centres_seen):
     """Where the cube's own faces have got to, read straight off the middles.
 
@@ -429,3 +466,5 @@ if __name__ == '__main__':
     check_the_middles_are_enough()
     print()
     check_the_grips_are_all_different()
+    print()
+    check_the_grips_are_told_apart_by_their_middles()

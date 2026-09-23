@@ -243,11 +243,34 @@ struct CubeAlignment: Equatable, Sendable {
             [Move(.y)], [Move(.y, .half)], [Move(.y, .counterClockwise)],
         ]
         var grips: [[Move]] = []
-        var seen: Set<CubeState> = []
+        // Told apart by where the middles land, followed through the raw
+        // geometry.
+        //
+        // This used to tell them apart by turning a solved cube and comparing
+        // the result, and ``CubeState/applying(_:)`` renames the faces after a
+        // rotation so that a solved cube still reads as solved. So all
+        // twenty-four came back identical, twenty-three were thrown away as
+        // duplicates, and this list held exactly one way of holding a cube:
+        // the identity.
+        //
+        // Which is the whole of "it turns the opposite side", and it survived
+        // fixing the very same trap one level down in ``faces(after:)`` —
+        // that fix computed a correct map for every grip in a list that had
+        // only one grip in it. It also meant the way the child is asked to
+        // hold the cube could not be found and fell back to the identity;
+        // that lining up off the middles found nothing; and that throwing the
+        // grip away and learning it again from the turns re-opened a single
+        // candidate, so it was "settled" on the identity the moment it was
+        // re-opened. Every one of those was visible in a move log before the
+        // cause was.
+        var seen: Set<[Int]> = []
         for first in toTop {
             for second in spin {
                 let grip = first + second
-                if seen.insert(CubeState.solved.applying(grip)).inserted {
+                let middles = Face.allCases.map {
+                    CubeGeometry.follow(sticker: $0.centreIndex, through: grip)
+                }
+                if seen.insert(middles).inserted {
                     grips.append(grip)
                 }
             }

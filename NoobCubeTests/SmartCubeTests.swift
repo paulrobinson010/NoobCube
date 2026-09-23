@@ -117,7 +117,14 @@ final class CubeAlignmentTests: XCTestCase {
 
     func testThereAreExactlyTwentyFourWaysToHoldACube() {
         XCTAssertEqual(CubeAlignment.allGrips.count, 24)
-        let shapes = Set(CubeAlignment.allGrips.map { CubeState.solved.applying($0) })
+        // Told apart by where the middles land, not by turning a solved cube
+        // and comparing it: ``CubeState/applying(_:)`` renames the faces after
+        // a rotation, so a solved cube stays solved whichever way you turn it
+        // and all twenty-four look identical. That is precisely the trap the
+        // list itself fell into, and this assertion was written with it.
+        let shapes = Set(CubeAlignment.allGrips.map { grip in
+            Face.allCases.map { CubeGeometry.follow(sticker: $0.centreIndex, through: grip) }
+        })
         XCTAssertEqual(shapes.count, 24, "every grip should leave the cube looking different")
         for grip in CubeAlignment.allGrips {
             XCTAssertTrue(grip.allSatisfy(\.isWholeCubeTurn))
