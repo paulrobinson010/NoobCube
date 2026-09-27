@@ -17,11 +17,16 @@ struct SolveView: View {
         VStack(spacing: 0) {
             header
 
+            // As big as it can be up to its usual size, and smaller on a
+            // smaller phone. It was always 276 points, and on a small phone
+            // that, the move strip and the buttons left nothing for the
+            // instruction — which was then scrolled out of sight.
             CubeSceneView(controller: session.scene)
                 .frame(maxWidth: .infinity)
-                .frame(height: 276)
+                .frame(minHeight: 150, maxHeight: 276)
                 .padding(.vertical, 4)
                 .overlay(alignment: .bottomTrailing) { demoCorner }
+                .layoutPriority(1)
 
             if session.help == .moveByMove {
                 // Only once the moves have started. Showing the set beside the
@@ -51,7 +56,8 @@ struct SolveView: View {
                     .padding(.horizontal, 20)
                     .padding(.top, 8)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // Always room for at least the move and its sentence.
+            .frame(maxWidth: .infinity, minHeight: 110, maxHeight: .infinity)
 
             controls
                 .padding(.horizontal, 20)
@@ -131,7 +137,8 @@ struct SolveView: View {
                     .font(.system(size: 12, weight: .black))
                 Text(why)
                     .font(.brand(size: 15, weight: .bold))
-                    .lineLimit(2)
+                    .lineLimit(3)
+                    .minimumScaleFactor(0.85)
                 Spacer(minLength: 0)
                 ForEach(Array(session.colours(of: step).enumerated()), id: \.offset) { _, colour in
                     RoundedRectangle(cornerRadius: 5, style: .continuous)
@@ -284,6 +291,7 @@ struct SolveView: View {
                 .font(.brand(size: 15, weight: .medium))
                 .foregroundStyle(Theme.muted)
                 .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
             Button {
                 session.confirmWholeCubeTurn()
             } label: {
@@ -305,10 +313,13 @@ struct SolveView: View {
                 .font(.system(size: 18, weight: .black))
             Text(words)
                 .font(.brand(size: 19, weight: .bold))
+                .lineLimit(2)
+                .minimumScaleFactor(0.8)
         }
         .foregroundStyle(Theme.done)
         .frame(maxWidth: .infinity)
-        .frame(height: 58)
+        .padding(.horizontal, 12)
+        .frame(minHeight: 58)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(Theme.done.opacity(0.14))
@@ -329,6 +340,8 @@ struct SolveView: View {
                 .font(.brand(size: 17, weight: .medium))
                 .foregroundStyle(.white.opacity(0.9))
                 .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 12)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 10)

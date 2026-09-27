@@ -70,9 +70,15 @@ struct WelcomeView: View {
             Text("Let's solve your cube together")
                 .font(.brand(size: 19, weight: .semibold))
                 .foregroundStyle(Theme.muted)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 20)
 
+            // Gives way on a small phone, now there can be three buttons under
+            // it: a fixed 300 points pushed the last of them off the screen.
             CubeSceneView(controller: model.scene)
-                .frame(height: 300)
+                .frame(minHeight: 150, maxHeight: 300)
+                .layoutPriority(1)
                 .onAppear { model.scene.startIdleSpin() }
 
             Spacer(minLength: 0)

@@ -47,27 +47,60 @@ struct ScreenHeader: View {
     var onHome: (() -> Void)? = nil
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            BrandMark(size: 38)
-
-            VStack(alignment: .leading, spacing: 1) {
-                if let subtitle {
-                    Text(subtitle)
-                        .font(.brand(size: 14, weight: .bold))
-                        .foregroundStyle(Theme.muted)
+        // One row when the title fits beside the buttons, and a row of its own
+        // underneath when it does not.
+        //
+        // It was always one row, with the title shrinking to fit — but once
+        // the mark, the camera, the house and the two voice buttons have their
+        // room, a phone leaves the title about a hundred points, and "Make the
+        // whole yellow face" needs over three hundred. Even at its smallest it
+        // was cut off, which is the one line on the screen that says what they
+        // are doing.
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .center, spacing: 12) {
+                BrandMark(size: 38)
+                VStack(alignment: .leading, spacing: 1) {
+                    subtitleText
+                    titleText.fixedSize()
                 }
-                Text(title)
-                    .font(.brand(size: 25, weight: .heavy))
-                    .foregroundStyle(.white)
-                    // One line, shrinking if it has to. Wrapping to two made
-                    // the header grow, which pushed everything below it down
-                    // the screen and left a gap where the cube should be.
-                    .minimumScaleFactor(0.55)
-                    .lineLimit(1)
+                Spacer(minLength: 4)
+                buttons
             }
 
-            Spacer(minLength: 4)
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .center, spacing: 12) {
+                    BrandMark(size: 38)
+                    subtitleText
+                    Spacer(minLength: 4)
+                    buttons
+                }
+                titleText
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.75)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
 
+    @ViewBuilder
+    private var subtitleText: some View {
+        if let subtitle {
+            Text(subtitle)
+                .font(.brand(size: 14, weight: .bold))
+                .foregroundStyle(Theme.muted)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+    }
+
+    private var titleText: some View {
+        Text(title)
+            .font(.brand(size: 25, weight: .heavy))
+            .foregroundStyle(.white)
+    }
+
+    private var buttons: some View {
+        HStack(spacing: 12) {
             if let onRescan {
                 Button(action: onRescan) {
                     Image(systemName: "camera.circle.fill")

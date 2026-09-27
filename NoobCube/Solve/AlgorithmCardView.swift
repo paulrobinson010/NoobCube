@@ -36,12 +36,16 @@ struct AlgorithmCardView: View {
             }
 
             ZStack {
-                HStack(spacing: 6) {
+                // Wrapping onto a second row when it has to. In one row, the
+                // nine moves of the edge swap were wider than the card and the
+                // last of them were simply cut off.
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 40), spacing: 6)],
+                          alignment: .leading, spacing: 6) {
                     ForEach(Array(moves.enumerated()), id: \.offset) { _, move in
                         Text(move.notation)
                             .font(.brand(size: 17, weight: .heavy))
                             .foregroundStyle(.white)
-                            .frame(minWidth: 34, minHeight: 38)
+                            .frame(maxWidth: .infinity, minHeight: 38)
                             .background(
                                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                                     .fill(.white.opacity(0.10))

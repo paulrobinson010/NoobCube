@@ -36,7 +36,10 @@ struct MoveStripView: View {
                 .font(.brand(size: 11, weight: .semibold))
                 .opacity(0.85)
         }
-        .foregroundStyle(isCurrent ? .white : (isDone ? Theme.muted : .white.opacity(0.75)))
+        // Dark on the bright chip. White on it measured about one and a half
+        // to one — the move to make now was the hardest thing on the screen
+        // to read.
+        .foregroundStyle(isCurrent ? Theme.ink : (isDone ? Theme.muted : .white.opacity(0.75)))
         .frame(minWidth: 74, minHeight: 60)
         .padding(.horizontal, 10)
         .background(

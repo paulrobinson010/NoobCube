@@ -156,7 +156,10 @@ struct ScanView: View {
             .font(.brand(size: 16, weight: .semibold))
             .foregroundStyle(.white)
             .multilineTextAlignment(.center)
-            .lineLimit(2)
+            // The longest of these runs to two lines on a big phone and three
+            // on a small one; at two it lost its end.
+            .lineLimit(3)
+            .minimumScaleFactor(0.85)
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .frame(maxWidth: .infinity)

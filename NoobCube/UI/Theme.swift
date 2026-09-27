@@ -57,6 +57,26 @@ extension Color {
     /// the same in both places rather than nearly the same.
     var buttonShadow: Color { dimmed(to: Theme.shadowDepth) }
 
+    /// How bright this colour looks, from nought (black) to one (white).
+    var luminance: CGFloat {
+        var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
+        guard UIColor(self).getRed(&red, green: &green, blue: &blue, alpha: &alpha) else {
+            return 0
+        }
+        func linear(_ channel: CGFloat) -> CGFloat {
+            channel <= 0.04045 ? channel / 12.92 : pow((channel + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * linear(red) + 0.7152 * linear(green) + 0.0722 * linear(blue)
+    }
+
+    /// Text that can be read on this colour: dark on a bright one, white on a
+    /// deep one.
+    ///
+    /// White on the bright green of the "go" buttons measured about two to
+    /// one — hard to read for anyone, and harder for someone just learning.
+    /// Dark ink on it is nearly ten to one. The blue keeps its white.
+    var readableText: Color { luminance > 0.2 ? Theme.ink : .white }
+
     /// This colour with the light turned down, keeping its hue.
     func dimmed(to depth: CGFloat) -> Color {
         var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
@@ -89,7 +109,13 @@ struct BigButtonStyle: ButtonStyle {
 
         return configuration.label
             .font(.brand(size: 24, weight: .bold))
-            .foregroundStyle(isProminent ? Color.white : tint)
+            .foregroundStyle(isProminent ? tint.readableText : tint)
+            // A long label wraps and centres, and shrinks a little before it
+            // would ever be cut off. It used to run out to the edges.
+            .multilineTextAlignment(.center)
+            .lineLimit(2)
+            .minimumScaleFactor(0.7)
+            .padding(.vertical, 8)
             .frame(maxWidth: .infinity, minHeight: Theme.minimumTapTarget)
             .padding(.horizontal, 20)
             .background(shape.fill(isProminent ? tint : tint.opacity(0.16)))

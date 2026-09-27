@@ -22,8 +22,11 @@ struct ReadyView: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 12)
 
+            // Up to its usual size, and smaller where the phone is: at a fixed
+            // 340 points, a small phone pushed "Let's solve it!" off the bottom.
             CubeSceneView(controller: scene)
-                .frame(height: 340)
+                .frame(minHeight: 170, maxHeight: 340)
+                .layoutPriority(1)
 
             if hasFolded {
                 gripCard
@@ -64,6 +67,8 @@ struct ReadyView: View {
             Text("\(colour.displayName) \(label)")
                 .font(.brand(size: 20, weight: .bold))
                 .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
         }
     }
 
