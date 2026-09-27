@@ -159,7 +159,7 @@ struct SmartCubeView: View {
                         .font(.brand(size: 16, weight: .bold))
                         .foregroundStyle(.white)
                     Text("Writes down every turn and every change of step, "
-                         + "and asks which colour you turned.")
+                         + "to send when something goes wrong.")
                         .font(.brand(size: 13, weight: .medium))
                         .foregroundStyle(Theme.muted)
                 }

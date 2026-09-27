@@ -77,67 +77,10 @@ struct TurnLogView: View {
     }
 
     private func headline(cube: Int, held: Int, right: Int, answered: Int) -> String {
-        if answered == 0 { return "Tap the colour you turned, and this will say where the fault is" }
+        if answered == 0 { return "Every turn and every change of step, in order" }
         if cube > held { return "The cube's own face numbers are what is wrong" }
         if held > 0 { return "The cube is right; the app renames the side wrongly" }
         if right > 0 { return "Every turn you answered came out right" }
         return "Nothing to go on yet"
     }
-}
-
-/// The one question the app cannot answer for itself, asked in the smallest
-/// way it can be: six squares, tap the one you just turned.
-///
-/// Only on screen while the log is being kept. It is there for the grown-up
-/// watching, and a five year old should not have to see it the rest of the
-/// time.
-struct TurnLogStrip: View {
-    @ObservedObject var manager: SmartCubeManager
-    var onTurned: (CubeColour) -> Void
-
-    @State private var showingLog = false
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Text(waiting == nil ? "turn your cube" : "you turned")
-                .font(.brand(size: 13, weight: .bold))
-                .foregroundStyle(Theme.muted)
-
-            ForEach(CubeColour.allCases) { colour in
-                Button {
-                    onTurned(colour)
-                } label: {
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(colour.swiftUIColor)
-                        .frame(width: 26, height: 26)
-                        .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .strokeBorder(.black.opacity(0.35), lineWidth: 1))
-                        .opacity(waiting == nil ? 0.3 : 1)
-                }
-                .buttonStyle(.plain)
-                .disabled(waiting == nil)
-                .accessibilityLabel("I turned \(colour.displayName)")
-            }
-
-            Spacer(minLength: 0)
-
-            Button {
-                showingLog = true
-            } label: {
-                Label("\(manager.turnLog.entries.count)", systemImage: "list.bullet.rectangle")
-                    .font(.brand(size: 13, weight: .bold))
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(Theme.attention)
-            .accessibilityLabel("Open the move log")
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
-            .fill(.black.opacity(0.3)))
-        .sheet(isPresented: $showingLog) { TurnLogView(manager: manager) }
-    }
-
-    /// The newest turn nobody has said a colour for.
-    private var waiting: TurnLog.Entry? { manager.turnLog.waitingForAnAnswer }
 }

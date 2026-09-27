@@ -959,3 +959,35 @@ final class PictureIsTheCubeTests: XCTestCase {
         XCTAssertNotEqual(theOldWay, picture)
     }
 }
+
+/// Telling a cube it is solved, in its own words.
+final class ResetCommandTests: XCTestCase {
+
+    /// The reset carries a solved cube, packed the way the decoder unpacks one:
+    /// every corner and edge in its own place, none of them twisted or flipped.
+    func testTheResetIsASolvedCube() {
+        for generation in GANProtocol.Generation.allCases {
+            let command = generation.resetToSolvedCommand
+            XCTAssertEqual(command.count, generation.commandLength)
+            let header = generation == .gen2 ? 1 : 2
+            let reader = GANProtocol.BitReader(bytes: Array(command[header...]))
+            for corner in 0..<8 {
+                XCTAssertEqual(reader.word(at: corner * 3, bits: 3), corner,
+                               "\(generation): corner \(corner) out of place")
+            }
+            XCTAssertEqual(reader.word(at: 24, bits: 16), 0, "\(generation): a corner is twisted")
+            for edge in 0..<12 {
+                XCTAssertEqual(reader.word(at: 40 + edge * 4, bits: 4), edge,
+                               "\(generation): edge \(edge) out of place")
+            }
+        }
+    }
+
+    /// And it is not the position request, which would be a harmless no-op
+    /// that left the cube remembering the wrong thing.
+    func testTheResetIsNotAPositionRequest() {
+        for generation in GANProtocol.Generation.allCases {
+            XCTAssertNotEqual(generation.resetToSolvedCommand, generation.requestFaceletsCommand)
+        }
+    }
+}

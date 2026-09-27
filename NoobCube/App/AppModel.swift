@@ -41,7 +41,9 @@ final class AppModel: ObservableObject {
 
     func showWelcome() {
         screen = .welcome
-        scene.reset(to: scan?.colours ?? ScannedCube.solvedColours)
+        // A solve waiting to be carried on shows the cube as far as they got.
+        let paused = pausedOn == nil ? nil : session?.displayCube.colours
+        scene.reset(to: paused ?? scan?.colours ?? ScannedCube.solvedColours)
         scene.startIdleSpin()
     }
 
@@ -70,6 +72,7 @@ final class AppModel: ObservableObject {
                                      scene: scene, narrator: narrator)
             follow(fresh)
             session = fresh
+            pausedOn = nil
             smartCube.logMoment("new plan from the camera, \(plan.moveCount) moves",
                                 why: "the camera looked at the cube")
 
@@ -110,10 +113,49 @@ final class AppModel: ObservableObject {
     }
 
     func finishSolve() {
-        smartCube.logMoment("back to the start", why: "they left the solve")
+        smartCube.logMoment("back to the start", why: "the solve was finished with")
         session = nil
         scan = nil
+        pausedOn = nil
         showWelcome()
+    }
+
+    // MARK: - Going home part way
+
+    /// Where they were when they went home part way through, so they can carry
+    /// on from there. Nil when there is nothing to carry on with.
+    @Published private(set) var pausedOn: Screen?
+
+    /// Whether there is a solve to go back to.
+    var canCarryOn: Bool { pausedOn != nil && session != nil }
+
+    /// The house button. It used to throw the solve away, so a child who
+    /// wandered off to the home screen had to show the camera their cube and
+    /// start from the beginning. Now the solve waits for them.
+    func goHome() {
+        if let session, !session.isFinished, screen == .solving || screen == .ready {
+            pausedOn = screen
+            session.stopPlayingThrough()
+            smartCube.logMoment("paused", why: "they went home part way through")
+        }
+        showWelcome()
+    }
+
+    /// Back to exactly where they were, next instruction and all.
+    ///
+    /// A connected cube may have been turned in the meantime, so the picture
+    /// is held to the cube straight away and the plan follows it if it moved.
+    func carryOn() {
+        guard let paused = pausedOn, let session else { return }
+        pausedOn = nil
+        smartCube.logMoment("carried on", why: "they came back from the home screen")
+        scene.stopIdleSpin()
+        scene.reset(to: session.displayCube.colours)
+        screen = paused
+        guard paused == .solving else { return }
+        session.cubeIsFollowing = smartCube.isFollowing
+        session.showWhereWeAre()
+        holdThePictureToTheCube()
     }
 
     /// Hook a freshly made session up to everything that watches it.
@@ -275,19 +317,6 @@ final class AppModel: ObservableObject {
         smartCube.logReading(move, asked: asked, outcome: session.lastReaction)
     }
 
-    /// The child has said which colour side they just turned.
-    ///
-    /// The one fact the app cannot get for itself, and the one that tells the
-    /// three suspects apart: the number the cube sent, what the app made of it,
-    /// and what it asked for. Taken together in ``TurnLog`` they name the
-    /// culprit rather than describing the symptom.
-    func theyTurnedByHand(_ colour: CubeColour) {
-        // Read live, not from the scan: a whole-cube turn moves every colour to
-        // a different side of the picture without the plan changing at all.
-        if let session { smartCube.picture(session.displayCube.centres) }
-        smartCube.theyTurned(colour)
-    }
-
     /// Work the plan out afresh from the cube's own position.
     ///
     /// Never a dead end. A cube's face numbers are welded to its plastic, so
@@ -395,6 +424,7 @@ final class AppModel: ObservableObject {
             let fresh = SolveSession(plan: plan, scan: scanned, scene: scene, narrator: narrator)
             follow(fresh)
             session = fresh
+            pausedOn = nil
             smartCube.logMoment("new plan from the cube itself, \(plan.moveCount) moves",
                                 why: "holding it \(smartCube.heldInWords)")
             session?.cubeIsFollowing = smartCube.isFollowing

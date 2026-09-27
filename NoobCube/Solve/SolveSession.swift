@@ -213,8 +213,25 @@ final class SolveSession: ObservableObject {
         narrator.say("\(opening)\(kind.title). \(kind.explanation)")
     }
 
+    /// Put the arrows back for wherever the solve has got to, without saying
+    /// anything — coming back to a solve, the screen says it as it appears.
+    func showWhereWeAre() {
+        scene.hideJourney()
+        guard phase == .coaching, help == .moveByMove, let move = currentMove else {
+            scene.hideTurnArrow()
+            return
+        }
+        scene.showTurnArrow(for: wrongTurn?.inverse ?? halfWayThrough ?? move)
+    }
+
     /// Say the move the child should make now.
     func announceCurrentMove() {
+        if let wrong = wrongTurn {
+            return narrator.say("\(wrong.inverse.spokenInstruction) to put it back.")
+        }
+        if let half = halfWayThrough {
+            return narrator.say("Once more. \(half.spokenInstruction)")
+        }
         guard let move = currentMove else { return }
         let remaining = remainingMoves.count
         let tail = remaining == 1 ? " This is the last one for this step." : ""

@@ -57,6 +57,38 @@ enum GANProtocol {
             return message
         }
 
+        /// The command telling the cube it is solved, so its own memory of where
+        /// its pieces are starts again from there.
+        ///
+        /// From `gan-web-bluetooth`'s reset request, the same source the position
+        /// requests above come from, which match it byte for byte. The payload
+        /// is the solved cube itself, in the piece layout the decoder reads:
+        /// `05 39 77` is corners nought to seven in three-bit fields, the two
+        /// zero bytes are their twists, and `01 23 45 67 89 AB` is edges
+        /// nought to eleven in four-bit fields. Checked in the tests by reading
+        /// it back.
+        ///
+        /// Not trusted on its own even so: the app asks the cube where it is
+        /// straight afterwards, and only a cube that answers "solved" is taken
+        /// to have remembered.
+        var resetToSolvedCommand: [UInt8] {
+            let header: [UInt8]
+            switch self {
+            case .gen2: header = [0x0A]
+            case .gen3: header = [0x68, 0x05]
+            case .gen4: header = [0xD2, 0x0D]
+            }
+            var message = [UInt8](repeating: 0, count: commandLength)
+            for (index, byte) in (header + Self.solvedPieces).enumerated() {
+                message[index] = byte
+            }
+            return message
+        }
+
+        /// A solved cube, packed the way these cubes pack one.
+        static let solvedPieces: [UInt8] =
+            [0x05, 0x39, 0x77, 0x00, 0x00, 0x01, 0x23, 0x45, 0x67, 0x89, 0xAB]
+
         /// The command asking the cube how full its battery is, where it is
         /// known.
         ///

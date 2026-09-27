@@ -27,7 +27,7 @@ struct RootView: View {
                               scene: model.scene,
                               narrator: model.narrator,
                               onStart: { model.beginSolving() },
-                              onHome: { model.finishSolve() })
+                              onHome: { model.goHome() })
                         .transition(.opacity)
                 }
 
@@ -35,11 +35,9 @@ struct RootView: View {
                 if let session = model.session {
                     SolveView(session: session,
                               narrator: model.narrator,
-                              smartCube: model.smartCube,
-                              onTurnedByHand: { model.theyTurnedByHand($0) },
                               onRescan: { model.rescan() },
                               onFinish: { model.finishSolve() },
-                              onHome: { model.finishSolve() })
+                              onHome: { model.goHome() })
                         .transition(.opacity)
                 }
             }
@@ -80,12 +78,24 @@ struct WelcomeView: View {
             Spacer(minLength: 0)
 
             VStack(spacing: 12) {
+                // A solve they left part way through comes first, so going home
+                // is never the end of it.
+                if model.canCarryOn {
+                    Button {
+                        model.carryOn()
+                    } label: {
+                        Label("Carry on solving", systemImage: "play.fill")
+                    }
+                    .buttonStyle(BigButtonStyle(tint: Theme.done))
+                }
+
                 Button {
                     model.startScanning()
                 } label: {
-                    Label("Show me your cube", systemImage: "camera.fill")
+                    Label(model.canCarryOn ? "Start again with a new cube" : "Show me your cube",
+                          systemImage: "camera.fill")
                 }
-                .buttonStyle(BigButtonStyle())
+                .buttonStyle(BigButtonStyle(isProminent: !model.canCarryOn))
 
                 Button {
                     showingSmartCubeSheet = true

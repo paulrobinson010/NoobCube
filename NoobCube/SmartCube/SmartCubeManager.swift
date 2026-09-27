@@ -50,7 +50,9 @@ final class SmartCubeManager: NSObject, ObservableObject {
     /// reports is applied here as it arrives. It is shown as soon as there is
     /// one: a child who has just connected a cube wants to see their cube, not
     /// be asked to solve it first.
-    @Published private(set) var cubeState: CubeState?
+    @Published private(set) var cubeState: CubeState? {
+        didSet { rememberTheCube() }
+    }
 
     /// Which side of the picture on screen each of the cube's own faces is on.
     ///
@@ -121,10 +123,8 @@ final class SmartCubeManager: NSObject, ObservableObject {
     /// Every turn, at every stage it passes through. See ``TurnLog``.
     @Published var turnLog = TurnLog()
 
-    /// Whether the log is being kept, and the child asked what they turned.
-    ///
-    /// Off by default and remembered, because it puts a question in front of a
-    /// five year old that is there for the grown-up's benefit, not theirs.
+    /// Whether the log is being kept. Off by default and remembered; it is for
+    /// a grown-up working out what went wrong, not for the child.
     @Published var isLogging: Bool = SmartCubeManager.wasLoggingLastTime {
         didSet { UserDefaults.standard.set(isLogging, forKey: Self.loggingKey) }
     }
@@ -196,20 +196,6 @@ final class SmartCubeManager: NSObject, ObservableObject {
     func logMoment(_ what: String, why: String) {
         guard isLogging else { return }
         turnLog.happened(what, why: why)
-    }
-
-    /// The child has said which colour side they turned.
-    func theyTurned(_ colour: CubeColour) {
-        guard let waiting = turnLog.waitingForAnAnswer else { return }
-        turnLog.theyTurned(colour, at: waiting.id)
-    }
-
-    /// How the picture on screen is painted, so the log can say whether the
-    /// side the child named is the side the app read.
-    func picture(_ centres: [Face: CubeColour]) {
-        var byColour: [CubeColour: Face] = [:]
-        for (face, colour) in centres { byColour[colour] = face }
-        turnLog.picturedAs = byColour
     }
 
     func clearTheLog() { turnLog.clear() }
@@ -287,14 +273,25 @@ final class SmartCubeManager: NSObject, ObservableObject {
     /// can be told about without looking at it, and the way back when its own
     /// idea of itself has drifted.
     func startFromSolved() {
-        if cubeState != .solved { theCubesOwnWordHolds = false }
         cubeState = .solved
-        // Where it is. Nothing else changes: what to call each of its faces
-        // comes from the colours on screen, and a solved cube has not moved
-        // any of them.
         positionIsTrustworthy = true
+        guard cubesOwnMemory != .solved else {
+            theCubesOwnWordHolds = true
+            note("Told it is solved right now, which the cube already knew")
+            return
+        }
+        // Tell the cube too. Before, only the app's copy was put right, and
+        // that copy is thrown away whenever the cube falls asleep or the app
+        // closes — at which point the cube's own wrong memory came straight
+        // back and "it's solved right now" had not stuck. Its word is not
+        // trusted again until it answers that it is solved.
+        theCubesOwnWordHolds = false
+        guard let generation else { return }
+        send(generation.resetToSolvedCommand)
+        isWaitingToHearTheResetTook = true
         lastMoveSerial = nil
-        note("Told it is solved right now")
+        requestState()
+        note("Told it is solved right now, and told the cube so too")
     }
 
     var isConnected: Bool { status.isConnected }
@@ -423,7 +420,11 @@ final class SmartCubeManager: NSObject, ObservableObject {
         peripheral = nil
         cipher = nil
         generation = nil
+        // Forgotten for this connection only: what was last saved is kept, so
+        // the same cube coming back can be picked up where it was left.
         cubeState = nil
+        cubesOwnMemory = nil
+        isWaitingToHearTheResetTook = false
         positionIsTrustworthy = false
         hasSeenPosition = false
         lastMoveSerial = nil
@@ -645,6 +646,7 @@ final class SmartCubeManager: NSObject, ObservableObject {
         if let state = cubeState {
             cubeState = state.applying(move)
         }
+        cubesOwnMemory = cubesOwnMemory?.applying(move)
         lastTurn = turn
         lastMove = move
         // Straight to the app, before the next turn is even looked at.
@@ -675,6 +677,54 @@ final class SmartCubeManager: NSObject, ObservableObject {
         requestState()
     }
 
+    /// What the cube itself remembers about where its pieces are.
+    ///
+    /// Usually the same as the app's copy. Not after the camera has corrected
+    /// it, or the child has said it is solved and the cube did not take being
+    /// told — and then keeping both is what lets the corrected copy survive
+    /// the cube falling asleep, or the app being closed: when the same cube
+    /// comes back still remembering the same thing, the app knows exactly
+    /// what its own copy was. See ``pickUpWhereItLeftOff(reported:)``.
+    private var cubesOwnMemory: CubeState? {
+        didSet { rememberTheCube() }
+    }
+
+    /// Asked the cube to reset itself to solved, and waiting to hear it did.
+    private var isWaitingToHearTheResetTook = false
+
+    private static let lastSeenKey = "NoobCube.cubeLastSeen"
+
+    /// Put the app's copy and the cube's own memory away, for next time.
+    private func rememberTheCube() {
+        guard let id = peripheral?.identifier.uuidString,
+              let copy = cubeState, let memory = cubesOwnMemory else { return }
+        UserDefaults.standard.set(["cube": id, "copy": copy.notation, "memory": memory.notation],
+                                  forKey: Self.lastSeenKey)
+    }
+
+    /// The cube has just said where it is, for the first time since connecting.
+    ///
+    /// Take its word — unless this is the same cube the app last saw, still
+    /// remembering exactly what it remembered then, and the app had a better
+    /// copy than its memory. Then nothing has happened to it in the meantime,
+    /// and the better copy is right: a picture taken, or "it's solved right
+    /// now", holds across the cube falling asleep and the app being closed.
+    private func pickUpWhereItLeftOff(reported state: CubeState) {
+        cubesOwnMemory = state
+        if let saved = UserDefaults.standard.dictionary(forKey: Self.lastSeenKey) as? [String: String],
+           saved["cube"] == peripheral?.identifier.uuidString,
+           saved["memory"] == state.notation,
+           let copy = saved["copy"].flatMap(CubeState.init(notation:)), copy != state {
+            cubeState = copy
+            theCubesOwnWordHolds = false
+            positionIsTrustworthy = true
+            note("Picked up where you left off; the cube's own memory is still out")
+            return
+        }
+        cubeState = state
+        theCubesOwnWordHolds = true
+    }
+
     /// Whether the app's copy of the cube came from the cube itself.
     ///
     /// Usually it did, and then the cube's word on where it is beats any tally.
@@ -693,13 +743,11 @@ final class SmartCubeManager: NSObject, ObservableObject {
             // on top of one, and disagreeing with it quietly is exactly what
             // let a misread turn go unnoticed for a whole solve.
             if cubeState == nil {
-                cubeState = state
-                theCubesOwnWordHolds = true
+                pickUpWhereItLeftOff(reported: state)
                 if let serial { lastMoveSerial = serial & 0xFF }
                 lineUpFromTheLastPicture()
                 return
             }
-            guard theCubesOwnWordHolds else { return }
             // Only a report of where the cube is *now*. It is asked after every
             // turn, and a child turning quickly can make another before the
             // answer arrives — an answer from before that turn is out of date,
@@ -708,8 +756,38 @@ final class SmartCubeManager: NSObject, ObservableObject {
             if let serial, let last = lastMoveSerial {
                 let ahead = ((serial & 0xFF) - last) & 0xFF
                 guard ahead < 128 else { return }
-                lastMoveSerial = serial & 0xFF
             }
+            if let serial { lastMoveSerial = serial & 0xFF }
+
+            // The answer to "you are solved — are you?"
+            if isWaitingToHearTheResetTook {
+                isWaitingToHearTheResetTook = false
+                cubesOwnMemory = state
+                if state == .solved {
+                    theCubesOwnWordHolds = true
+                    note("The cube now remembers it is solved")
+                } else {
+                    note("The cube did not take being told it is solved; "
+                         + "the app will remember for it")
+                }
+                return
+            }
+
+            guard theCubesOwnWordHolds else {
+                // Its memory is known to be out, so its word is not taken. It is
+                // still followed, though: if it differs from what the app thinks
+                // the cube remembers by exactly one turn, that is a turn the app
+                // missed, and the same turn is due on the app's own copy.
+                if let memory = cubesOwnMemory, memory != state, let copy = cubeState,
+                   let missed = Move.between(memory, and: state) {
+                    note("Caught a turn that went missing: \(missed.notation)")
+                    cubeState = copy.applying(missed)
+                    onPositionCorrected?()
+                }
+                cubesOwnMemory = state
+                return
+            }
+            cubesOwnMemory = state
             if cubeState != state {
                 note("Cube says it is somewhere else; taking its word for it")
                 cubeState = state
@@ -832,6 +910,10 @@ extension SmartCubeManager: CBCentralManagerDelegate {
                                     error: Error?) {
         Task { @MainActor in
             self.cubeState = nil
+            self.cubesOwnMemory = nil
+            self.isWaitingToHearTheResetTook = false
+            self.hasSeenPosition = false
+            self.lastMoveSerial = nil
             self.positionIsTrustworthy = false
             self.forgetTheDialect()
             self.status = .idle
