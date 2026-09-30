@@ -65,6 +65,10 @@
 		1468E2D688936AB64CF9A772 = {isa = PBXBuildFile; fileRef = CA3EE2F22E32BB92F3F5CD3A; };
 		2320F2242D12638A36EB7E3B = {isa = PBXBuildFile; fileRef = B32DD064F3876B8FBC27CE18; };
 		26B63D2185FFA07D8022F734 = {isa = PBXBuildFile; fileRef = 78F2B7FEAF73E8FC537F4A3C; };
+		573B677DAD0A79826ECDD248 = {isa = PBXBuildFile; fileRef = 1C05E1F811BC6C8C003B6130; };
+		20C9CF667BF24D142D4E9780 = {isa = PBXBuildFile; fileRef = 8DC06BA8E1F31251F54526B8; };
+		3E27CF73CE39ED8F1B20D4F1 = {isa = PBXBuildFile; fileRef = D2B75F6F4B6BC9322187AA04; };
+		BC675298A66B2CBC1FC4B45D = {isa = PBXBuildFile; fileRef = 190E94B4999D61DB5B7D2A1B; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -139,6 +143,10 @@
 		CA3EE2F22E32BB92F3F5CD3A = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HoldGuideView.swift"; sourceTree = "<group>"; };
 		B32DD064F3876B8FBC27CE18 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SideEditorView.swift"; sourceTree = "<group>"; };
 		78F2B7FEAF73E8FC537F4A3C = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CubeEditor3DView.swift"; sourceTree = "<group>"; };
+		1C05E1F811BC6C8C003B6130 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LastLayer.swift"; sourceTree = "<group>"; };
+		8DC06BA8E1F31251F54526B8 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PairsSolver.swift"; sourceTree = "<group>"; };
+		D2B75F6F4B6BC9322187AA04 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SolveMethod.swift"; sourceTree = "<group>"; };
+		190E94B4999D61DB5B7D2A1B = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PairsSolverTests.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -175,6 +183,7 @@
 		378DAF2D8D6091BC8133B2DD /* NoobCubeTests */ = {
 			isa = PBXGroup;
 			children = (
+				190E94B4999D61DB5B7D2A1B,
 				8C6A370C2C039FE042165B06,
 				F0212F177FA7DCB719AFA6AF /* CubeEngineTests.swift */,
 				A6BF8EA82D22B0FDD53C446C /* ScanTests.swift */,
@@ -229,6 +238,9 @@
 		9C2EE410B2373AE697E5D9C5 /* Solver */ = {
 			isa = PBXGroup;
 			children = (
+				D2B75F6F4B6BC9322187AA04,
+				8DC06BA8E1F31251F54526B8,
+				1C05E1F811BC6C8C003B6130,
 				FEB931EE64270630A7A91C1F /* BeginnerSolver.swift */,
 				63CF2DD836F6350EEB95E633 /* SolvePlan.swift */,
 			);
@@ -406,6 +418,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				3E27CF73CE39ED8F1B20D4F1,
+				20C9CF667BF24D142D4E9780,
+				573B677DAD0A79826ECDD248,
 				26B63D2185FFA07D8022F734,
 				2320F2242D12638A36EB7E3B,
 				1468E2D688936AB64CF9A772,
@@ -465,6 +480,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BC675298A66B2CBC1FC4B45D,
 				F2A8C50DEB7497C3CED9E40B,
 				F611560A4F0168608B4E8F2E /* CubeEngineTests.swift in Sources */,
 				FC51A77DFFF24D651AB4DB32 /* ScanTests.swift in Sources */,

@@ -30,6 +30,7 @@ final class Narrator: NSObject, ObservableObject {
         case retakeSide, restartScan
         case headerCamera, headerHome, headerRepeat, headerMute
         case slower
+        case methodBeginner, methodFaster, methodSpeedcuber
     }
 
     /// One sentence of an explanation, and the button it is about, if any.

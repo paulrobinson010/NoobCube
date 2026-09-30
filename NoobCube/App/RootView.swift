@@ -78,11 +78,14 @@ struct WelcomeView: View {
             // Gives way on a small phone, now there can be three buttons under
             // it: a fixed 300 points pushed the last of them off the screen.
             CubeSceneView(controller: model.scene)
-                .frame(minHeight: 150, maxHeight: 300)
+                .frame(minHeight: 110, maxHeight: 300)
                 .layoutPriority(1)
                 .onAppear { model.scene.startIdleSpin() }
 
             Spacer(minLength: 0)
+
+            MethodPicker(model: model)
+                .padding(.horizontal, 20)
 
             VStack(spacing: 12) {
                 // A solve they left part way through comes first, so going home
@@ -141,6 +144,63 @@ struct WelcomeView: View {
                               model.startScanning()
                           },
                           onCalibrateSolved: { model.smartCubeIsSolved() })
+        }
+    }
+}
+
+/// Beginner, Faster or Speedcuber, side by side: a walking figure, a hare and
+/// a lightning bolt, so the choice can be made from the pictures alone.
+struct MethodPicker: View {
+    @ObservedObject var model: AppModel
+
+    var body: some View {
+        HStack(spacing: 10) {
+            ForEach(SolveMethod.allCases, id: \.self) { method in
+                let chosen = method == model.method
+                Button {
+                    model.choose(method)
+                } label: {
+                    VStack(spacing: 4) {
+                        Image(systemName: method.symbol)
+                            .font(.system(size: 22, weight: .bold))
+                        Text(method.title)
+                            .font(.brand(size: 16, weight: .bold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                    }
+                    .foregroundStyle(chosen ? Theme.action.readableText : Theme.muted)
+                    .frame(maxWidth: .infinity, minHeight: Theme.minimumTapTarget)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(chosen ? Theme.action : Theme.card)
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(method.title): \(method.subtitle)")
+                .accessibilityAddTraits(chosen ? .isSelected : [])
+                .pointedAt(method.button, by: model.narrator)
+            }
+        }
+    }
+}
+
+extension SolveMethod {
+
+    /// The picture on its button.
+    var symbol: String {
+        switch self {
+        case .beginner:   return "figure.walk"
+        case .faster:     return "hare.fill"
+        case .speedcuber: return "bolt.fill"
+        }
+    }
+
+    /// Its button, for the voice to point at.
+    var button: Narrator.ButtonName {
+        switch self {
+        case .beginner:   return .methodBeginner
+        case .faster:     return .methodFaster
+        case .speedcuber: return .methodSpeedcuber
         }
     }
 }

@@ -61,6 +61,23 @@ yellow face on purpose, leaving the fish shape again, and doing the fish from
 there brings the face back with two corners traded over. Solves average about
 156 moves.
 
+### Faster and Speedcuber
+
+Chosen on the home screen (a walking figure, a hare and a lightning bolt), and
+remembered. Both make the white cross straight onto the bottom, then fill the
+first two layers a corner-and-edge pair at a time: the gap is turned to the
+front right, and a short search in U, R and F puts both pieces in without
+disturbing anything already done. Then the top:
+
+| | looks | algorithms | average moves |
+|---|---|---|---|
+| Faster | yellow cross, yellow face, corners, edges | 13 (line, hook, 7 OCLL, T and Y perms, 4 edge perms) | about 74 |
+| Speedcuber | OLL, PLL | 78 (all 57 OLL, all 21 PLL) | about 61 |
+
+Face turns only — no wide or slice turns — so a smart cube can follow every
+move. Every algorithm is checked by the engine in
+`Tools/CubeReference/last_layer.py` against all 62,208 possible last layers.
+
 ## Building it
 
 Open `NoobCube.xcodeproj` and run on a device. The camera and Bluetooth both
@@ -193,6 +210,8 @@ position:
 
 ```
 cd Tools/CubeReference && python3 test_solver.py 3000
+cd Tools/CubeReference && python3 test_advanced.py 2000   # Faster and Speedcuber
+cd Tools/CubeReference && python3 last_layer.py           # every last-layer algorithm
 ```
 
 That reference is the oracle the Swift is ported from. If you change a solver

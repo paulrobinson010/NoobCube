@@ -75,7 +75,7 @@ final class AppModel: ObservableObject {
             // A re-scan part way through is just a fresh plan from where the
             // cube actually is. Stages already finished come back empty, so the
             // child is never sent back over work they have done.
-            let plan = try BeginnerSolver.solve(state, whiteFace: whiteFace)
+            let plan = try method.solve(state, whiteFace: whiteFace)
             let fresh = SolveSession(plan: plan, scan: finishedScan,
                                      scene: scene, narrator: narrator)
             follow(fresh)
@@ -144,6 +144,9 @@ final class AppModel: ObservableObject {
                            ? "To use your smart cube, press the button with the cube on it."
                            : "If you have a smart cube, press the button with the cube on it.",
                            pointingAt: .smartCube))
+        parts.append(.init("We're solving it the \(method.title) way. To pick a different way, "
+                           + "press one of the three buttons in a row.",
+                           pointingAt: method.button))
         narrator.explain(parts)
     }
 
@@ -174,6 +177,34 @@ final class AppModel: ObservableObject {
     /// on from there. Nil when there is nothing to carry on with.
     @Published private(set) var pausedOn: Screen?
 
+    // MARK: - How to solve it
+
+    /// Beginner, Faster or Speedcuber: chosen on the home screen, and used for
+    /// every cube from then on. Remembered between launches, unlike the mute —
+    /// a child who has moved on to a faster way should not be sent back to the
+    /// daisy every morning.
+    @Published private(set) var method: SolveMethod = AppModel.savedMethod
+
+    private static let methodKey = "NoobCube.method"
+
+    private static var savedMethod: SolveMethod {
+        UserDefaults.standard.string(forKey: methodKey).flatMap(SolveMethod.init(rawValue:)) ?? .beginner
+    }
+
+    func choose(_ chosen: SolveMethod) {
+        narrator.explain([.init(chosen.spoken, pointingAt: chosen.button)])
+        guard chosen != method else { return }
+        method = chosen
+        UserDefaults.standard.set(chosen.rawValue, forKey: Self.methodKey)
+        smartCube.logMoment("solving the \(chosen.title) way", why: "they picked it on the home screen")
+    }
+
+    /// A plan the chosen way, from a cube as the picture shows it.
+    private func planTheChosenWay(from picture: ScannedCube) -> SolvePlan? {
+        guard let now = try? picture.cubeState() else { return nil }
+        return try? method.solve(now.state, whiteFace: now.whiteFace)
+    }
+
     /// Whether there is a solve to go back to.
     var canCarryOn: Bool { pausedOn != nil && session != nil }
 
@@ -199,6 +230,28 @@ final class AppModel: ObservableObject {
         smartCube.logMoment("carried on", why: "they came back from the home screen")
         scene.stopIdleSpin()
         scene.reset(to: session.displayCube.colours)
+
+        // They picked a different way while they were home: the rest of the
+        // solve is worked out again that way, from where the cube is now.
+        if session.plan.method != method, let plan = planTheChosenWay(from: session.displayCube) {
+            smartCube.logMoment("new plan, the \(method.title) way, \(plan.moveCount) moves",
+                                why: "they changed the way to solve it on the home screen")
+            if paused == .ready {
+                let fresh = SolveSession(plan: plan, scan: session.displayCube,
+                                         scene: scene, narrator: narrator)
+                follow(fresh)
+                self.session = fresh
+                fresh.cubeIsFollowing = smartCube.isFollowing
+                screen = .ready
+                return
+            }
+            screen = paused
+            session.cubeIsFollowing = smartCube.isFollowing
+            session.replacePlan(plan, scan: session.displayCube,
+                                because: "they chose the \(method.title) way")
+            holdThePictureToTheCube()
+            return
+        }
         screen = paused
         guard paused == .solving else { return }
         session.cubeIsFollowing = smartCube.isFollowing
@@ -425,7 +478,7 @@ final class AppModel: ObservableObject {
         let scanned = held.painted(cubeState)
         let whiteFace = scanned.face(withCentre: .white) ?? .D
         do {
-            let plan = try BeginnerSolver.solve(state, whiteFace: whiteFace)
+            let plan = try session.plan.method.solve(state, whiteFace: whiteFace)
             scan = scanned
             session.replacePlan(plan, scan: scanned,
                                 because: "worked out again from where the cube says it is, "
@@ -499,7 +552,7 @@ final class AppModel: ObservableObject {
         let scanned = held.painted(state)
         let whiteFace = scanned.face(withCentre: .white) ?? .D
         do {
-            let plan = try BeginnerSolver.solve(asTheyHoldIt, whiteFace: whiteFace)
+            let plan = try method.solve(asTheyHoldIt, whiteFace: whiteFace)
             scan = scanned
             smartCube.lineUp(withPictureShowing: scanned.centres)
             let fresh = SolveSession(plan: plan, scan: scanned, scene: scene, narrator: narrator)

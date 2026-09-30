@@ -223,7 +223,7 @@ final class SolveSession: ObservableObject {
         return Array(stage.moves.dropFirst(moveIndex))
     }
 
-    var totalStages: Int { SolveStage.Kind.totalNumbered }
+    var totalStages: Int { plan.method.numbered.count }
 
     /// "Step 3 of 8", or nothing while the cube is still being lined up.
     var stageLabel: String? {
@@ -370,7 +370,12 @@ final class SolveSession: ObservableObject {
     /// A piece has just gone where it belongs.
     private func celebratePlacing(_ step: SolveStep) {
         let piece = name(of: step)
-        let whereTo = stage?.kind == .daisy ? "is on the daisy" : "is in its place"
+        let whereTo: String
+        switch stage?.kind {
+        case .daisy: whereTo = "is on the daisy"
+        case .pairs: whereTo = "and its edge are in their place"
+        default: whereTo = "is in its place"
+        }
         let cheer = nextPraise()
         sayFirst.append("\(cheer) \(piece.sentenceCased) \(whereTo).")
         celebrate(cheer, detail: "\(piece.sentenceCased) \(whereTo)", big: false,
@@ -390,6 +395,12 @@ final class SolveSession: ObservableObject {
         case .yellowFace: done = "The whole top is yellow"
         case .lastCorners: done = "All the corners are home"
         case .lastEdges: done = "Every piece is home"
+        case .cross: done = "That's the white cross done"
+        case .pairs: done = "That's the first two layers done"
+        case .topCross: done = "That's the yellow cross"
+        case .topFace, .oll: done = "The whole top is yellow"
+        case .topCorners: done = "The top corners are all in order"
+        case .topEdges, .pll: done = "Every piece is home"
         }
         sayFirst.append("\(nextPraise()) \(done)!")
         celebrate("\(done)!", detail: stageLabel.map { "\($0) finished" }, big: true)
@@ -1112,7 +1123,7 @@ final class SolveSession: ObservableObject {
     /// finished come back empty.
     private func hasGotPast(_ kind: SolveStage.Kind) -> Bool {
         guard let now = try? displayCube.cubeState(),
-              let ahead = try? BeginnerSolver.solve(now.state, whiteFace: now.whiteFace)
+              let ahead = try? plan.method.solve(now.state, whiteFace: now.whiteFace)
         else { return false }
         guard let reached = ahead.stages.first(where: { !$0.steps.isEmpty })?.kind else {
             return true     // nothing left at all: solved
@@ -1166,7 +1177,7 @@ final class SolveSession: ObservableObject {
         // solver thinks it is being handed.
         guard !move.isWholeCubeTurn, let current = stage?.kind else { return nil }
         guard let after = try? displayCube.applying(move).cubeState(),
-              let ahead = try? BeginnerSolver.solve(after.state, whiteFace: after.whiteFace),
+              let ahead = try? plan.method.solve(after.state, whiteFace: after.whiteFace),
               let reached = ahead.stages.first(where: { !$0.steps.isEmpty })?.kind,
               reached.howFarThrough < current.howFarThrough else { return nil }
         return reached.whatItTakesApart

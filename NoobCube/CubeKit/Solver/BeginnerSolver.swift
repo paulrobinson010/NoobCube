@@ -50,7 +50,7 @@ enum BeginnerSolver {
     /// between them any three edges go home in a single go.
     static let edgeSwapBack = Move.parse("F2 U' R' L F2 L' R U' F2")
 
-    private static let topTurns: [[Move]] = [
+    static let topTurns: [[Move]] = [
         [],
         [Move(.U, .clockwise)],
         [Move(.U, .half)],
@@ -60,7 +60,7 @@ enum BeginnerSolver {
     /// A U turn carries a top-layer piece R -> F -> L -> B -> R; a y rotation
     /// brings the R face round to the front. Both were checked against the
     /// move engine rather than assumed.
-    private static let sideStep: [Face: Face] = [.R: .F, .F: .L, .L: .B, .B: .R]
+    static let sideStep: [Face: Face] = [.R: .F, .F: .L, .L: .B, .B: .R]
 
     // MARK: - Entry point
 
@@ -143,7 +143,7 @@ enum BeginnerSolver {
     ///
     /// It is split into the steps the child actually sees at the end, because
     /// only then is it known what the lining up turned out to consist of.
-    private struct Draft {
+    struct Draft {
         var piece: Set<Face>?
         var home: Set<Face>?
         /// The words for each kind of positioning. Each one is only ever shown
@@ -160,7 +160,7 @@ enum BeginnerSolver {
     }
 
     /// Builds the plan: stages, each a list of drafts.
-    private final class Builder {
+    final class Builder {
         var state: CubeState
         private(set) var kinds: [SolveStage.Kind] = []
         private(set) var drafts: [[Draft]] = []
@@ -353,7 +353,7 @@ enum BeginnerSolver {
     /// Everything is worked out by replaying the solve from the beginning,
     /// because a square's position, the name of a face, and what is sitting in
     /// the way are all facts about a particular moment.
-    private static func assemble(_ builder: Builder, from start: CubeState) -> [SolveStage] {
+    static func assemble(_ builder: Builder, from start: CubeState) -> [SolveStage] {
         var stages: [SolveStage] = []
         var state = start
 
@@ -414,7 +414,7 @@ enum BeginnerSolver {
 
     // MARK: - Turning helpers
 
-    private static func steps(from start: Face, to goal: Face) -> Int? {
+    static func steps(from start: Face, to goal: Face) -> Int? {
         var face = start
         for count in 0..<4 {
             if face == goal { return count }
@@ -425,12 +425,12 @@ enum BeginnerSolver {
     }
 
     /// Top turns that carry a top-layer piece from above `from` to above `to`.
-    private static func topTurn(from: Face, to: Face) -> [Move] {
+    static func topTurn(from: Face, to: Face) -> [Move] {
         guard let count = steps(from: from, to: to) else { return [] }
         return topTurns[count]
     }
 
-    private static let yTurns: [[Move]] = [
+    static let yTurns: [[Move]] = [
         [],
         [Move(.y, .clockwise)],
         [Move(.y, .half)],
@@ -438,13 +438,13 @@ enum BeginnerSolver {
     ]
 
     /// Whole-cube turns that bring `face` round to the front.
-    private static func turnToFront(_ face: Face) -> [Move] {
+    static func turnToFront(_ face: Face) -> [Move] {
         guard let count = steps(from: face, to: .F) else { return [] }
         return yTurns[count]
     }
 
     /// Whole-cube turns that bring the slot spanning `pair` to the front-right.
-    private static func turnToFrontRight(_ pair: [Face]) -> [Move] {
+    static func turnToFrontRight(_ pair: [Face]) -> [Move] {
         var current = Set(pair)
         let goal: Set<Face> = [.F, .R]
         for count in 0..<4 {
@@ -454,7 +454,7 @@ enum BeginnerSolver {
         return []
     }
 
-    private static func rotationBringingWhiteDown(from face: Face) -> [Move] {
+    static func rotationBringingWhiteDown(from face: Face) -> [Move] {
         switch face {
         case .D: return []
         case .U: return [Move(.x, .half)]
@@ -928,11 +928,11 @@ enum BeginnerSolver {
         return pairs.isEmpty ? true : pairs.contains(.L)
     }
 
-    private static func solvedIgnoringTopTurn(_ state: CubeState) -> Bool {
+    static func solvedIgnoringTopTurn(_ state: CubeState) -> Bool {
         topTurns.contains { state.applying($0).isSolved }
     }
 
-    private static func finalTopTurn(_ state: CubeState) -> [Move] {
+    static func finalTopTurn(_ state: CubeState) -> [Move] {
         topTurns.first { state.applying($0).isSolved } ?? []
     }
 

@@ -50,7 +50,7 @@ struct SolveStep: Identifiable, Hashable, Sendable {
     var isEmpty: Bool { moves.isEmpty }
 }
 
-/// One step of the beginner method: a goal to reach and the moves that reach it.
+/// One step of a method: a goal to reach and the moves that reach it.
 struct SolveStage: Identifiable, Hashable, Sendable {
 
     enum Kind: String, CaseIterable, Codable, Hashable, Sendable {
@@ -64,9 +64,20 @@ struct SolveStage: Identifiable, Hashable, Sendable {
         case lastCorners
         case lastEdges
 
+        // The faster methods. Each method only ever uses its own stages, so
+        // declaring these after the beginner ones keeps every method's order.
+        case cross
+        case pairs
+        case topCross
+        case topFace
+        case topCorners
+        case topEdges
+        case oll
+        case pll
+
         /// How far through a solve this stage is. The cases are declared in the
-        /// order they are done, so comparing these says whether a cube has gone
-        /// forwards or backwards.
+        /// order they are done, so comparing two stages of the same method says
+        /// whether a cube has gone forwards or backwards.
         var howFarThrough: Int { Self.allCases.firstIndex(of: self) ?? 0 }
 
         /// What a child would see come apart if a cube went back this far,
@@ -74,12 +85,13 @@ struct SolveStage: Identifiable, Hashable, Sendable {
         var whatItTakesApart: String {
             switch self {
             case .hold, .daisy: return "daisy"
-            case .whiteCross: return "white cross"
+            case .whiteCross, .cross: return "white cross"
             case .whiteCorners: return "white side"
             case .middleRow: return "middle row"
-            case .yellowCross: return "yellow cross"
-            case .yellowFace: return "yellow top"
-            case .lastCorners, .lastEdges: return "last layer"
+            case .pairs: return "first two layers"
+            case .yellowCross, .topCross: return "yellow cross"
+            case .yellowFace, .topFace, .oll: return "yellow top"
+            case .lastCorners, .lastEdges, .topCorners, .topEdges, .pll: return "last layer"
             }
         }
     }
@@ -121,6 +133,14 @@ extension SolveStage.Kind {
         case .yellowFace:   return "Make the whole yellow face"
         case .lastCorners:  return "Send the corners home"
         case .lastEdges:    return "Send the last pieces home"
+        case .cross:        return "Make the white cross"
+        case .pairs:        return "Fill the first two layers"
+        case .topCross:     return "Make the yellow cross"
+        case .topFace:      return "Make the whole yellow face"
+        case .topCorners:   return "Put the top corners in order"
+        case .topEdges:     return "Put the top edges in order"
+        case .oll:          return "Make the top yellow in one go"
+        case .pll:          return "Finish the top in one go"
         }
     }
 
@@ -145,6 +165,22 @@ extension SolveStage.Kind {
             return "Move the top corners around until each one is in the right place."
         case .lastEdges:
             return "Slide the last edges around and the cube is finished."
+        case .cross:
+            return "Put the four white edges straight onto the bottom, one at a time, each under the middle that matches it. No daisy this time."
+        case .pairs:
+            return "Find a white corner and the edge that goes beside it. Turn the cube so their gap is at the front right, join them up on top, and drop them in together."
+        case .topCross:
+            return "Make a yellow plus sign on top. A line or a hook of yellow tells you which move to do. A dot takes both."
+        case .topFace:
+            return "Look at the shape the yellow corners make. There are seven shapes, and each one has its own move that turns the whole top yellow."
+        case .topCorners:
+            return "Look for two corners on one side that match. If you find them, it's the T-perm. If not, it's the Y-perm."
+        case .topEdges:
+            return "The corners are right, so only the edges move now. Three edges going round is a U-perm, all four is an H or a Z."
+        case .oll:
+            return "Spot which of the 57 shapes the yellow on top makes, and do its move. The whole top goes yellow at once."
+        case .pll:
+            return "Spot which of the 21 swaps the top needs, and do its move. The whole cube is finished at once."
         }
     }
 
@@ -160,6 +196,14 @@ extension SolveStage.Kind {
         case .yellowFace:   return "Yellow face"
         case .lastCorners:  return "Corners home"
         case .lastEdges:    return "Finished!"
+        case .cross:        return "White cross"
+        case .pairs:        return "Two layers"
+        case .topCross:     return "Yellow cross"
+        case .topFace:      return "Yellow face"
+        case .topCorners:   return "Top corners"
+        case .topEdges:     return "Finished!"
+        case .oll:          return "Yellow top"
+        case .pll:          return "Finished!"
         }
     }
 
@@ -184,6 +228,22 @@ extension SolveStage.Kind {
             return "The corners go to their proper homes. Going back to the fish breaks the yellow face on purpose, and doing the fish again brings it straight back with two corners swapped."
         case .lastEdges:
             return "The last four pieces slide into place and the cube is done."
+        case .cross:
+            return "Building the cross where it belongs saves the whole daisy step, and you learn to see pieces without turning them to the top first."
+        case .pairs:
+            return "A corner and its edge go in together, so two layers get done in four goes instead of eight."
+        case .topCross:
+            return "The first of four looks at the top. Only two moves to learn."
+        case .topFace:
+            return "The second look. Seven moves, and you'll soon know them by their shapes."
+        case .topCorners:
+            return "The third look. Get the corners right first, then the edges are easy."
+        case .topEdges:
+            return "The last look, and the cube is done."
+        case .oll:
+            return "This is how speedcubers do it: one look, one move, whole top yellow."
+        case .pll:
+            return "One look, one move, and the cube is finished."
         }
     }
 
@@ -196,6 +256,10 @@ extension SolveStage.Kind {
         case .yellowFace:   return ("the fish", "R U R' U R U2 R'")
         case .lastCorners:  return ("back to the fish", "L' U R U' L U R'")
         case .lastEdges:    return ("the edge swap", "F2 U R' L F2 L' R U F2")
+        case .topCross:     return ("the line", "F R U R' U' F'")
+        case .topFace:      return ("Sune", "R U R' U R U2 R'")
+        case .topCorners:   return ("the T-perm", "R U R' U' R' F R2 U' R' U' R U R' F'")
+        case .topEdges:     return ("the Ua-perm", "R U' R U R U R U' R' U' R2")
         default:            return nil
         }
     }
@@ -206,22 +270,21 @@ extension SolveStage.Kind {
     /// The number the child sees on the checklist and hears spoken aloud.
     ///
     /// Holding the cube the right way up is how you start rather than a step
-    /// you tick off, so it has no number, and the eight that follow are the
-    /// eight the website lists. One number, everywhere.
+    /// you tick off, so it has no number, and for the beginner method the eight
+    /// that follow are the eight the website lists. One number, everywhere.
+    /// A stage the faster methods share has the same number in both.
     var number: Int? {
-        SolveStage.Kind.numbered.firstIndex(of: self).map { $0 + 1 }
+        let method = SolveMethod.allCases.first { $0.stages.contains(self) } ?? .beginner
+        return method.numbered.firstIndex(of: self).map { $0 + 1 }
     }
-
-    /// The stages that get a number, in order.
-    static var numbered: [SolveStage.Kind] { allCases.filter { $0 != .hold } }
-
-    static var totalNumbered: Int { numbered.count }
 }
 
 /// A complete route from a scanned cube to a solved one.
 struct SolvePlan: Sendable {
     let start: CubeState
     var stages: [SolveStage]
+    /// Which method worked it out, so a re-plan keeps to the same one.
+    var method: SolveMethod = .beginner
 
     var allMoves: [Move] { stages.flatMap(\.moves) }
     var moveCount: Int { allMoves.count }

@@ -50,10 +50,13 @@ def stages_from_swift() -> list[tuple[str, str]]:
     """
     source = PLAN.read_text()
 
-    enum = re.search(r"enum Kind[^{]*\{(.*?)\n    \}", source, re.S)
-    if not enum:
-        raise SystemExit("could not find SolveStage.Kind in SolvePlan.swift")
-    order = re.findall(r"case (\w+)", enum.group(1))
+    # The beginner method's stages: the eight the website lists. The faster
+    # methods borrow their colours from these (see StageTint.swift).
+    methods = (PLAN.parent / "SolveMethod.swift").read_text()
+    beginner = re.search(r"case \.beginner:\s*return \[(.*?)\]", methods, re.S)
+    if not beginner:
+        raise SystemExit("could not find the beginner stages in SolveMethod.swift")
+    order = re.findall(r"\.(\w+)", beginner.group(1))
 
     block = re.search(r"var shortName: String \{(.*?)\n    \}", source, re.S)
     if not block:
@@ -272,6 +275,7 @@ def stage_tint_swift(t: dict, stages: list[tuple[str, str]]) -> str:
         else:
             value = f"Theme.{tint}"
         lines.append(f"        case .{case}:".ljust(width + 14) + f"return {value}")
+    lines.append("        default:".ljust(width + 14) + "return beginnerTwin.tint")
     lines.append("        }")
     return "\n".join(lines)
 

@@ -56,7 +56,7 @@ final class SolverTests: XCTestCase {
         var generator = SeededGenerator(seed: 5)
         let start = CubeState.solved.applying(randomScramble(using: &generator))
         let plan = try BeginnerSolver.solve(start)
-        XCTAssertEqual(plan.stages.map(\.kind), SolveStage.Kind.allCases)
+        XCTAssertEqual(plan.stages.map(\.kind), SolveMethod.beginner.stages)
     }
 
     /// The child re-scans part way through, so every stage must be a no-op once

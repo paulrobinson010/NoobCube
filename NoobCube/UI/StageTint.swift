@@ -19,7 +19,26 @@ extension SolveStage.Kind {
         case .yellowFace:   return CubeColour.yellow.swiftUIColor
         case .lastCorners:  return CubeColour.orange.swiftUIColor
         case .lastEdges:    return CubeColour.green.swiftUIColor
+        default:            return beginnerTwin.tint
         }
         // END generated
+    }
+}
+
+extension SolveStage.Kind {
+
+    /// The beginner stage that does the same job, whose colour a faster
+    /// method's stage is shown in: the white cross is white whichever way you
+    /// make it, and the last layer is the last layer.
+    var beginnerTwin: SolveStage.Kind {
+        switch self {
+        case .cross:                return .whiteCross
+        case .pairs:                return .middleRow
+        case .topCross:             return .yellowCross
+        case .topFace, .oll:        return .yellowFace
+        case .topCorners:           return .lastCorners
+        case .topEdges, .pll:       return .lastEdges
+        default:                    return SolveMethod.beginner.stages.contains(self) ? self : .hold
+        }
     }
 }
