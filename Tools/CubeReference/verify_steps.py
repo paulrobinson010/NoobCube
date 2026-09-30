@@ -53,13 +53,13 @@ def scramble(rng, length=25):
     return moves
 
 
-def check(trials=600, seed=11):
+def check(trials=600, seed=11, solve=solver.solve):
     rng = random.Random(seed)
     counts = {'steps': 0, 'with piece': 0, 'progressed': 0, 'no progress': 0,
               'arrows': 0}
     for trial in range(trials):
         start = cube.apply(cube.SOLVED, scramble(rng))
-        sv = solver.solve(start)
+        sv = solve(start)
 
         state = start
         for stage in sv.stages:

@@ -22,3 +22,16 @@ rotates both. That makes the 54-element permutations impossible to mistype, and
 it is verified against known algorithm identities (T-perm and Y-perm are
 involutions, sune has order 6, the 20-move superflip reaches a geometrically
 constructed superflip, and so on).
+
+## The faster methods
+
+`advanced.py` solves the cross straight onto the bottom and then the first two
+layers a corner-and-edge pair at a time (a short search in U, R and F with the
+gap turned to the front right), then the last layer from `last_layer.py`:
+four looks for Faster (13 algorithms), two for Speedcuber (all 57 OLL and 21
+PLL). Face turns only, so a smart cube can follow all of it.
+
+```
+python3 last_layer.py        # every algorithm, against all 62,208 last layers
+python3 test_advanced.py 2000
+```
