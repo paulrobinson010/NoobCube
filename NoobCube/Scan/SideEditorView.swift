@@ -112,8 +112,14 @@ struct SideEditorView: View {
                 .fill(colour?.swiftUIColor ?? Color.white.opacity(0.15))
                 .frame(width: size, height: size)
                 .overlay {
-                    if coordinator.doubtful.contains(index) { DoubtMark(size: size) }
+                    if coordinator.doubtful.contains(index) {
+                        DoubtMark(size: size)
+                    } else if coordinator.justWorkedOut.contains(index) {
+                        WorkedOutMark(size: size)
+                    }
                 }
+                .animation(.spring(response: 0.3, dampingFraction: 0.7),
+                           value: coordinator.justWorkedOut.contains(index))
                 .overlay {
                     // The middle is not a guess: the side was asked for by it.
                     if isMiddle {

@@ -244,6 +244,8 @@ final class ScanCoordinator: ObservableObject {
         paintedByHand = [:]
         isTakingAnyAgain = false
         doubtful = []
+        lastReading = nil
+        justWorkedOut = []
         show(ScannedCube())
         lookAtSide = [:]
         lastSide = nil
@@ -563,8 +565,20 @@ final class ScanCoordinator: ObservableObject {
         for (face, look) in lookAtSide {
             for offset in 0..<9 { arranged[face.rawValue * 9 + offset] = look[offset] }
         }
-        let (candidate, fit) = bestReading(
-            ColourClassifier.priced(arranged, expectedCentres: expected), expecting: expected)
+        let priced = ColourClassifier.priced(arranged, expectedCentres: expected)
+        let reading = bestReading(priced, expecting: expected)
+        let (fit, turns) = (reading.fit, reading.turns)
+        var candidate = reading.cube
+        // Kept, so squares painted by hand can be read again with the rest.
+        lastReading = (priced, turns)
+        // Squares painted while the scan was still going are right too, and
+        // the pieces around them follow.
+        if !paintedByHand.isEmpty {
+            let settled = ColourClassifier.settle(Self.turning(priced, turns),
+                                                  painted: paintedByHand,
+                                                  expectedCentres: expected)
+            candidate = ScannedCube(colours: settled.colours.map { Optional($0) })
+        }
 
         show(candidate)
         isComplete = true
@@ -638,11 +652,12 @@ final class ScanCoordinator: ObservableObject {
     /// 0 of 40 right to 33, and two from 0 to 22.
     private func bestReading(_ priced: ColourClassifier.Priced,
                              expecting expected: [Face: CubeColour])
-    -> (cube: ScannedCube, fit: Double) {
+    -> (cube: ScannedCube, fit: Double, turns: [Face: Int]) {
         var sides: [Face: Int] = [:]
         let first = bestTopAndBottom(priced, sides: sides, expecting: expected)
         guard var found = first.found else {
-            return first.straight ?? (cube: ScannedCube(), fit: .greatestFiniteMagnitude)
+            let straight = first.straight ?? (cube: ScannedCube(), fit: .greatestFiniteMagnitude)
+            return (straight.cube, straight.fit, [:])
         }
 
         for _ in 0..<2 {
@@ -673,7 +688,10 @@ final class ScanCoordinator: ObservableObject {
             }
             if !changed { break }
         }
-        return (found.cube, found.fit)
+        var turns = sides
+        turns[.U] = found.top
+        turns[.D] = found.bottom
+        return (found.cube, found.fit, turns)
     }
 
     /// The top and bottom tried every way round, with the sides turned as given.
@@ -730,9 +748,45 @@ final class ScanCoordinator: ObservableObject {
     func setSticker(at index: Int, to colour: CubeColour) {
         guard index >= 0, index < 54, index % 9 != 4 else { return }
         paintedByHand[index] = colour
-        show(scan)
+        guard isComplete, let reading = lastReading else {
+            show(scan)
+            return revalidate()
+        }
+
+        // Every painted square is right, above anything the camera saw — and
+        // a cube is made of whole pieces, so a square that is known says things
+        // about the squares around it. Read the whole cube again with the
+        // painted ones locked, and let the pieces fill in what they must.
+        let before = scan
+        var expected: [Face: CubeColour] = [:]
+        for step in Self.steps { expected[step.face] = Self.colour(for: step.face) }
+        let settled = ColourClassifier.settle(Self.turning(reading.priced, reading.turns),
+                                              painted: paintedByHand,
+                                              expectedCentres: expected)
+        show(ScannedCube(colours: settled.colours.map { Optional($0) }))
         revalidate()
+
+        // Say so when it has worked something out, and show where.
+        let workedOut = Set((0..<54).filter {
+            $0 != index && $0 % 9 != 4 && before[$0] != scan[$0]
+        })
+        guard !workedOut.isEmpty else { return }
+        justWorkedOut = workedOut
+        narrator.say(workedOut.count == 1
+                     ? "That tells me one more square too."
+                     : "That tells me \(workedOut.count) more squares too.")
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 2_500_000_000)
+            if self?.justWorkedOut == workedOut { self?.justWorkedOut = [] }
+        }
     }
+
+    /// The camera's reading, priced, and which way round each side was read —
+    /// all a painted square needs to have the cube read again around it.
+    private var lastReading: (priced: ColourClassifier.Priced, turns: [Face: Int])?
+
+    /// Squares just worked out from one painted by hand, shown for a moment.
+    @Published private(set) var justWorkedOut: Set<Int> = []
 
     /// Squares that are probably wrong, when the cube does not add up.
     @Published private(set) var doubtful: Set<Int> = []

@@ -31,6 +31,8 @@ struct CubeNetView: View {
     var onTapSticker: ((Int) -> Void)? = nil
     /// Squares the app thinks are probably wrong, marked so they can be found.
     var doubtful: Set<Int> = []
+    /// Squares just worked out from one painted by hand, shown for a moment.
+    var workedOut: Set<Int> = []
 
     /// Where each face sits in the 4 x 3 grid of face-sized cells.
     private static let layout: [(face: Face, column: Int, row: Int)] = [
@@ -98,12 +100,34 @@ struct CubeNetView: View {
             )
             .frame(width: size - inset * 2, height: size - inset * 2)
             .overlay {
-                if doubtful.contains(index) { DoubtMark(size: size - inset * 2) }
+                if doubtful.contains(index) {
+                    DoubtMark(size: size - inset * 2)
+                } else if workedOut.contains(index) {
+                    WorkedOutMark(size: size - inset * 2)
+                }
             }
             .contentShape(Rectangle())
             .onTapGesture { if !isMiddle { onTapSticker?(index) } }
             .animation(.easeOut(duration: 0.25), value: colour)
             .accessibilityLabel(colour.map { "\($0.displayName) square" } ?? "Not seen yet")
+    }
+}
+
+/// A green ring and a sparkle: "I worked this one out from yours".
+struct WorkedOutMark: View {
+    let size: CGFloat
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: size * 0.2, style: .continuous)
+                .strokeBorder(Theme.done, lineWidth: max(2, size * 0.1))
+            Image(systemName: "sparkles")
+                .font(.system(size: size * 0.45, weight: .black))
+                .foregroundStyle(.black.opacity(0.55))
+        }
+        .transition(.scale.combined(with: .opacity))
+        .allowsHitTesting(false)
+        .accessibilityLabel("Worked out from the square you painted")
     }
 }
 

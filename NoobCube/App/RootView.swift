@@ -37,6 +37,7 @@ struct RootView: View {
                               narrator: model.narrator,
                               onRescan: { model.rescan() },
                               onFinish: { model.finishSolve() },
+                              onSolveAgain: { model.solveAgain() },
                               onHome: { model.goHome() })
                         .transition(.opacity)
                 }

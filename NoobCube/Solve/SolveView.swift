@@ -7,6 +7,8 @@ struct SolveView: View {
     /// Tapping "look at my cube again" hands back to the camera.
     var onRescan: () -> Void
     var onFinish: () -> Void
+    /// With a smart cube: straight into a new solve from where it is now.
+    var onSolveAgain: () -> Void
     var onHome: () -> Void
 
     @State private var showingSteps = false
@@ -259,8 +261,14 @@ struct SolveView: View {
         switch session.phase {
         case .finished:
             VStack(spacing: 12) {
-                Button { onFinish() } label: {
-                    Label("Play again", systemImage: "arrow.counterclockwise")
+                // With a smart cube there is no camera to go back to: mix it
+                // up, and it goes again from wherever the cube says it is.
+                Button {
+                    session.cubeIsFollowing ? onSolveAgain() : onFinish()
+                } label: {
+                    Label(session.cubeIsFollowing ? "Solve it again" : "Play again",
+                          systemImage: session.cubeIsFollowing ? "play.fill"
+                                                               : "arrow.counterclockwise")
                 }
                 .buttonStyle(BigButtonStyle(tint: Theme.done))
                 .pointedAt(.playAgain, by: narrator)

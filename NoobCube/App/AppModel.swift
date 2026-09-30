@@ -147,6 +147,27 @@ final class AppModel: ObservableObject {
         narrator.explain(parts)
     }
 
+    /// "Solve it again", after solving with a smart cube.
+    ///
+    /// The cube says where it is, so there is nothing to show the camera and
+    /// no reason to go home first. Still solved, it asks for a mix-up first
+    /// rather than starting a solve with nothing in it.
+    func solveAgain() {
+        guard smartCube.isFollowing, let state = smartCube.cubeState else { return finishSolve() }
+        guard !state.isSolved else {
+            narrator.explain([
+                .init("Mix your cube up first. Turn it lots of different ways."),
+                .init("Then press the green button again.", pointingAt: .playAgain),
+            ])
+            return
+        }
+        smartCube.logMoment("solving again", why: "they mixed it up and asked to go again")
+        // A fresh start the usual way round — green facing them, yellow on
+        // top — rather than however the last solve left the picture turned.
+        smartCube.lineUp(withPictureShowing: CubeAlignment.asTheChildIsAskedToHoldIt.pictureCentres)
+        startFromSmartCube()
+    }
+
     // MARK: - Going home part way
 
     /// Where they were when they went home part way through, so they can carry

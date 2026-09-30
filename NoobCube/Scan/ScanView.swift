@@ -41,7 +41,8 @@ struct ScanView: View {
                                   coordinator.canEdit(face) else { return }
                             editing = EditedSide(face: face)
                         },
-                        doubtful: coordinator.doubtful)
+                        doubtful: coordinator.doubtful,
+                        workedOut: coordinator.justWorkedOut)
                 .pointedAt(.scanMap, by: narrator)
 
             if coordinator.scannedFaceCount > 0 {

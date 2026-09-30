@@ -272,6 +272,9 @@ final class SolveSession: ObservableObject {
         narrator.explain([Narrator.Part(whole)] + choices)
     }
 
+    /// Whether "mixing it up again?" has been said since the solve finished.
+    private var hasSaidMixingItUp = false
+
     /// Whether the Next button has been explained yet this solve. Once is
     /// enough: it is the same button for every move after.
     private var hasExplainedNext = false
@@ -749,7 +752,10 @@ final class SolveSession: ObservableObject {
             celebrate("You solved it!", detail: "The whole cube", big: true)
             sayFirst = []
             explain("You did it! The whole cube is finished. Well done!", choices: [
-                .init("To solve another one, press the green button.", pointingAt: .playAgain),
+                .init(cubeIsFollowing
+                      ? "To go again, mix your cube up, then press the green button."
+                      : "To solve another one, press the green button.",
+                      pointingAt: .playAgain),
             ])
             onSolved?()
             return
@@ -933,6 +939,23 @@ final class SolveSession: ObservableObject {
             lastReaction = "queued: something was still animating"
             waitingTurns.append(move)
             return
+        }
+
+        // Solved, and now being picked up or mixed up again. That is neither a
+        // mistake nor a solve to work out: the first turn used to find no move
+        // on screen, decide the cube was lost, and start a whole new solve from
+        // one turn off solved — with every turn after it "not that one". Now
+        // the turns are drawn, and a new solve waits for them to ask.
+        if phase == .finished {
+            lastReaction = "turned after solving — drawn, nothing more"
+            if !hasSaidMixingItUp {
+                hasSaidMixingItUp = true
+                explain("Mixing it up again?", choices: [
+                    .init("When you're ready, press the green button, and I'll help you "
+                          + "solve it again.", pointingAt: .playAgain),
+                ])
+            }
+            return playTheirTurn(move) {}
         }
 
         // Doing the stage themselves. Every turn used to be held against the

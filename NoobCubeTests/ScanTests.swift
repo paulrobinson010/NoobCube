@@ -808,3 +808,52 @@ final class DoubtfulSquareTests: XCTestCase {
         XCTAssertLessThanOrEqual(doubtful.count, 6, "only a piece or two, not the whole cube")
     }
 }
+
+/// A square painted by hand is right, and the pieces around it follow.
+final class PaintedSquareTests: XCTestCase {
+
+    private func scrambledColours(using generator: inout SeededGenerator) -> [CubeColour] {
+        let layout = CubeColourScheme.scanningLayout
+        let state = CubeState.solved.applying(randomScramble(using: &generator))
+        return state.facelets.map { layout[$0] ?? .white }
+    }
+
+    private func perfectReading(_ colours: [CubeColour]) -> ColourClassifier.Priced {
+        let samples = colours.map { colour -> RGBSample in
+            let (red, green, blue) = colour.rgb
+            return RGBSample(red: red, green: green, blue: blue)
+        }
+        return ColourClassifier.priced(samples, expectedCentres: CubeColourScheme.scanningLayout)
+    }
+
+    /// Painting a square its own colour on a good reading changes nothing.
+    func testPaintingWhatIsThereChangesNothing() {
+        var generator = SeededGenerator(seed: 41)
+        let truth = scrambledColours(using: &generator)
+        let index = CubeSlots.edges[3].indices[0]
+        let settled = ColourClassifier.settle(perfectReading(truth), painted: [index: truth[index]],
+                                              expectedCentres: CubeColourScheme.scanningLayout)
+        XCTAssertEqual(settled.colours, truth)
+    }
+
+    /// Paint one square of a corner a different colour: that square takes it,
+    /// and the whole corner becomes a corner that exists with that colour in
+    /// that place — the rest of the piece is worked out, not left behind.
+    func testTheRestOfAPaintedPieceFollows() {
+        var generator = SeededGenerator(seed: 7)
+        let truth = scrambledColours(using: &generator)
+        let centres = CubeColourScheme.scanningLayout
+        let real = Set(CubeSlots.corners.map { Set($0.faces.compactMap { centres[$0] }) })
+
+        let corner = CubeSlots.corners[2]
+        let index = corner.indices[0]
+        let other = CubeColour.allCases.first { colour in
+            colour != truth[index] && real.contains { $0.contains(colour) }
+        }!
+        let settled = ColourClassifier.settle(perfectReading(truth), painted: [index: other],
+                                              expectedCentres: centres)
+        XCTAssertEqual(settled.colours[index], other, "the painted square keeps its paint")
+        let piece = Set(corner.indices.map { settled.colours[$0] })
+        XCTAssertTrue(real.contains(piece), "and its corner is one a cube really has")
+    }
+}

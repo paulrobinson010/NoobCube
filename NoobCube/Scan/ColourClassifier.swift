@@ -434,6 +434,41 @@ enum ColourClassifier {
             prices[sticker * 6 + colour.ordinal]
         }
 
+        /// The same scan with some squares painted by hand, taken as right.
+        ///
+        /// A painted square is ruled out as any colour but its own, above
+        /// anything the camera saw, and settling fits whole pieces — so the
+        /// rest of each painted piece follows, and so does every piece that can
+        /// now only go somewhere else.
+        ///
+        /// Gently, its own colour is free. Firmly, it is *owed*: pieces are
+        /// handed out cheapest first, so a painted square that is merely free
+        /// can find every piece with its colour already given to slots the
+        /// camera was sure of, and be ignored; owed, its slot is filled before
+        /// anything else. Gently reads better — firmly sometimes hands the slot
+        /// a piece that only shares the colour — so ``settle(_:painted:
+        /// expectedCentres:)`` tries gently first and insists only when it has
+        /// to. Measured in `Tools/CubeReference/painted_squares.py`: of the
+        /// scans that come out wrong, painting one square puts about two in five
+        /// completely right, and nearly all need fewer taps than they have
+        /// wrong squares.
+        func locking(_ painted: [Int: CubeColour], firmly: Bool = false) -> Priced {
+            guard !painted.isEmpty else { return self }
+            var prices = self.prices
+            for (index, colour) in painted where index >= 0 && index < 54 {
+                for other in CubeColour.allCases {
+                    prices[index * 6 + other.ordinal] = other == colour
+                        ? (firmly ? -Self.ruledOut : 0)
+                        : Self.ruledOut
+                }
+            }
+            return Priced(samples: samples, prices: prices)
+        }
+
+        /// The price of a colour a painted square is not: dearer than any
+        /// reading could ever make a real one.
+        static let ruledOut = 1_000.0
+
         /// The same scan with one face's stickers turned on the spot.
         func turning(_ face: Face, quarterTurns: Int) -> Priced {
             let turns = ((quarterTurns % 4) + 4) % 4
@@ -514,6 +549,15 @@ enum ColourClassifier {
     /// again past ten. Set in the middle of the flat part rather than on the
     /// exact best, which is a feature of one synthetic camera and not of rooms.
     private static let fixedReferenceShare = 4.0
+
+    /// Settle a scan with squares painted by hand, which it always honours:
+    /// gently if that is enough, firmly if not. See ``Priced/locking(_:firmly:)``.
+    static func settle(_ priced: Priced, painted: [Int: CubeColour],
+                       expectedCentres: [Face: CubeColour] = [:]) -> Settled {
+        let gently = settle(priced.locking(painted), expectedCentres: expectedCentres)
+        if painted.allSatisfy({ gently.colours[$0.key] == $0.value }) { return gently }
+        return settle(priced.locking(painted, firmly: true), expectedCentres: expectedCentres)
+    }
 
     static func settle(_ priced: Priced,
                        expectedCentres: [Face: CubeColour] = [:]) -> Settled {
