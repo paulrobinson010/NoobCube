@@ -69,6 +69,8 @@
 		20C9CF667BF24D142D4E9780 = {isa = PBXBuildFile; fileRef = 8DC06BA8E1F31251F54526B8; };
 		3E27CF73CE39ED8F1B20D4F1 = {isa = PBXBuildFile; fileRef = D2B75F6F4B6BC9322187AA04; };
 		BC675298A66B2CBC1FC4B45D = {isa = PBXBuildFile; fileRef = 190E94B4999D61DB5B7D2A1B; };
+		9CF60CB9319A4AD2B925EB2B = {isa = PBXBuildFile; fileRef = CFA4CAC8AB3872F56A3777FA; };
+		598206EC363FA8597D91F262 = {isa = PBXBuildFile; fileRef = D0D9502971E136A4FCCC98AB; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -147,6 +149,8 @@
 		8DC06BA8E1F31251F54526B8 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PairsSolver.swift"; sourceTree = "<group>"; };
 		D2B75F6F4B6BC9322187AA04 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SolveMethod.swift"; sourceTree = "<group>"; };
 		190E94B4999D61DB5B7D2A1B = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PairsSolverTests.swift"; sourceTree = "<group>"; };
+		CFA4CAC8AB3872F56A3777FA = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "VoiceCommands.swift"; sourceTree = "<group>"; };
+		D0D9502971E136A4FCCC98AB = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "VoiceCommandTests.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -183,6 +187,7 @@
 		378DAF2D8D6091BC8133B2DD /* NoobCubeTests */ = {
 			isa = PBXGroup;
 			children = (
+				D0D9502971E136A4FCCC98AB,
 				190E94B4999D61DB5B7D2A1B,
 				8C6A370C2C039FE042165B06,
 				F0212F177FA7DCB719AFA6AF /* CubeEngineTests.swift */,
@@ -318,6 +323,7 @@
 		EE7AB7FF32DB44C2FEC3F1BE /* App */ = {
 			isa = PBXGroup;
 			children = (
+				CFA4CAC8AB3872F56A3777FA,
 				A3E2E8C27005A4BAE0777660 /* AppModel.swift */,
 				7D5A45F0E6DCBAF7B49C6C04 /* Narrator.swift */,
 				B16CC27BCF1F5035FD2F10B9 /* NoobCubeApp.swift */,
@@ -418,6 +424,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				9CF60CB9319A4AD2B925EB2B,
 				3E27CF73CE39ED8F1B20D4F1,
 				20C9CF667BF24D142D4E9780,
 				573B677DAD0A79826ECDD248,
@@ -480,6 +487,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				598206EC363FA8597D91F262,
 				BC675298A66B2CBC1FC4B45D,
 				F2A8C50DEB7497C3CED9E40B,
 				F611560A4F0168608B4E8F2E /* CubeEngineTests.swift in Sources */,

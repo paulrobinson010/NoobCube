@@ -31,6 +31,7 @@ final class Narrator: NSObject, ObservableObject {
         case headerCamera, headerHome, headerRepeat, headerMute
         case slower
         case methodBeginner, methodFaster, methodSpeedcuber
+        case headerMicrophone
     }
 
     /// One sentence of an explanation, and the button it is about, if any.
@@ -142,18 +143,53 @@ final class Narrator: NSObject, ObservableObject {
         }
     }
 
+    // MARK: - Hearing itself
+
+    private var wordsNow: Set<String> = []
+    private var wordsJustSaid: Set<String> = []
+    private var finishedSpeakingAt = Date.distantPast
+
+    /// Whether a word the microphone picked up could be this voice, heard
+    /// back through the loudspeaker: it is being said now, or was in the
+    /// sentence that has only just finished. The recogniser runs a little
+    /// behind the sound, hence the second or so of grace.
+    ///
+    /// Any of the spellings counts: the voice saying "next" can come back
+    /// written down as "necks" just as a child's can.
+    func mightHaveJustSaid(anyOf spellings: Set<String>) -> Bool {
+        if !wordsNow.isDisjoint(with: spellings) { return true }
+        return Date().timeIntervalSince(finishedSpeakingAt) < 1.5
+            && !wordsJustSaid.isDisjoint(with: spellings)
+    }
+
+    private static func words(in sentence: String) -> Set<String> {
+        Set(sentence.split(whereSeparator: { !$0.isLetter }).map { VoiceCommand.normalised(String($0)) })
+    }
+
     private func stopPointing() {
         buttonFor = [:]
+        if speakingNow != nil {
+            // Cut off part way: what was being said is still in the air.
+            wordsJustSaid = wordsNow
+            finishedSpeakingAt = Date()
+        }
+        wordsNow = []
         speakingNow = nil
         pointingAt = nil
     }
 
-    fileprivate func started(_ utterance: ObjectIdentifier) {
+    fileprivate func started(_ utterance: ObjectIdentifier, saying words: String) {
         speakingNow = utterance
         pointingAt = buttonFor[utterance]
+        wordsNow = Self.words(in: words)
     }
 
     fileprivate func ended(_ utterance: ObjectIdentifier) {
+        if speakingNow == utterance {
+            wordsJustSaid = wordsNow
+            wordsNow = []
+            finishedSpeakingAt = Date()
+        }
         buttonFor[utterance] = nil
         guard speakingNow == utterance else { return }
         speakingNow = nil
@@ -170,10 +206,26 @@ final class Narrator: NSObject, ObservableObject {
     }
 
     private func configureAudioSession() {
+        AppAudio.configure(listening: false)
+    }
+}
+
+/// The one place the app's sound is set up, for the voice and, when voice
+/// commands are on, the microphone.
+enum AppAudio {
+    static func configure(listening: Bool) {
         // Mix with anything else playing and duck it, rather than stopping it.
         let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.playback, mode: .spokenAudio,
-                                 options: [.duckOthers, .mixWithOthers])
+        if listening {
+            // Recording as well, with the voice still out of the loudspeaker
+            // rather than the earpiece.
+            try? session.setCategory(.playAndRecord, mode: .default,
+                                     options: [.defaultToSpeaker, .allowBluetoothA2DP,
+                                               .duckOthers, .mixWithOthers])
+        } else {
+            try? session.setCategory(.playback, mode: .spokenAudio,
+                                     options: [.duckOthers, .mixWithOthers])
+        }
         try? session.setActive(true)
     }
 }
@@ -182,7 +234,8 @@ extension Narrator: AVSpeechSynthesizerDelegate {
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer,
                                        didStart utterance: AVSpeechUtterance) {
         let id = ObjectIdentifier(utterance)
-        Task { @MainActor in self.started(id) }
+        let words = utterance.speechString
+        Task { @MainActor in self.started(id, saying: words) }
     }
 
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer,

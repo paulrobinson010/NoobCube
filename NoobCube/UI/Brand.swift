@@ -45,6 +45,9 @@ struct ScreenHeader: View {
     /// Back to the start. Every screen past the welcome needs one, or there is
     /// no way out but force-quitting.
     var onHome: (() -> Void)? = nil
+    /// Listening for "next" and "back", on the solve screen.
+    var voice: VoiceCommands? = nil
+    var onMicrophone: (() -> Void)? = nil
 
     var body: some View {
         // One row when the title fits beside the buttons, and a row of its own
@@ -121,8 +124,31 @@ struct ScreenHeader: View {
                 .accessibilityLabel("Back to the start")
             }
 
+            if let voice, let onMicrophone {
+                MicrophoneButton(voice: voice, narrator: narrator, action: onMicrophone)
+            }
+
             NarratorControls(narrator: narrator)
         }
+    }
+}
+
+/// On: a green microphone. Off: a grey one with a line through it.
+private struct MicrophoneButton: View {
+    @ObservedObject var voice: VoiceCommands
+    @ObservedObject var narrator: Narrator
+    let action: () -> Void
+
+    private var isOn: Bool { voice.state == .listening }
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: isOn ? "mic.circle.fill" : "mic.slash.circle.fill")
+                .font(.system(size: 34))
+                .foregroundStyle(isOn ? Theme.done : Theme.muted)
+        }
+        .pointedAt(.headerMicrophone, by: narrator, small: true)
+        .accessibilityLabel(isOn ? "Stop listening" : "Listen for next and back")
     }
 }
 

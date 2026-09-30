@@ -35,6 +35,9 @@ struct RootView: View {
                 if let session = model.session {
                     SolveView(session: session,
                               narrator: model.narrator,
+                              voice: model.voice,
+                              onToggleListening: { model.toggleListening() },
+                              onShowing: { model.solveScreenIsShowing($0) },
                               onRescan: { model.rescan() },
                               onFinish: { model.finishSolve() },
                               onSolveAgain: { model.solveAgain() },

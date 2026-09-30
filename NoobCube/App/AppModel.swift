@@ -26,6 +26,8 @@ final class AppModel: ObservableObject {
     }
 
     let narrator = Narrator()
+    /// "Next" and "back", said instead of pressed.
+    let voice = VoiceCommands()
     let scene = CubeSceneController()
     let camera = CameraController()
     let smartCube: SmartCubeManager
@@ -42,6 +44,55 @@ final class AppModel: ObservableObject {
         // have to reach views observing this model.
         smartCubeStatusObserver = smartCube.objectWillChange.sink { [weak self] _ in
             self?.objectWillChange.send()
+        }
+        listenForCommands()
+    }
+
+    // MARK: - Saying "next"
+
+    private func listenForCommands() {
+        voice.isOwnVoice = { [weak self] command in
+            self?.narrator.mightHaveJustSaid(anyOf: command.spellings) ?? false
+        }
+        voice.onCommand = { [weak self] command, word in
+            guard let self, self.screen == .solving, let session = self.session else { return false }
+            let did = session.heard(command)
+            self.smartCube.logMoment("heard \"\(word)\"",
+                                     why: did ? "said instead of pressed" : "nothing to do with it just then")
+            return did
+        }
+    }
+
+    /// The microphone button on the solve screen.
+    func toggleListening() {
+        Task { @MainActor in
+            let wasOn = voice.isWanted
+            if !wasOn, voice.needsToAsk {
+                narrator.say("I need to ask if I can listen. Ask a grown-up to press Allow.")
+            }
+            await voice.toggle()
+            session?.isListening = voice.state == .listening
+            switch voice.state {
+            case .listening:
+                narrator.explain([.init("I'm listening. When you've done a move, say next. "
+                                        + "To go back one, say back.",
+                                        pointingAt: .headerMicrophone)])
+            case .notAllowed:
+                narrator.say("I'm not allowed to listen. A grown-up can turn on the microphone "
+                             + "and speech recognition for NoobCube in Settings.")
+            case .unavailable:
+                narrator.say("Listening doesn't work on this phone, so press the buttons instead.")
+            case .off:
+                if wasOn { narrator.say("I've stopped listening.") }
+            }
+        }
+    }
+
+    /// Listening only while the solve screen is up and the app is in front.
+    func solveScreenIsShowing(_ showing: Bool) {
+        Task { @MainActor in
+            await voice.screenIsShowing(showing)
+            session?.isListening = voice.state == .listening
         }
     }
 
@@ -270,6 +321,7 @@ final class AppModel: ObservableObject {
             self?.smartCube.logMoment(what, why: why)
         }
         session.onSettled = { [weak self] in self?.holdThePictureToTheCube() }
+        session.isListening = voice.state == .listening
     }
 
     // MARK: - The picture is the cube

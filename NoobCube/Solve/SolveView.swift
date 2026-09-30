@@ -4,6 +4,11 @@ import SwiftUI
 struct SolveView: View {
     @ObservedObject var session: SolveSession
     @ObservedObject var narrator: Narrator
+    /// Listening for "next" and "back".
+    @ObservedObject var voice: VoiceCommands
+    var onToggleListening: () -> Void
+    /// The screen came or went, or the app went into the background.
+    var onShowing: (Bool) -> Void
     /// Tapping "look at my cube again" hands back to the camera.
     var onRescan: () -> Void
     var onFinish: () -> Void
@@ -14,6 +19,7 @@ struct SolveView: View {
     @State private var showingSteps = false
     @State private var showingWhy = false
     @State private var algorithmCovered = false
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         VStack(spacing: 0) {
@@ -29,6 +35,8 @@ struct SolveView: View {
                 .padding(.vertical, 4)
                 .overlay(alignment: .bottomTrailing) { demoCorner }
                 .overlay(alignment: .top) { cheerBadge }
+                .overlay(alignment: .topLeading) { heardBadge }
+                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: voice.heard)
                 .animation(.spring(response: 0.4, dampingFraction: 0.6), value: session.cheer)
                 .layoutPriority(1)
 
@@ -68,7 +76,14 @@ struct SolveView: View {
                 .padding(.bottom, 10)
         }
         .background(Theme.background.ignoresSafeArea())
-        .onAppear { session.announceCurrentStep() }
+        .onAppear {
+            session.announceCurrentStep()
+            onShowing(true)
+        }
+        .onDisappear { onShowing(false) }
+        // Not on .inactive: the permission question makes the app inactive,
+        // and stopping then would switch it straight back off.
+        .onChange(of: scenePhase) { _, phase in onShowing(phase != .background) }
         .sheet(isPresented: $showingSteps) {
             StageChecklistSheet(stages: session.plan.stages,
                                 currentKind: session.stage?.kind)
@@ -82,6 +97,24 @@ struct SolveView: View {
     }
 
     // MARK: - Pieces
+
+    /// The word just heard, for a moment: proof the microphone is listening,
+    /// for a child who has just said "next" and wants to know it worked.
+    @ViewBuilder
+    private var heardBadge: some View {
+        if let word = voice.heard {
+            Label("\u{201C}\(word)\u{201D}", systemImage: "mic.fill")
+                .font(.brand(size: 18, weight: .heavy))
+                .foregroundStyle(Theme.ink)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(Capsule().fill(Theme.attention))
+                .padding(.leading, 20)
+                .padding(.top, 6)
+                .transition(.scale(scale: 0.5).combined(with: .opacity))
+                .accessibilityLabel("Heard \(word)")
+        }
+    }
 
     /// The fuss made when a piece goes home or a stage is done. It sits over
     /// the top of the cube, bounces in, and goes away by itself; nothing waits
@@ -145,7 +178,11 @@ struct SolveView: View {
                          subtitle: session.stageLabel,
                          narrator: narrator,
                          onRescan: onRescan,
-                         onHome: onHome)
+                         onHome: onHome,
+                         // A connected cube says what turned; there is
+                         // nothing to say "next" to.
+                         voice: session.cubeIsFollowing ? nil : voice,
+                         onMicrophone: onToggleListening)
 
             StageChecklistStrip(stages: session.plan.stages,
                                 currentKind: session.stage?.kind,

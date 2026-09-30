@@ -38,6 +38,10 @@
 	<false/>
 	<key>NSCameraUsageDescription</key>
 	<string>NoobCube uses the camera to look at your Rubik’s cube and work out what colour each sticker is.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>NoobCube listens for you to say “next” or “back”, so you can keep both hands on your cube.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>NoobCube listens for the words “next”, “done” and “back”, and does nothing with anything else it hears.</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>NoobCube connects to your smart cube over Bluetooth so it can follow along as you turn it.</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>

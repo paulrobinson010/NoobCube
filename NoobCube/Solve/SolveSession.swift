@@ -510,6 +510,13 @@ final class SolveSession: ObservableObject {
             choices.append(.init("The house takes you home, and you can carry on later.",
                                  pointingAt: .headerHome))
             choices.append(.init("And this one says it all again.", pointingAt: .headerRepeat))
+            if !cubeIsFollowing {
+                choices.append(isListening
+                    ? .init("I'm listening too: say next when you've done a move, or back "
+                            + "to go back one.", pointingAt: .headerMicrophone)
+                    : .init("Press the microphone, and you can say next instead of "
+                            + "pressing it.", pointingAt: .headerMicrophone))
+            }
         }
 
         if choices.isEmpty { say(words) } else { explain(words, choices: choices) }
@@ -517,6 +524,10 @@ final class SolveSession: ObservableObject {
 
     /// Whether the buttons along the top have been explained yet this solve.
     private var hasExplainedTheTop = false
+
+    /// Whether the microphone is listening for "next" and "back", so the
+    /// explanation of the top buttons says the right thing about it.
+    var isListening = false
 
     func announceCurrentStep() {
         if phase == .checkStage { return askWhetherItLooksRight() }
@@ -1245,6 +1256,47 @@ final class SolveSession: ObservableObject {
     ///
     /// Goes through the same door a real turn would, so being told about a step
     /// and getting on with it are not two taps.
+    /// "Next", "done" or "back", said instead of pressed.
+    ///
+    /// Exactly what the button on screen would do, and only when that button
+    /// is there to be pressed: a word heard at any other moment is ignored
+    /// rather than guessed at. Returns whether it did anything.
+    @discardableResult
+    func heard(_ command: VoiceCommand) -> Bool {
+        guard !isBusy, !isPlayingThrough else { return false }
+        switch (command, phase) {
+        case (.next, .checkStage):
+            // "Does your cube look like this?" — carrying on means yes.
+            cubeLooksRight()
+            return true
+        case (.next, .coaching):
+            switch help {
+            case .undecided:
+                return false
+            case .wholeStage:
+                declareStageDoneByHand()
+                return true
+            case .moveByMove:
+                switch prompt {
+                case .tapWhenDone where currentMove != nil:
+                    confirmCurrentMove()
+                    return true
+                case .turnTheWholeCube:
+                    confirmWholeCubeTurn()
+                    return true
+                default:
+                    return false
+                }
+            }
+        case (.back, .coaching):
+            guard canGoBack, prompt == .tapWhenDone else { return false }
+            goBackOneMove()
+            return true
+        default:
+            return false
+        }
+    }
+
     func confirmWholeCubeTurn() {
         guard !isBusy, currentMove?.isWholeCubeTurn == true else { return }
         confirmCurrentMove()
