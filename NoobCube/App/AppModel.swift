@@ -120,6 +120,25 @@ final class AppModel: ObservableObject {
         showWelcome()
     }
 
+    /// Say what the buttons on the home screen do, pointing at each.
+    func explainTheHomeScreen() {
+        var parts: [Narrator.Part] = [.init("Let's solve your cube together!")]
+        if canCarryOn {
+            parts.append(.init("To carry on where you left off, press the green play button.",
+                               pointingAt: .carryOn))
+            parts.append(.init("To start again with a new cube, press the camera button.",
+                               pointingAt: .showMeYourCube))
+        } else {
+            parts.append(.init("To show me your cube, press the blue camera button.",
+                               pointingAt: .showMeYourCube))
+        }
+        parts.append(.init(smartCube.isConnected
+                           ? "To use your smart cube, press the button with the cube on it."
+                           : "If you have a smart cube, press the button with the cube on it.",
+                           pointingAt: .smartCube))
+        narrator.explain(parts)
+    }
+
     // MARK: - Going home part way
 
     /// Where they were when they went home part way through, so they can carry

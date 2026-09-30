@@ -251,8 +251,11 @@ struct SolveView: View {
         switch session.phase {
         case .finished:
             VStack(spacing: 12) {
-                Button("Play again") { onFinish() }
-                    .buttonStyle(BigButtonStyle(tint: Theme.done))
+                Button { onFinish() } label: {
+                    Label("Play again", systemImage: "arrow.counterclockwise")
+                }
+                .buttonStyle(BigButtonStyle(tint: Theme.done))
+                .pointedAt(.playAgain, by: narrator)
             }
 
         case .offerRescan:
@@ -260,27 +263,39 @@ struct SolveView: View {
                 Text("Let me look at your cube again.")
                     .font(.brand(size: 18, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.9))
-                Button("Look at my cube") { onRescan() }
-                    .buttonStyle(BigButtonStyle())
-                Button("Keep going without looking") { session.skipToNextStage() }
-                    .buttonStyle(BigButtonStyle(tint: Theme.muted, isProminent: false))
+                Button { onRescan() } label: {
+                    Label("Look at my cube", systemImage: "camera.fill")
+                }
+                .buttonStyle(BigButtonStyle())
+                .pointedAt(.lookAgain, by: narrator)
+                Button { session.skipToNextStage() } label: {
+                    Label("Keep going without looking", systemImage: "arrow.right")
+                }
+                .buttonStyle(BigButtonStyle(tint: Theme.muted, isProminent: false))
+                .pointedAt(.keepGoing, by: narrator)
             }
 
         case .coaching:
             switch session.help {
             case .undecided:
                 VStack(spacing: 12) {
-                    Button("Show me each move") {
+                    Button {
                         session.help = .moveByMove
                         session.startStage(because: "they asked to be shown each move")
+                    } label: {
+                        Label("Show me each move", systemImage: "hand.point.up.left.fill")
                     }
                     .buttonStyle(BigButtonStyle())
+                    .pointedAt(.showEachMove, by: narrator)
 
-                    Button("I'll do this bit myself") {
+                    Button {
                         session.help = .wholeStage
                         session.announceStage()
+                    } label: {
+                        Label("I'll do this bit myself", systemImage: "star.fill")
                     }
                     .buttonStyle(BigButtonStyle(tint: Theme.done, isProminent: false))
+                    .pointedAt(.doItMyself, by: narrator)
                 }
 
             case .moveByMove:
@@ -306,14 +321,20 @@ struct SolveView: View {
                         MoveStripView(moves: stage.moves, currentIndex: -1)
                             .frame(height: 76)
                     }
-                    Button("I've done this bit") { session.declareStageDoneByHand() }
-                        .buttonStyle(BigButtonStyle(tint: Theme.done))
+                    Button { session.declareStageDoneByHand() } label: {
+                        Label("I've done this bit", systemImage: "checkmark")
+                    }
+                    .buttonStyle(BigButtonStyle(tint: Theme.done))
+                    .pointedAt(.doneThisBit, by: narrator)
 
-                    Button("Actually, show me each move") {
+                    Button {
                         session.help = .moveByMove
                         session.startStage(because: "they changed their mind mid-stage")
+                    } label: {
+                        Label("Actually, show me each move", systemImage: "hand.point.up.left.fill")
                     }
                     .buttonStyle(BigButtonStyle(isProminent: false))
+                    .pointedAt(.showMeAfterAll, by: narrator)
                 }
             }
         }
@@ -339,6 +360,7 @@ struct SolveView: View {
                 Label("I\u{2019}ve turned it", systemImage: "checkmark.circle.fill")
             }
             .buttonStyle(BigButtonStyle())
+            .pointedAt(.turnedIt, by: narrator)
             .disabled(session.isBusy)
         }
     }
@@ -458,6 +480,7 @@ struct SolveView: View {
             .buttonStyle(BigButtonStyle())
             .disabled(session.isBusy || session.currentMove == nil
                       || session.isPlayingThrough)
+            .pointedAt(.next, by: narrator)
 
             if session.canPlayThroughStep || session.isPlayingThrough {
                 Button {
@@ -473,6 +496,7 @@ struct SolveView: View {
                 }
                 .buttonStyle(BigButtonStyle(tint: Theme.done, isProminent: false))
                 .frame(width: Theme.minimumTapTarget + 16)
+                .pointedAt(.playThrough, by: narrator)
                 .accessibilityLabel(session.isPlayingThrough
                                     ? "Stop playing the moves"
                                     : "Play the rest of these moves")

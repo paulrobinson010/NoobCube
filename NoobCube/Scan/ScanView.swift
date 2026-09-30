@@ -41,6 +41,7 @@ struct ScanView: View {
                                   coordinator.canEdit(face) else { return }
                             editing = EditedSide(face: face)
                         })
+                .pointedAt(.scanMap, by: narrator)
 
             if coordinator.scannedFaceCount > 0 {
                 HStack(spacing: 10) {
@@ -266,12 +267,15 @@ struct ScanView: View {
                             .fill(Theme.card))
             }
 
-            Button("Yes, that's my cube!") {
+            Button {
                 if let result = coordinator.result {
                     onReady(result.state, result.whiteFace, coordinator.scan)
                 }
+            } label: {
+                Label("Yes, that's my cube!", systemImage: "checkmark")
             }
             .buttonStyle(BigButtonStyle(tint: Theme.done))
+            .pointedAt(.thatsMyCube, by: narrator)
             .disabled(coordinator.result == nil)
             .opacity(coordinator.result == nil ? 0.5 : 1)
 

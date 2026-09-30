@@ -42,7 +42,9 @@ struct SideEditorView: View {
 
                     whichWayUp
                     grid
+                        .pointedAt(.paintHere, by: coordinator.narrator)
                     palette
+                        .pointedAt(.palette, by: coordinator.narrator)
 
                     Button {
                         coordinator.retake(face)
@@ -55,6 +57,13 @@ struct SideEditorView: View {
                 .padding(20)
             }
             .background(Theme.background.ignoresSafeArea())
+            .onAppear {
+                coordinator.narrator.explain([
+                    .init("Tap a colour down here,", pointingAt: .palette),
+                    .init("then tap the squares that should be that colour.",
+                          pointingAt: .paintHere),
+                ])
+            }
             .navigationTitle("The \(ScanCoordinator.colour(for: face).spokenName) side")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

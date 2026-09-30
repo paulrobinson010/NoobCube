@@ -39,7 +39,11 @@ struct SmartCubeView: View {
                 }
             }
         }
-        .onAppear { manager.startScanning() }
+        .onAppear {
+            manager.startScanning()
+            explainIfThereIsAPicture()
+        }
+        .onChange(of: manager.hasSaidWhatItLooksLike) { _, _ in explainIfThereIsAPicture() }
         .onDisappear { manager.stopScanning() }
         .sheet(isPresented: $isChecking) { SmartCubeCheckView(manager: manager) }
         .sheet(isPresented: $isReadingTheLog) { TurnLogView(manager: manager) }
@@ -108,8 +112,11 @@ struct SmartCubeView: View {
 
                 CubeNetView(colours: colours, width: 260)
 
-                Button("Solve this") { onUseCube() }
-                    .buttonStyle(BigButtonStyle(tint: Theme.done))
+                Button { onUseCube() } label: {
+                    Label("Solve this", systemImage: "play.fill")
+                }
+                .buttonStyle(BigButtonStyle(tint: Theme.done))
+                .pointedAt(.solveThis, by: narrator)
 
                 // The cube knows which way it has been turned but not what
                 // colour anything is, so when its idea of itself is wrong the
@@ -122,9 +129,13 @@ struct SmartCubeView: View {
                     Label("My cube looks different", systemImage: "camera.fill")
                 }
                 .buttonStyle(BigButtonStyle())
+                .pointedAt(.looksDifferent, by: narrator)
 
-                Button("Or it's solved right now") { onCalibrateSolved() }
-                    .buttonStyle(BigButtonStyle(isProminent: false))
+                Button { onCalibrateSolved() } label: {
+                    Label("Or it's solved right now", systemImage: "checkmark.seal.fill")
+                }
+                .buttonStyle(BigButtonStyle(isProminent: false))
+                .pointedAt(.solvedNow, by: narrator)
 
                 Button("Check my turns") { isChecking = true }
                     .buttonStyle(BigButtonStyle(tint: Theme.muted, isProminent: false))
@@ -179,6 +190,21 @@ struct SmartCubeView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .cardBackground()
+    }
+
+    /// Once the cube's picture is up, say what each button does, pointing at
+    /// each one.
+    private func explainIfThereIsAPicture() {
+        guard manager.isConnected, manager.trackedColours != nil else { return }
+        narrator.explain([
+            .init("This is what your cube tells me it looks like."),
+            .init("If it looks like your cube, press the green play button.",
+                  pointingAt: .solveThis),
+            .init("If it looks different, press the blue camera button, and show me.",
+                  pointingAt: .looksDifferent),
+            .init("If your cube is solved right now, press the button with the tick.",
+                  pointingAt: .solvedNow),
+        ])
     }
 
     private var statusTitle: String {

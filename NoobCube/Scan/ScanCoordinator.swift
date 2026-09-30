@@ -140,7 +140,7 @@ final class ScanCoordinator: ObservableObject {
     private var announcedFace: Face?
 
     let camera: CameraController
-    private let narrator: Narrator
+    let narrator: Narrator
     /// The camera is its own observable object, so its changes are passed on
     /// here; otherwise the live squares and the steadiness ring never redraw.
     private var cameraObserver: AnyCancellable?
@@ -583,11 +583,20 @@ final class ScanCoordinator: ObservableObject {
             if let first = problems.first {
                 problem = inColours(first)
                 result = nil
-                narrator.say("Hmm, that doesn't look right. \(inColours(first))")
+                narrator.explain([
+                    .init("Hmm, that doesn't look right. \(inColours(first))"),
+                    .init("You can tap a side up here to fix its squares.", pointingAt: .scanMap),
+                ])
             } else {
                 problem = nil
                 result = converted
-                narrator.say("Got it! That's your whole cube.")
+                narrator.explain([
+                    .init("Got it! That's your whole cube."),
+                    .init("If it looks like your cube, press the green tick button.",
+                          pointingAt: .thatsMyCube),
+                    .init("If a square is wrong, tap that side up here to fix it.",
+                          pointingAt: .scanMap),
+                ])
             }
         } catch {
             problem = error.localizedDescription

@@ -254,6 +254,22 @@ final class SolveSession: ObservableObject {
         narrator.say(whole)
     }
 
+    /// Say something and then explain the buttons, pointing at each one as it
+    /// is talked about — so a child who cannot read the labels still knows
+    /// which to press.
+    private func explain(_ words: String, choices: [Narrator.Part]) {
+        let whole = (sayFirst + [words]).joined(separator: " ")
+        sayFirst = []
+        narrator.explain([Narrator.Part(whole)] + choices)
+    }
+
+    /// Whether the Next button has been explained yet this solve. Once is
+    /// enough: it is the same button for every move after.
+    private var hasExplainedNext = false
+
+    /// Whether the "I've turned it" button has been explained yet.
+    private var hasExplainedTurnedIt = false
+
     /// What a step is for, said as it begins.
     ///
     /// The solver has always written these — "turn the cube so that side is
@@ -389,7 +405,27 @@ final class SolveSession: ObservableObject {
         }
         let kind = stage.kind
         let opening = stageLabel.map { "\($0). " } ?? ""
-        say("\(opening)\(kind.title). \(kind.explanation)")
+        let intro = "\(opening)\(kind.title). \(kind.explanation)"
+        guard phase == .coaching else { return say(intro) }
+        switch help {
+        case .undecided:
+            explain(intro, choices: [
+                .init("To be shown every move, press the blue button with the hand.",
+                      pointingAt: .showEachMove),
+                .init("To try it yourself, press the green button with the star.",
+                      pointingAt: .doItMyself),
+            ])
+        case .wholeStage:
+            explain(intro, choices: [
+                .init("When you've done it, press the green tick button.",
+                      pointingAt: .doneThisBit),
+                .init("If you get stuck, press the button with the hand, "
+                      + "and I'll show you each move.",
+                      pointingAt: .showMeAfterAll),
+            ])
+        case .moveByMove:
+            say(intro)
+        }
     }
 
     /// Put the arrows back for wherever the solve has got to, without saying
@@ -414,7 +450,29 @@ final class SolveSession: ObservableObject {
         guard let move = currentMove else { return }
         let remaining = remainingMoves.count
         let tail = remaining == 1 ? " This is the last one for this step." : ""
-        say("\(move.spokenInstruction)\(tail)")
+        let words = "\(move.spokenInstruction)\(tail)"
+
+        // The first time a move needs a button pressing, say which button.
+        switch prompt {
+        case .tapWhenDone where !hasExplainedNext:
+            hasExplainedNext = true
+            var choices: [Narrator.Part] = [
+                .init("When you've done it, press the big blue Next button.", pointingAt: .next),
+            ]
+            if canPlayThroughStep {
+                choices.append(.init("Or press the green play button, and I'll show "
+                                     + "the moves one after another.",
+                                     pointingAt: .playThrough))
+            }
+            explain(words, choices: choices)
+        case .turnTheWholeCube where !hasExplainedTurnedIt:
+            hasExplainedTurnedIt = true
+            explain(words, choices: [
+                .init("When you've turned it, press the blue tick button.", pointingAt: .turnedIt),
+            ])
+        default:
+            say(words)
+        }
     }
 
     func announceCurrentStep() {
@@ -646,7 +704,9 @@ final class SolveSession: ObservableObject {
             phase = .finished
             celebrate("You solved it!", detail: "The whole cube", big: true)
             sayFirst = []
-            narrator.say("You did it! The whole cube is finished. Well done!")
+            explain("You did it! The whole cube is finished. Well done!", choices: [
+                .init("To solve another one, press the green button.", pointingAt: .playAgain),
+            ])
             onSolved?()
             return
         }
@@ -665,7 +725,11 @@ final class SolveSession: ObservableObject {
     func declareStageDoneByHand() {
         logMoment?("offering a re-scan", "they said they did the stage themselves")
         phase = .offerRescan
-        narrator.say("Great. Let me look at your cube again to see how you got on.")
+        explain("Great! Let me look at your cube again to see how you got on.", choices: [
+            .init("To show me your cube, press the blue camera button.", pointingAt: .lookAgain),
+            .init("To keep going without looking, press the grey arrow button.",
+                  pointingAt: .keepGoing),
+        ])
     }
 
     func skipToNextStage() {

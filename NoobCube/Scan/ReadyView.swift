@@ -36,8 +36,11 @@ struct ReadyView: View {
 
             Spacer(minLength: 0)
 
-            Button("Let's solve it!") { onStart() }
+            Button { onStart() } label: {
+                Label("Let's solve it!", systemImage: "play.fill")
+            }
                 .buttonStyle(BigButtonStyle(tint: Theme.done))
+                .pointedAt(.startSolving, by: narrator)
                 .padding(.horizontal, 20)
                 .padding(.bottom, 18)
                 .opacity(hasFolded ? 1 : 0.4)
@@ -83,9 +86,12 @@ struct ReadyView: View {
                 hasFolded = true
             }
             scene.highlightGrip()
-            narrator.say("Here's your cube. Hold it with \(bottomColour.spokenName) on the bottom, "
-                         + "\(topColour.spokenName) on top, and \(frontColour.spokenName) facing you. "
-                         + "Keep holding it that way.")
+            narrator.explain([
+                .init("Here's your cube. Hold it with \(bottomColour.spokenName) on the bottom, "
+                      + "\(topColour.spokenName) on top, and \(frontColour.spokenName) facing you. "
+                      + "Keep holding it that way."),
+                .init("When you're ready, press the green play button.", pointingAt: .startSolving),
+            ])
         }
     }
 }

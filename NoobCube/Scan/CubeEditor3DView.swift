@@ -28,6 +28,7 @@ struct CubeEditor3DView: View {
                     coordinator.setSticker(at: index, to: brush)
                 }
                 .frame(maxWidth: .infinity, minHeight: 220, maxHeight: .infinity)
+                .pointedAt(.paintHere, by: coordinator.narrator)
 
                 if let problem = coordinator.problem, coordinator.isComplete {
                     Text(problem)
@@ -39,6 +40,7 @@ struct CubeEditor3DView: View {
                 }
 
                 PaintPalette(brush: $brush)
+                    .pointedAt(.palette, by: coordinator.narrator)
 
                 Button {
                     scene.resetTurn()
@@ -61,6 +63,11 @@ struct CubeEditor3DView: View {
             .onAppear {
                 scene.stopIdleSpin()
                 scene.reset(to: coordinator.scan.colours)
+                coordinator.narrator.explain([
+                    .init("Drag the cube with your finger to turn it round.", pointingAt: .paintHere),
+                    .init("Tap a colour down here,", pointingAt: .palette),
+                    .init("then tap a square on the cube to paint it.", pointingAt: .paintHere),
+                ])
             }
             .onChange(of: coordinator.scan) { _, painted in
                 scene.setColours(painted.colours)

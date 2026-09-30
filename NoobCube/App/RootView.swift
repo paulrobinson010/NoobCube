@@ -93,6 +93,7 @@ struct WelcomeView: View {
                         Label("Carry on solving", systemImage: "play.fill")
                     }
                     .buttonStyle(BigButtonStyle(tint: Theme.done))
+                    .pointedAt(.carryOn, by: model.narrator)
                 }
 
                 Button {
@@ -102,6 +103,7 @@ struct WelcomeView: View {
                           systemImage: "camera.fill")
                 }
                 .buttonStyle(BigButtonStyle(isProminent: !model.canCarryOn))
+                .pointedAt(.showMeYourCube, by: model.narrator)
 
                 Button {
                     showingSmartCubeSheet = true
@@ -111,6 +113,7 @@ struct WelcomeView: View {
                 }
                 .buttonStyle(BigButtonStyle(tint: model.smartCube.isConnected ? Theme.done : Theme.action,
                                             isProminent: false))
+                .pointedAt(.smartCube, by: model.narrator)
 
                 HStack {
                     Spacer()
@@ -122,6 +125,9 @@ struct WelcomeView: View {
             .padding(.horizontal, 20)
             .padding(.bottom, 20)
         }
+        // Every time home comes up, including coming back to it part way
+        // through a solve: what each button does, with each one pointed at.
+        .onAppear { model.explainTheHomeScreen() }
         .sheet(isPresented: $showingSmartCubeSheet) {
             SmartCubeView(manager: model.smartCube,
                           narrator: model.narrator,
