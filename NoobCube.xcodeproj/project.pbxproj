@@ -62,6 +62,9 @@
 		323BB0300F59C1AFF1EC4DD6 = {isa = PBXBuildFile; fileRef = 4C0C94406EF0476E1BDDB657; };
 		AB4C0997F949CDAFC6385506 = {isa = PBXBuildFile; fileRef = C0FEE07E66FEF21D5A5970DA; };
 		2F9F0C02C7961402018B8503 = {isa = PBXBuildFile; fileRef = A83FA98912F946AE288BB9BF; };
+		1468E2D688936AB64CF9A772 = {isa = PBXBuildFile; fileRef = CA3EE2F22E32BB92F3F5CD3A; };
+		2320F2242D12638A36EB7E3B = {isa = PBXBuildFile; fileRef = B32DD064F3876B8FBC27CE18; };
+		26B63D2185FFA07D8022F734 = {isa = PBXBuildFile; fileRef = 78F2B7FEAF73E8FC537F4A3C; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -133,6 +136,9 @@
 		4C0C94406EF0476E1BDDB657 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SmartCubeCheckView.swift"; sourceTree = "<group>"; };
 		C0FEE07E66FEF21D5A5970DA = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TurnLog.swift"; sourceTree = "<group>"; };
 		A83FA98912F946AE288BB9BF = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TurnLogView.swift"; sourceTree = "<group>"; };
+		CA3EE2F22E32BB92F3F5CD3A = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HoldGuideView.swift"; sourceTree = "<group>"; };
+		B32DD064F3876B8FBC27CE18 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SideEditorView.swift"; sourceTree = "<group>"; };
+		78F2B7FEAF73E8FC537F4A3C = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CubeEditor3DView.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -180,6 +186,9 @@
 		3FE09AD2DEA8103ED1C5C2FF /* Scan */ = {
 			isa = PBXGroup;
 			children = (
+				78F2B7FEAF73E8FC537F4A3C,
+				B32DD064F3876B8FBC27CE18,
+				CA3EE2F22E32BB92F3F5CD3A,
 				06E00E2B74E76B2233EF602B,
 				3D7EDCFB0475A1E69EC17AEE,
 				F399168BC23552D0FC060EFF /* CameraController.swift */,
@@ -397,6 +406,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				26B63D2185FFA07D8022F734,
+				2320F2242D12638A36EB7E3B,
+				1468E2D688936AB64CF9A772,
 				2F9F0C02C7961402018B8503,
 				AB4C0997F949CDAFC6385506,
 				323BB0300F59C1AFF1EC4DD6,

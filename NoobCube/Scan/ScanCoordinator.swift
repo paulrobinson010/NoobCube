@@ -24,6 +24,10 @@ final class ScanCoordinator: ObservableObject {
         let face: Face
         let title: String
         let spoken: String
+        /// The colour that has to be on top while this side faces the camera,
+        /// where it matters. The four sides are read assuming yellow is up; the
+        /// top and bottom are tried every way round, so for them it does not.
+        let upColour: CubeColour?
         var id: Face { face }
     }
 
@@ -33,28 +37,56 @@ final class ScanCoordinator: ObservableObject {
     /// worth showing those two first: it settles how the cube is being held
     /// before anything else, and gets the two awkward ones out of the way while
     /// the child is still fresh. After that it is one easy turn at a time.
+    ///
+    /// Every sentence names both colours that matter — the one facing the
+    /// camera and the one on top — and never says left or right. Which way is
+    /// left depends on which side of the phone you are standing, and a side
+    /// shown the wrong way up was the commonest way a scan went wrong.
     static let steps: [Step] = [
         Step(face: .U,
              title: "Show me the yellow top",
-             spoken: "Hold your cube with yellow on top and white underneath. "
-                   + "Keep it that way all the way through. "
-                   + "Now tip it forwards so I can see the yellow top."),
+             spoken: "Hold your cube with yellow on top and white underneath, and keep "
+                   + "it that way the whole time. Now tip it so the yellow top faces "
+                   + "the camera.",
+             upColour: nil),
         Step(face: .D,
              title: "Now the white bottom",
-             spoken: "Nice. Now tip it the other way and show me the white bottom."),
+             spoken: "Nice. Now tip it right over the other way, so the white bottom "
+                   + "faces the camera.",
+             upColour: nil),
         Step(face: .F,
              title: "Now the green side",
-             spoken: "Yellow back on top. Now show me the green side."),
+             spoken: "Put yellow back on top. Now turn it so green faces the camera, "
+                   + "with yellow still on top.",
+             upColour: .yellow),
         Step(face: .R,
              title: "Now the orange side",
-             spoken: "Keep yellow on top, and spin it round to the orange side."),
+             spoken: "Keep yellow on top, and turn the cube round until orange faces "
+                   + "the camera.",
+             upColour: .yellow),
         Step(face: .B,
              title: "Now the blue side",
-             spoken: "Keep going, the same way round. Show me the blue side."),
+             spoken: "Keep turning the same way, yellow still on top, until blue faces "
+                   + "the camera.",
+             upColour: .yellow),
         Step(face: .L,
              title: "Last one, the red side",
-             spoken: "Last one. Spin it round once more to the red side."),
+             spoken: "Last one! Turn it once more, yellow still on top, until red faces "
+                   + "the camera.",
+             upColour: .yellow),
     ]
+
+    /// Squares the child has set by hand, laid over whatever the camera reads.
+    ///
+    /// Kept apart from the camera's reading rather than written into it,
+    /// because the whole map is read again from the camera at the end — which
+    /// quietly undid every correction made along the way. A side's squares
+    /// are only forgotten when that side is taken again.
+    private var paintedByHand: [Int: CubeColour] = [:]
+
+    private func forgetPainting(on face: Face) {
+        paintedByHand = paintedByHand.filter { $0.key / 9 != face.rawValue }
+    }
 
     /// The colour of the middle sticker each step is asking for.
     static func colour(for face: Face) -> CubeColour {
@@ -208,6 +240,7 @@ final class ScanCoordinator: ObservableObject {
         // opposite orange, blue opposite green, so the moment the child is
         // asked to hold it yellow-up and white-down, every middle is known
         // before the camera has seen a thing. ``show`` puts them there.
+        paintedByHand = [:]
         show(ScannedCube())
         lookAtSide = [:]
         lastSide = nil
@@ -253,8 +286,14 @@ final class ScanCoordinator: ObservableObject {
     /// Nine colour *names* either change or they do not. There is no noise in
     /// that, it is exactly what the child can see on screen, and when it has
     /// held for two seconds the app has plainly worked the side out.
+    /// Set while a side is open to be fixed by hand, so the camera does not
+    /// take whatever happens to be in front of it in the meantime.
+    var isPaused = false {
+        didSet { if isPaused { forgetTheNaming() } }
+    }
+
     func considerAutoCapture() {
-        guard currentStep != nil, !isComplete else { return }
+        guard currentStep != nil, !isComplete, !isPaused else { return }
         guard camera.isCubeInFrame else { return forgetTheNaming() }
 
         let reading = camera.steadyReading.count == 9 ? camera.steadyReading : camera.liveSamples
@@ -302,6 +341,7 @@ final class ScanCoordinator: ObservableObject {
     func takeThatSideAgain() {
         guard let side = lastSide else { return }
         lookAtSide[side] = nil
+        forgetPainting(on: side)
         lastSide = nil
         readyForAnotherLook()
         redraw()
@@ -310,12 +350,6 @@ final class ScanCoordinator: ObservableObject {
         problem = nil
         result = nil
         announceStep(force: true)
-    }
-
-    /// Tapping a side in the flat net means "that one came out wrong".
-    func retakeFace(containing index: Int) {
-        guard let face = Face(rawValue: index / 9), scan.isFaceScanned(face) else { return }
-        retake(face)
     }
 
     /// Ready to look at the same thing again: forget what was last taken, so
@@ -454,6 +488,7 @@ final class ScanCoordinator: ObservableObject {
                        + "I'll use this look at it.")
         }
         lookAtSide[side] = reading
+        forgetPainting(on: side)
         lastSide = side
 
         redraw()
@@ -495,6 +530,7 @@ final class ScanCoordinator: ObservableObject {
     /// Go back and take one side again: throw that look away and ask for it.
     func retake(_ face: Face) {
         lookAtSide[face] = nil
+        forgetPainting(on: face)
         if lastSide == face { lastSide = nil }
         readyForAnotherLook()
         redraw()
@@ -541,7 +577,8 @@ final class ScanCoordinator: ObservableObject {
         }
 
         do {
-            let converted = try candidate.cubeState()
+            // The map as shown, with anything painted by hand on top.
+            let converted = try scan.cubeState()
             let problems = converted.state.validate()
             if let first = problems.first {
                 problem = inColours(first)
@@ -558,28 +595,82 @@ final class ScanCoordinator: ObservableObject {
         }
     }
 
-    /// Read the whole scan, trying the top and bottom at all four rotations.
+    /// Read the whole scan, trying each side at all four rotations.
     ///
-    /// Those two are the awkward ones to hold square to the camera. The turn
-    /// has to be tried before the colours are settled rather than after:
-    /// settling fits whole pieces into slots, so where a sticker sits is part
-    /// of the reading.
+    /// The top and bottom are the awkward ones to hold square to the camera,
+    /// so they are always tried every way round. The turn has to be tried
+    /// before the colours are settled rather than after: settling fits whole
+    /// pieces into slots, so where a sticker sits is part of the reading.
     ///
     /// Of the turns that make a cube that could exist, the winner is whichever
     /// accounts best for the pixels. Being a real cube is not enough on its own
     /// — a wrong turn can still land on one — but it cannot also explain the
     /// colours better than the truth does. The straight reading is kept as the
     /// tie-break, because the child was probably holding it as asked.
+    ///
+    /// The four sides used to be taken exactly as shown, and a side shown
+    /// tilted is the easiest mistake there is. It never failed loudly: settling
+    /// still made a real cube out of it, just not theirs — right 3 times in 60
+    /// in `Tools/CubeReference`. So each side is now tried every way round too,
+    /// one at a time, keeping a turn only when it explains the colours better
+    /// than the side as shown. Measured over 160 scans: a cube held as asked
+    /// comes out exactly as before (75 of 80), one side shown tilted goes from
+    /// 0 of 40 right to 33, and two from 0 to 22.
     private func bestReading(_ priced: ColourClassifier.Priced,
                              expecting expected: [Face: CubeColour])
     -> (cube: ScannedCube, fit: Double) {
+        var sides: [Face: Int] = [:]
+        let first = bestTopAndBottom(priced, sides: sides, expecting: expected)
+        guard var found = first.found else {
+            return first.straight ?? (cube: ScannedCube(), fit: .greatestFiniteMagnitude)
+        }
+
+        for _ in 0..<2 {
+            var changed = false
+            for side in [Face.F, .R, .B, .L] {
+                let current = sides[side] ?? 0
+                var better: (turn: Int, cube: ScannedCube, fit: Double)?
+                for turn in 0..<4 where turn != current {
+                    var trial = sides
+                    trial[side] = turn
+                    trial[.U] = found.top
+                    trial[.D] = found.bottom
+                    let settled = ColourClassifier.settle(Self.turning(priced, trial),
+                                                          expectedCentres: expected)
+                    guard settled.averageFit < (better?.fit ?? found.fit) else { continue }
+                    let cube = ScannedCube(colours: settled.colours.map { Optional($0) })
+                    guard let converted = try? cube.cubeState(),
+                          converted.state.isValid else { continue }
+                    better = (turn, cube, settled.averageFit)
+                }
+                guard let better else { continue }
+                sides[side] = better.turn
+                changed = true
+                // The top and bottom may read differently once a side has
+                // turned, so they are tried again with it.
+                found = bestTopAndBottom(priced, sides: sides, expecting: expected).found
+                    ?? (cube: better.cube, fit: better.fit, top: found.top, bottom: found.bottom)
+            }
+            if !changed { break }
+        }
+        return (found.cube, found.fit)
+    }
+
+    /// The top and bottom tried every way round, with the sides turned as given.
+    private func bestTopAndBottom(_ priced: ColourClassifier.Priced,
+                                  sides: [Face: Int],
+                                  expecting expected: [Face: CubeColour])
+    -> (found: (cube: ScannedCube, fit: Double, top: Int, bottom: Int)?,
+        straight: (cube: ScannedCube, fit: Double)?) {
         var straight: (cube: ScannedCube, fit: Double)?
-        var best: (cube: ScannedCube, fit: Double)?
+        var best: (cube: ScannedCube, fit: Double, top: Int, bottom: Int)?
         for topTurns in 0..<4 {
-            let top = priced.turning(.U, quarterTurns: topTurns)
             for bottomTurns in 0..<4 {
-                let settled = ColourClassifier.settle(
-                    top.turning(.D, quarterTurns: bottomTurns), expectedCentres: expected)
+                var turns = sides
+                turns[.U] = topTurns
+                turns[.D] = bottomTurns
+                let settled = ColourClassifier.settle(Self.turning(priced, turns),
+                                                      expectedCentres: expected)
 
                 // Kept so there is something to show, and something to complain
                 // about, when no turn makes a real cube.
@@ -591,42 +682,40 @@ final class ScanCoordinator: ObservableObject {
                 // Checking whether a cube could exist is the expensive part —
                 // twenty pieces, three parities — and a reading that explains
                 // the pixels worse than the best one so far cannot win however
-                // real it is. So ask about the fit first, and most of the
-                // hundred and twenty-eight readings never get checked at all.
+                // real it is. So ask about the fit first, and most readings
+                // never get checked at all.
                 guard settled.averageFit < (best?.fit ?? .greatestFiniteMagnitude) else { continue }
                 let cube = ScannedCube(colours: settled.colours.map { Optional($0) })
                 guard let converted = try? cube.cubeState(),
                       converted.state.isValid else { continue }
-                best = (cube, settled.averageFit)
+                best = (cube, settled.averageFit, topTurns, bottomTurns)
             }
         }
-        return best ?? straight ?? (cube: ScannedCube(), fit: .greatestFiniteMagnitude)
+        return (best, straight)
+    }
+
+    /// Every side turned as given, before anything is settled.
+    private static func turning(_ priced: ColourClassifier.Priced,
+                                _ turns: [Face: Int]) -> ColourClassifier.Priced {
+        turns.reduce(priced) { reading, turn in
+            reading.turning(turn.key, quarterTurns: turn.value)
+        }
     }
 
     // MARK: - Fixing a square by hand
 
-    /// Tapping a square steps it to the next colour.
-    func cycleSticker(at index: Int) {
-        guard index >= 0, index < 54 else { return }
-        // Not the middles. A middle is not a guess and never was — the side was
-        // asked for by name, and ``begin`` drew all six before the camera saw
-        // anything. Letting one be tapped could only ever put the same colour
-        // in the middle of two sides, which is a cube that cannot exist, and
-        // that is exactly the complaint that came back: a white middle on the
-        // back face, and "two middle stickers are the same colour".
-        guard index % 9 != 4 else { return }
-        let current = scan[index] ?? .white
-        let all = CubeColour.allCases
-        let next = all[(all.firstIndex(of: current).map { $0 + 1 } ?? 0) % all.count]
-        setSticker(at: index, to: next)
-    }
-
+    /// Paint one square by hand. Not the middles: a middle is not a guess —
+    /// the side was asked for by it — and painting one could only ever put the
+    /// same colour in the middle of two sides, a cube that cannot exist.
     func setSticker(at index: Int, to colour: CubeColour) {
-        var edited = scan
-        edited[index] = colour
-        show(edited)
+        guard index >= 0, index < 54, index % 9 != 4 else { return }
+        paintedByHand[index] = colour
+        show(scan)
         revalidate()
     }
+
+    /// Whether a side has anything on it yet, and so anything to fix.
+    func canEdit(_ face: Face) -> Bool { scan.isFaceScanned(face) }
 
     /// Put a cube on the map, with its middles set to what they must be.
     ///
@@ -636,7 +725,9 @@ final class ScanCoordinator: ObservableObject {
     /// writer used to be trusted to remember that separately, which is four
     /// places to get it right and one to get it wrong.
     private func show(_ cube: ScannedCube) {
-        scan = Self.withFixedMiddles(cube)
+        var painted = cube
+        for (index, colour) in paintedByHand { painted[index] = colour }
+        scan = Self.withFixedMiddles(painted)
     }
 
     /// A cube with the middles put back to the only thing they can be.

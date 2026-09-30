@@ -12,6 +12,16 @@ struct ScanView: View {
     var onReady: (CubeState, Face, ScannedCube) -> Void
     var onCancel: () -> Void
 
+    /// The side open for fixing by hand, if any.
+    @State private var editing: EditedSide?
+    /// The whole cube open in 3D, to turn round and fix.
+    @State private var showing3D = false
+
+    private struct EditedSide: Identifiable {
+        let face: Face
+        var id: Int { face.rawValue }
+    }
+
     var body: some View {
         VStack(spacing: 10) {
             header
@@ -23,16 +33,36 @@ struct ScanView: View {
                         width: coordinator.isComplete ? 320 : 232,
                         highlightedFace: coordinator.currentStep?.face,
                         pulsingFace: coordinator.currentStep?.face,
-                        // While scanning, tapping a side that is already in
-                        // means "that one came out wrong" and asks for it
-                        // again. Afterwards a tap steps one square's colour on.
+                        // Tapping a side that is in opens it big, to paint its
+                        // squares by hand or take it again — during the scan as
+                        // well as after.
                         onTapSticker: { index in
-                            if coordinator.isComplete {
-                                coordinator.cycleSticker(at: index)
-                            } else {
-                                coordinator.retakeFace(containing: index)
-                            }
+                            guard let face = Face(rawValue: index / 9),
+                                  coordinator.canEdit(face) else { return }
+                            editing = EditedSide(face: face)
                         })
+
+            if coordinator.scannedFaceCount > 0 {
+                HStack(spacing: 10) {
+                    Text("Something wrong? Tap that side to fix it.")
+                        .font(.brand(size: 13, weight: .semibold))
+                        .foregroundStyle(Theme.muted)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                    Button {
+                        showing3D = true
+                    } label: {
+                        Label("3D", systemImage: "cube.fill")
+                            .font(.brand(size: 13, weight: .bold))
+                            .foregroundStyle(Theme.ink)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(Capsule().fill(Theme.attention))
+                    }
+                    .accessibilityLabel("See the cube in 3D and fix it there")
+                }
+                .padding(.horizontal, 20)
+            }
 
             // One viewfinder, in one place, whether the scan is finished or
             // not. Having it inside both halves of an if meant SwiftUI counted
@@ -49,6 +79,14 @@ struct ScanView: View {
         .background(Theme.background.ignoresSafeArea())
         .onAppear { coordinator.begin() }
         .onDisappear { coordinator.stop() }
+        .sheet(item: $editing, onDismiss: { coordinator.isPaused = false }) { side in
+            SideEditorView(coordinator: coordinator, face: side.face)
+                .onAppear { coordinator.isPaused = true }
+        }
+        .fullScreenCover(isPresented: $showing3D, onDismiss: { coordinator.isPaused = false }) {
+            CubeEditor3DView(coordinator: coordinator)
+                .onAppear { coordinator.isPaused = true }
+        }
     }
 
     // MARK: - Pieces
@@ -83,6 +121,15 @@ struct ScanView: View {
         // Takes whatever the map and the buttons have not, so it is as big as
         // it can be and always whole.
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .overlay(alignment: .top) {
+            // How to hold it for this side, on screen the whole time it is
+            // being looked for.
+            if !coordinator.isComplete, let step = coordinator.currentStep {
+                HoldGuideView(front: ScanCoordinator.colour(for: step.face), top: step.upColour)
+                    .padding(.top, 10)
+                    .padding(.horizontal, 10)
+            }
+        }
         .overlay(alignment: .bottom) { cameraCaption }
         .clipShape(RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous))
         .padding(.horizontal, 20)

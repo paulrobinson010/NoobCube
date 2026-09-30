@@ -329,6 +329,32 @@ final class CubeSceneController {
         return result
     }
 
+    // MARK: - Turning it round by hand, and tapping a square
+
+    /// Turn the whole cube round with a finger.
+    ///
+    /// About the camera's own up and right, so dragging sideways spins it the
+    /// way the finger goes and dragging down rolls the top towards you,
+    /// whichever way round it already is.
+    func turnByDrag(dx: Float, dy: Float) {
+        let up = cameraNode.worldUp
+        let right = cameraNode.worldRight
+        var turned = cubeNode.transform
+        turned = SCNMatrix4Mult(turned, SCNMatrix4MakeRotation(dx, up.x, up.y, up.z))
+        turned = SCNMatrix4Mult(turned, SCNMatrix4MakeRotation(dy, right.x, right.y, right.z))
+        cubeNode.transform = turned
+    }
+
+    /// Back to the usual three-quarter view.
+    func resetTurn() {
+        cubeNode.transform = SCNMatrix4Identity
+    }
+
+    /// Which square a tapped node is, if it is a square at all.
+    func stickerIndex(of node: SCNNode) -> Int? {
+        stickerNodes.first { $0.value === node }?.key
+    }
+
     /// Put the cube back to a known state instantly, with no animation.
     func reset(to colours: [CubeColour?]) {
         hideTurnArrow()
