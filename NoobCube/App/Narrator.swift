@@ -44,7 +44,6 @@ final class Narrator: NSObject, ObservableObject {
     private var lastExplanation: [Part] = []
     private var buttonFor: [ObjectIdentifier: ButtonName] = [:]
     private var speakingNow: ObjectIdentifier?
-    private var pointingWithoutWords: Task<Void, Never>?
 
     @Published var isMuted: Bool {
         didSet {
@@ -69,12 +68,13 @@ final class Narrator: NSObject, ObservableObject {
     /// Explain a choice: each sentence in turn, pointing at each button as it
     /// is talked about.
     ///
-    /// Muted, the buttons still light up one after another, a little under
-    /// two seconds each, so the pointing works without the words.
+    /// Muted, nothing lights up: the pointing goes with the words, and a
+    /// button lit with nothing said about it is only a distraction. The
+    /// repeat button still says it all, pointing and all.
     func explain(_ parts: [Part]) {
         lastExplanation = parts
         lastPhrase = parts.map(\.words).joined(separator: " ")
-        guard !isMuted else { return pointWithoutWords(parts) }
+        guard !isMuted else { return stopPointing() }
         speak(parts)
     }
 
@@ -130,25 +130,9 @@ final class Narrator: NSObject, ObservableObject {
     }
 
     private func stopPointing() {
-        pointingWithoutWords?.cancel()
-        pointingWithoutWords = nil
         buttonFor = [:]
         speakingNow = nil
         pointingAt = nil
-    }
-
-    private func pointWithoutWords(_ parts: [Part]) {
-        stopPointing()
-        let buttons = parts.compactMap(\.button)
-        guard !buttons.isEmpty else { return }
-        pointingWithoutWords = Task { [weak self] in
-            for button in buttons {
-                self?.pointingAt = button
-                try? await Task.sleep(nanoseconds: 1_800_000_000)
-                if Task.isCancelled { return }
-            }
-            self?.pointingAt = nil
-        }
     }
 
     fileprivate func started(_ utterance: ObjectIdentifier) {
