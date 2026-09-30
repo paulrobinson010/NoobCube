@@ -991,3 +991,40 @@ final class ResetCommandTests: XCTestCase {
         }
     }
 }
+
+/// What the app says while a child works through the moves.
+final class CoachingTests: XCTestCase {
+
+    /// Met for the first time, an algorithm is one to remember; after that it
+    /// is an old friend, and the long version is not said again.
+    func testAnAlgorithmIsIntroducedOnceAsOneToRemember() {
+        let first = SolveSession.introduction(of: "righty", firstTime: true)
+        XCTAssertTrue(first.lowercased().contains("remember"))
+        XCTAssertTrue(first.contains("right side up"), "righty should be said in words")
+        let again = SolveSession.introduction(of: "righty", firstTime: false)
+        XCTAssertEqual(again, "Righty again!")
+    }
+
+    /// Every algorithm the solver names has something of its own to say.
+    func testEveryNamedAlgorithmHasAnIntroduction() {
+        for name in ["righty", "send it right", "send it left", "the cross move", "the fish",
+                     "the way back to the fish", "the edge swap"] {
+            let words = SolveSession.introduction(of: name, firstTime: true)
+            XCTAssertFalse(words.hasPrefix("This is \(name). It's one to remember"),
+                           "\(name) fell through to the catch-all")
+        }
+    }
+
+    /// The way back to the fish is not introduced as the fish.
+    func testTheWayBackToTheFishIsNotTheFish() {
+        let back = SolveSession.introduction(of: "the way back to the fish", firstTime: true)
+        XCTAssertTrue(back.contains("back to the fish"))
+    }
+
+    /// Two wrong turns in a row say which way round to hold it, in the
+    /// picture's own colours.
+    func testTheHoldingReminderNamesBothColours() {
+        let holding = SolveSession.Holding(front: .green, top: .yellow)
+        XCTAssertEqual(holding.inWords, "green at the front and yellow on top")
+    }
+}

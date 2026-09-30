@@ -26,6 +26,8 @@ struct SolveView: View {
                 .frame(minHeight: 150, maxHeight: 276)
                 .padding(.vertical, 4)
                 .overlay(alignment: .bottomTrailing) { demoCorner }
+                .overlay(alignment: .top) { cheerBadge }
+                .animation(.spring(response: 0.4, dampingFraction: 0.6), value: session.cheer)
                 .layoutPriority(1)
 
             if session.help == .moveByMove {
@@ -78,6 +80,44 @@ struct SolveView: View {
     }
 
     // MARK: - Pieces
+
+    /// The fuss made when a piece goes home or a stage is done. It sits over
+    /// the top of the cube, bounces in, and goes away by itself; nothing waits
+    /// for it.
+    @ViewBuilder
+    private var cheerBadge: some View {
+        if let cheer = session.cheer {
+            VStack(spacing: 2) {
+                HStack(spacing: 8) {
+                    Image(systemName: cheer.isBig ? "star.circle.fill" : "star.fill")
+                        .font(.system(size: cheer.isBig ? 30 : 20, weight: .black))
+                    Text(cheer.title)
+                        .font(.brand(size: cheer.isBig ? 26 : 22, weight: .heavy))
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.7)
+                        .multilineTextAlignment(.center)
+                }
+                if let detail = cheer.detail {
+                    Text(detail)
+                        .font(.brand(size: 15, weight: .bold))
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.8)
+                        .multilineTextAlignment(.center)
+                        .opacity(0.8)
+                }
+            }
+            .foregroundStyle(Theme.ink)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 10)
+            .background(Capsule().fill(Theme.done))
+            .background(Capsule().fill(Theme.done.buttonShadow).offset(y: 4))
+            .padding(.horizontal, 20)
+            .padding(.top, 6)
+            .transition(.scale(scale: 0.4).combined(with: .opacity))
+            .id(cheer.id)
+            .accessibilityElement(children: .combine)
+        }
+    }
 
     /// The one move in hand, playing over and over beside the big cube.
     ///
@@ -135,10 +175,11 @@ struct SolveView: View {
             HStack(spacing: 8) {
                 Image(systemName: "hand.point.up.left.fill")
                     .font(.system(size: 12, weight: .black))
+                // All of it: this is now the reason for the lining up as well,
+                // and those sentences are longer than "the edge goes home".
                 Text(why)
                     .font(.brand(size: 15, weight: .bold))
-                    .lineLimit(3)
-                    .minimumScaleFactor(0.85)
+                    .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
                 ForEach(Array(session.colours(of: step).enumerated()), id: \.offset) { _, colour in
                     RoundedRectangle(cornerRadius: 5, style: .continuous)
@@ -326,6 +367,33 @@ struct SolveView: View {
         )
     }
 
+    /// After two wrong turns in a row: how the cube should be held, with the
+    /// two colours shown rather than only named.
+    private func holdingHint(_ holding: SolveSession.Holding) -> some View {
+        HStack(spacing: 8) {
+            Text("Hold it with")
+            swatch(holding.front)
+            Text("at the front,")
+            swatch(holding.top)
+            Text("on top")
+        }
+        .font(.brand(size: 15, weight: .bold))
+        .foregroundStyle(.white)
+        .lineLimit(1)
+        .minimumScaleFactor(0.7)
+        .padding(.horizontal, 12)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Hold it with \(holding.inWords)")
+    }
+
+    private func swatch(_ colour: CubeColour) -> some View {
+        RoundedRectangle(cornerRadius: 5, style: .continuous)
+            .fill(colour.swiftUIColor)
+            .frame(width: 20, height: 20)
+            .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous)
+                .strokeBorder(.black.opacity(0.35), lineWidth: 1))
+    }
+
     /// A wrong turn, and the one turn that undoes it.
     ///
     /// Being told only that it is wrong leaves a five year old stuck with a
@@ -336,6 +404,9 @@ struct SolveView: View {
             Text("That wasn't the one.")
                 .font(.brand(size: 18, weight: .bold))
                 .foregroundStyle(Theme.attention)
+            if let holding = session.holdingReminder {
+                holdingHint(holding)
+            }
             Text("\(wrong.inverse.childLabel) — \(wrong.inverse.spokenInstruction)")
                 .font(.brand(size: 17, weight: .medium))
                 .foregroundStyle(.white.opacity(0.9))

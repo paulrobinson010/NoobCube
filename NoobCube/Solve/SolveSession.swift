@@ -1,5 +1,6 @@
 import Combine
 import SwiftUI
+import UIKit
 
 /// Coaches the child through one solve.
 ///
@@ -50,6 +51,50 @@ final class SolveSession: ObservableObject {
     /// start from where the set starts, however far through it the child is.
     @Published private(set) var stepStartCube: ScannedCube
     @Published private(set) var isBusy = false
+
+    // MARK: - Making a fuss
+
+    /// A moment of celebration over the cube: a piece gone home, a stage done.
+    ///
+    /// Never a button and never a pause. It pops up over the cube, says so,
+    /// and goes away by itself while the next move is already on screen — a
+    /// five year old wants to be told they did well, not asked to press
+    /// something before they can carry on.
+    struct Cheer: Identifiable, Equatable {
+        let id = UUID()
+        let title: String
+        let detail: String?
+        let isBig: Bool
+    }
+
+    @Published private(set) var cheer: Cheer?
+
+    /// Said at the front of whatever is said next, as one sentence.
+    ///
+    /// The narrator replaces what it is saying with each new sentence, so
+    /// "well done" said on its own and then the next instruction straight
+    /// after came out as the next instruction alone. That is how the stage's
+    /// own "Nice one, that step is done" was never heard at all.
+    private var sayFirst: [String] = []
+
+    /// Algorithms already met in this solve. The first time, it is introduced
+    /// as one to remember; after that it is an old friend.
+    private var algorithmsMet: Set<String> = []
+
+    /// Wrong turns since the last right one. One is a slip; two in a row is
+    /// usually the cube being held a different way round from the picture.
+    private var wrongTurnsInARow = 0
+
+    /// How they are meant to be holding it, once it looks as though they are
+    /// not: the colour at the front and the colour on top, as in the picture.
+    struct Holding: Equatable {
+        let front: CubeColour
+        let top: CubeColour
+
+        var inWords: String { "\(front.spokenName) at the front and \(top.spokenName) on top" }
+    }
+
+    @Published private(set) var holdingReminder: Holding?
 
     /// What was made of the last turn a connected cube reported, in a few
     /// words. Written down for ``TurnLog`` and nothing else: the child is told
@@ -202,6 +247,140 @@ final class SolveSession: ObservableObject {
 
     // MARK: - Speaking
 
+    /// Say something, with whatever was waiting to go first in front of it.
+    private func say(_ words: String) {
+        let whole = (sayFirst + [words]).joined(separator: " ")
+        sayFirst = []
+        narrator.say(whole)
+    }
+
+    /// What a step is for, said as it begins.
+    ///
+    /// The solver has always written these — "turn the cube so that side is
+    /// facing you", "spin the top until the corner sits over its gap", "now do
+    /// righty until it drops in" — but they only ever appeared behind the "i".
+    /// Out loud, the child hears why the top is spinning before it spins.
+    func spokenPurpose(of step: SolveStep) -> String? {
+        var parts: [String] = []
+        if step.purpose == .move {
+            if let name = step.algorithmName {
+                parts.append(Self.introduction(of: name,
+                                               firstTime: !algorithmsMet.contains(name.lowercased())))
+            } else if !step.piece.isEmpty, step.places {
+                parts.append("Now \(name(of: step)) goes home.")
+            }
+        }
+        if let text = step.text { parts.append(text) }
+        return parts.isEmpty ? nil : parts.joined(separator: " ")
+    }
+
+    /// An algorithm, introduced: the first time as something worth
+    /// remembering, and after that as an old friend.
+    static func introduction(of name: String, firstTime: Bool) -> String {
+        let key = name.lowercased()
+        guard firstTime else { return "\(name.sentenceCased) again!" }
+        if key.contains("righty") {
+            return "This is righty: right side up, top to the left, right side down, "
+                + "top back. It's one to remember, because you'll use it lots!"
+        }
+        if key.contains("send it") {
+            return "This one sends the edge down into the middle row. "
+                + "See if you can remember it for next time."
+        }
+        if key.contains("cross") {
+            return "This is the yellow cross move. Watch the yellow on top: dot, then "
+                + "L, then line, then cross. A good one to remember!"
+        }
+        if key.contains("back to the fish") {
+            return "This one takes you back to the fish, so you can use the fish again."
+        }
+        if key.contains("fish") {
+            return "This is the fish. It turns the top corners yellow. "
+                + "Try to remember it for next time!"
+        }
+        if key.contains("swap") {
+            return "This is the edge swap, the very last one to learn. "
+                + "It swaps the last edges into place."
+        }
+        return "This is \(name). It's one to remember for next time."
+    }
+
+    /// The cube's picture as the child is meant to be holding it, in words.
+    private var howToHoldIt: Holding? {
+        guard let front = displayCube[Face.F.centreIndex],
+              let top = displayCube[Face.U.centreIndex] else { return nil }
+        return Holding(front: front, top: top)
+    }
+
+    /// Words of praise, taken in turn so it is not the same one every time.
+    private static let praise = ["Well done!", "Brilliant!", "Nice one!", "Great job!",
+                                 "Yes!", "Fantastic!"]
+    private var praiseIndex = 0
+
+    private func nextPraise() -> String {
+        defer { praiseIndex += 1 }
+        return Self.praise[praiseIndex % Self.praise.count]
+    }
+
+    /// Make a fuss, without stopping anything: a cheer over the cube, a buzz,
+    /// the piece glowing where it landed, and the words said in front of the
+    /// next instruction. It clears itself.
+    private func celebrate(_ title: String, detail: String?, big: Bool,
+                           glowing squares: [Int] = []) {
+        let now = Cheer(title: title, detail: detail, isBig: big)
+        cheer = now
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        if !squares.isEmpty { scene.highlight(faceletIndices: Set(squares)) }
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: big ? 2_800_000_000 : 1_800_000_000)
+            guard let self, self.cheer?.id == now.id else { return }
+            self.cheer = nil
+            if !squares.isEmpty { self.scene.clearHighlight() }
+        }
+    }
+
+    /// A piece has just gone where it belongs.
+    private func celebratePlacing(_ step: SolveStep) {
+        let piece = name(of: step)
+        let whereTo = stage?.kind == .daisy ? "is on the daisy" : "is in its place"
+        let cheer = nextPraise()
+        sayFirst.append("\(cheer) \(piece.sentenceCased) \(whereTo).")
+        celebrate(cheer, detail: "\(piece.sentenceCased) \(whereTo)", big: false,
+                  glowing: step.to)
+    }
+
+    /// A whole stage done: the bigger fuss.
+    private func celebrateStage(_ kind: SolveStage.Kind) {
+        let done: String
+        switch kind {
+        case .hold: done = "You're holding it the right way"
+        case .daisy: done = "That's the daisy made"
+        case .whiteCross: done = "That's the white cross done"
+        case .whiteCorners: done = "That's the whole white side done"
+        case .middleRow: done = "That's the middle row done"
+        case .yellowCross: done = "That's the yellow cross"
+        case .yellowFace: done = "The whole top is yellow"
+        case .lastCorners: done = "All the corners are home"
+        case .lastEdges: done = "Every piece is home"
+        }
+        sayFirst.append("\(nextPraise()) \(done)!")
+        celebrate("\(done)!", detail: stageLabel.map { "\($0) finished" }, big: true)
+    }
+
+    /// Two wrong turns in a row: most likely the cube is round a different
+    /// way from the picture, so say which way it should be.
+    private func noteWrongTurn() {
+        wrongTurnsInARow += 1
+        guard wrongTurnsInARow >= 2, let holding = howToHoldIt else { return }
+        holdingReminder = holding
+    }
+
+    /// A right turn: whatever was going wrong has stopped.
+    private func noteRightTurn() {
+        wrongTurnsInARow = 0
+        holdingReminder = nil
+    }
+
     /// Introduce the stage the child is now on.
     func announceStage() {
         guard let stage else {
@@ -210,7 +389,7 @@ final class SolveSession: ObservableObject {
         }
         let kind = stage.kind
         let opening = stageLabel.map { "\($0). " } ?? ""
-        narrator.say("\(opening)\(kind.title). \(kind.explanation)")
+        say("\(opening)\(kind.title). \(kind.explanation)")
     }
 
     /// Put the arrows back for wherever the solve has got to, without saying
@@ -227,15 +406,15 @@ final class SolveSession: ObservableObject {
     /// Say the move the child should make now.
     func announceCurrentMove() {
         if let wrong = wrongTurn {
-            return narrator.say("\(wrong.inverse.spokenInstruction) to put it back.")
+            return say("\(wrong.inverse.spokenInstruction) to put it back.")
         }
         if let half = halfWayThrough {
-            return narrator.say("Once more. \(half.spokenInstruction)")
+            return say("Once more. \(half.spokenInstruction)")
         }
         guard let move = currentMove else { return }
         let remaining = remainingMoves.count
         let tail = remaining == 1 ? " This is the last one for this step." : ""
-        narrator.say("\(move.spokenInstruction)\(tail)")
+        say("\(move.spokenInstruction)\(tail)")
     }
 
     func announceCurrentStep() {
@@ -326,6 +505,11 @@ final class SolveSession: ObservableObject {
             self.displayCube = self.displayCube.applying(turn)
             self.moveIndex += 1
             self.isBusy = false
+            // The step that just ended put a piece where it belongs.
+            if let done = wasStep, done.places, done.purpose == .move,
+               self.currentMove == nil || self.currentStep != wasStep {
+                self.celebratePlacing(done)
+            }
             if self.currentMove == nil {
                 self.finishStage()
             } else if self.currentStep != wasStep {
@@ -348,7 +532,7 @@ final class SolveSession: ObservableObject {
         scene.hideJourney()
         if let half = halfWayThrough {
             scene.showTurnArrow(for: half)
-            narrator.say("Once more. \(half.spokenInstruction)")
+            say("Once more. \(half.spokenInstruction)")
         } else {
             scene.showTurnArrow(for: move)
             announceCurrentMove()
@@ -388,12 +572,29 @@ final class SolveSession: ObservableObject {
         logMoment?("step: \(currentStep.map(heading(of:)) ?? "none")"
                    + (currentMove.map { " — asking for \($0.notation)" } ?? ""),
                    reasonForThisStep ?? "the piece being worked on changed")
+        // Why, then what: "Spin the top until the corner sits over its gap.
+        // Turn the top to the left." Said together, so neither cuts the other
+        // off. Only when they asked to be shown each move — doing a stage
+        // themselves, they do not want a running commentary.
+        if help == .moveByMove, let step = currentStep, let why = spokenPurpose(of: step) {
+            sayFirst.append(why)
+            if let name = step.algorithmName { algorithmsMet.insert(name.lowercased()) }
+        }
         presentCurrentMove()
     }
 
-    /// The one line of why, for the banner over the move.
+    /// The line of why, for the banner over the move.
+    ///
+    /// It only ever said "the white and red edge goes home", and only for the
+    /// step that puts it there — so the lining up before it, which is most of
+    /// what a child is actually doing, came with no reason at all.
     var reasonForThisStep: String? {
-        guard let step = currentStep, !step.piece.isEmpty, step.places else { return nil }
+        guard let step = currentStep else { return nil }
+        if step.purpose == .positioning { return step.text }
+        if let name = step.algorithmName {
+            return "\(name.sentenceCased) — a move to remember"
+        }
+        guard !step.piece.isEmpty, step.places else { return step.text }
         return "\(name(of: step).sentenceCased) goes home"
     }
 
@@ -443,16 +644,20 @@ final class SolveSession: ObservableObject {
         guard let next = Self.nextWorkableStage(in: plan, from: stageIndex + 1) else {
             logMoment?("finished", "every move in the plan has been made")
             phase = .finished
+            celebrate("You solved it!", detail: "The whole cube", big: true)
+            sayFirst = []
             narrator.say("You did it! The whole cube is finished. Well done!")
             onSolved?()
             return
         }
+        if let kind = stage?.kind { celebrateStage(kind) }
         stageIndex = next
         // A genuinely new stage, so they are asked again how they want helping.
         // Not to be confused with a re-plan, which has no business forgetting
         // what they already said.
         help = .undecided
-        narrator.say("Nice one, that step is done. \(plan.stages[next].kind.title) is next.")
+        // Said in front of the next stage's introduction by ``say(_:)``, so it
+        // is heard rather than talked over.
         startStage(because: "\(finished) finished, its last move made")
     }
 
@@ -603,6 +808,7 @@ final class SolveSession: ObservableObject {
                 // The second quarter, the same way as the first: done. Only
                 // this quarter is drawn — the first already was.
                 lastReaction = "second half of \(expected.notation) — moved on"
+                noteRightTurn()
                 logMoment?("\(expected.notation) finished", "the second quarter went the same way")
                 confirmCurrentMove()
                 return
@@ -621,6 +827,7 @@ final class SolveSession: ObservableObject {
             // it back returns them there, still halfway.
         } else if expected.isHalfTurn(of: move) {
             lastReaction = "first half of \(expected.notation) — asked for once more"
+            noteRightTurn()
             logMoment?("halfway through \(expected.notation)",
                        "a smart cube reports a half turn as two quarters")
             // Set now rather than when the picture catches up, so a second
@@ -636,7 +843,12 @@ final class SolveSession: ObservableObject {
         guard !expected.isWholeCubeTurn, move == expected else {
             lastReaction = "called wrong: asked for \(expected.notation), read \(move.notation)"
             wrongTurn = move
-            narrator.say("Not that one. \(move.inverse.spokenInstruction) to put it back.")
+            noteWrongTurn()
+            var words = "Not that one. \(move.inverse.spokenInstruction) to put it back."
+            if let holding = holdingReminder {
+                words += " And check you're holding it with \(holding.inWords)."
+            }
+            narrator.say(words)
             playTheirTurn(move) { [weak self] in self?.showTheWayBack() }
             return
         }
@@ -644,6 +856,7 @@ final class SolveSession: ObservableObject {
         // Turning the cube is the child saying they are ready, so a step being
         // explained gets on with it rather than waiting for a tap as well.
         lastReaction = "right — moved on"
+        noteRightTurn()
         confirmCurrentMove()
     }
 
@@ -655,7 +868,12 @@ final class SolveSession: ObservableObject {
                    "turned again while already off the path, at \(whereWeAre)")
         wrongTurn = nil
         waitingTurns.removeAll()
-        narrator.say("Let me work out where your cube is now.")
+        noteWrongTurn()
+        var words = "Let me work out where your cube is now."
+        if let holding = holdingReminder ?? howToHoldIt {
+            words += " Remember to hold it with \(holding.inWords)."
+        }
+        narrator.say(words)
         onLost?()
     }
 
