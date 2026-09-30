@@ -399,6 +399,28 @@ final class SmartCubeManager: NSObject, ObservableObject {
         if case .scanning = status { status = .idle }
     }
 
+    /// Connect without anyone having to read a cube's name.
+    ///
+    /// Straight away to the cube used last time; otherwise to the only cube
+    /// found, once a moment has passed without a second one turning up. A
+    /// house with two smart cubes still gets the list to choose from.
+    private func connectByItselfIfItCan() {
+        guard !isConnected, case .scanning = status else { return }
+        if let last = Self.lastCubeID, let known = discovered.first(where: { $0.id == last }) {
+            note("Found the cube from last time; connecting")
+            return connect(known)
+        }
+        guard discovered.count == 1 else { return }
+        let only = discovered[0]
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            guard let self, !self.isConnected, case .scanning = self.status,
+                  self.discovered == [only] else { return }
+            self.note("Only one cube about; connecting to it")
+            self.connect(only)
+        }
+    }
+
     func connect(_ item: Discovered) {
         guard let central,
               let found = discoveredPeripherals[item.id]
@@ -409,11 +431,14 @@ final class SmartCubeManager: NSObject, ObservableObject {
         central.stopScan()
         peripheral = found
         found.delegate = self
+        disconnectedOnPurpose = false
         status = .connecting(item.name)
         central.connect(found)
     }
 
     func disconnect() {
+        disconnectedOnPurpose = true
+        isWaitingForItToWake = false
         if let peripheral, let central {
             central.cancelPeripheralConnection(peripheral)
         }
@@ -527,7 +552,7 @@ final class SmartCubeManager: NSObject, ObservableObject {
                 note("Battery read as \(percent), which cannot be right — ignoring it")
             }
         case .disconnected:
-            note("Cube went to sleep")
+            fellAsleep()
         case .hardware, .ignored:
             break
         }
@@ -671,6 +696,36 @@ final class SmartCubeManager: NSObject, ObservableObject {
     /// from. The copy has already been put right by then.
     var onPositionCorrected: (@MainActor () -> Void)?
 
+    // MARK: - Falling asleep and waking up
+
+    /// Called when the cube stops being followable: it has gone to sleep, or
+    /// wandered out of range. These cubes nap after a minute or two without a
+    /// turn, which is exactly what happens while a child studies the screen.
+    var onFellAsleep: (@MainActor () -> Void)?
+
+    /// Called when the cube has come back and said where it is.
+    var onWokeUp: (@MainActor () -> Void)?
+
+    /// Waiting for the cube to wake up and connect again by itself.
+    @Published private(set) var isWaitingForItToWake = false
+
+    /// Set when the grown-up chose to disconnect, so the app does not then
+    /// quietly connect again behind their back.
+    private var disconnectedOnPurpose = false
+
+    /// The cube that last connected, remembered across launches so it can be
+    /// connected to again without anyone having to read its name.
+    static var lastCubeID: UUID? {
+        get { UserDefaults.standard.string(forKey: "NoobCube.lastCube").flatMap(UUID.init) }
+        set { UserDefaults.standard.set(newValue?.uuidString, forKey: "NoobCube.lastCube") }
+    }
+
+    private func fellAsleep() {
+        guard !isWaitingForItToWake else { return }
+        note("Cube went to sleep; waiting for it to wake up")
+        onFellAsleep?()
+    }
+
     /// Ask the cube where it is. Its answer is what the app's copy is held to.
     func askWhereItIs() {
         guard theCubesOwnWordHolds else { return }
@@ -746,6 +801,11 @@ final class SmartCubeManager: NSObject, ObservableObject {
                 pickUpWhereItLeftOff(reported: state)
                 if let serial { lastMoveSerial = serial & 0xFF }
                 lineUpFromTheLastPicture()
+                if isWaitingForItToWake {
+                    isWaitingForItToWake = false
+                    note("Cube woke up")
+                    onWokeUp?()
+                }
                 return
             }
             // Only a report of where the cube is *now*. It is asked after every
@@ -884,6 +944,7 @@ extension SmartCubeManager: CBCentralManagerDelegate {
                                   generation: advertised)
             if !self.discovered.contains(item) {
                 self.discovered.append(item)
+                self.connectByItselfIfItCan()
             }
         }
     }
@@ -916,7 +977,17 @@ extension SmartCubeManager: CBCentralManagerDelegate {
             self.lastMoveSerial = nil
             self.positionIsTrustworthy = false
             self.forgetTheDialect()
-            self.status = .idle
+            guard !self.disconnectedOnPurpose, let central = self.central else {
+                self.status = .idle
+                return
+            }
+            // Not on purpose, so it has gone to sleep or out of range. Asking to
+            // connect again is exactly "when it wakes up": CoreBluetooth waits
+            // for the cube to appear, however long that takes.
+            self.fellAsleep()
+            self.isWaitingForItToWake = true
+            self.status = .connecting(peripheral.name ?? "your cube")
+            central.connect(peripheral)
         }
     }
 }
@@ -982,6 +1053,7 @@ extension SmartCubeManager: CBPeripheralDelegate {
                 }
             }
             self.status = .connected(peripheral.name ?? "Smart cube")
+            Self.lastCubeID = peripheral.identifier
             self.requestState()
             self.requestBattery()
         }

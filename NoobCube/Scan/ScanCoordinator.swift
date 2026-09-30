@@ -45,8 +45,9 @@ final class ScanCoordinator: ObservableObject {
     static let steps: [Step] = [
         Step(face: .U,
              title: "Show me the yellow top",
-             spoken: "Hold your cube with yellow on top and white underneath, and keep "
-                   + "it that way the whole time. Now tip it so the yellow top faces "
+             spoken: "It's easiest if a grown-up holds the phone, while you hold the "
+                   + "cube. Hold your cube with yellow on top and white underneath, and "
+                   + "keep it that way the whole time. Now tip it so the yellow top faces "
                    + "the camera.",
              upColour: nil),
         Step(face: .D,
@@ -241,6 +242,8 @@ final class ScanCoordinator: ObservableObject {
         // asked to hold it yellow-up and white-down, every middle is known
         // before the camera has seen a thing. ``show`` puts them there.
         paintedByHand = [:]
+        isTakingAnyAgain = false
+        doubtful = []
         show(ScannedCube())
         lookAtSide = [:]
         lastSide = nil
@@ -519,6 +522,7 @@ final class ScanCoordinator: ObservableObject {
     /// its middle, so the sides that have one are exactly the sides that have
     /// been seen.
     private func advanceToNextUnseenFace() {
+        isTakingAnyAgain = false
         if let next = Self.steps.firstIndex(where: { lookAtSide[$0.face] == nil }) {
             stepIndex = next
             announceStep()
@@ -583,19 +587,26 @@ final class ScanCoordinator: ObservableObject {
             if let first = problems.first {
                 problem = inColours(first)
                 result = nil
+                doubtful = Self.doubtfulSquares(in: scan)
                 narrator.explain([
                     .init("Hmm, that doesn't look right. \(inColours(first))"),
-                    .init("You can tap a side up here to fix its squares.", pointingAt: .scanMap),
+                    .init(doubtful.isEmpty
+                          ? "You can tap a side up here to fix its squares."
+                          : "The squares I'm not sure about are flashing up here. "
+                            + "Check them against your cube, and tap that side to fix them.",
+                          pointingAt: .scanMap),
                 ])
             } else {
                 problem = nil
                 result = converted
+                doubtful = []
                 narrator.explain([
                     .init("Got it! That's your whole cube."),
                     .init("If it looks like your cube, press the green tick button.",
                           pointingAt: .thatsMyCube),
                     .init("If a square is wrong, tap that side up here to fix it.",
                           pointingAt: .scanMap),
+                    .init("Or, to show me a side again, press this.", pointingAt: .retakeSide),
                 ])
             }
         } catch {
@@ -723,6 +734,61 @@ final class ScanCoordinator: ObservableObject {
         revalidate()
     }
 
+    /// Squares that are probably wrong, when the cube does not add up.
+    @Published private(set) var doubtful: Set<Int> = []
+
+    /// The squares of any piece no cube has, or a piece this cube already has
+    /// somewhere else.
+    ///
+    /// "One of the corners or edges came out wrong" gave nothing to look for.
+    /// A square read as the wrong colour almost always makes a piece that
+    /// cannot exist — a red and orange edge, say — or a second copy of one
+    /// that does, so those squares can be marked on the map, and the child
+    /// has three squares to check rather than fifty-four.
+    static func doubtfulSquares(in scan: ScannedCube) -> Set<Int> {
+        let centres = scan.centres
+        var real: Set<Set<CubeColour>> = []
+        for slot in CubeSlots.all {
+            real.insert(Set(slot.faces.compactMap { centres[$0] }))
+        }
+        var found: [Set<CubeColour>: [CubeSlot]] = [:]
+        var doubtful: Set<Int> = []
+        for slot in CubeSlots.all {
+            let colours = slot.indices.compactMap { scan[$0] }
+            guard colours.count == slot.indices.count else { continue }
+            let piece = Set(colours)
+            if piece.count != colours.count || !real.contains(piece) {
+                doubtful.formUnion(slot.indices)
+            } else {
+                found[piece, default: []].append(slot)
+            }
+        }
+        for (_, slots) in found where slots.count > 1 {
+            for slot in slots { doubtful.formUnion(slot.indices) }
+        }
+        return doubtful
+    }
+
+    /// Waiting for whichever side they want to take again, after the scan.
+    @Published private(set) var isTakingAnyAgain = false
+
+    /// "Take a side again", once every side is in.
+    ///
+    /// It used to take whatever happened to be in front of the camera the
+    /// instant it was pressed, without saying which side it meant. Now it
+    /// asks for the side to be held up, and takes it by itself once it is
+    /// held still, like every other side.
+    func letMeTakeASideAgain() {
+        guard isComplete else { return }
+        isComplete = false
+        isTakingAnyAgain = true
+        result = nil
+        problem = nil
+        readyForAnotherLook()
+        narrator.say("Hold up the side you want me to take again, and keep it still. "
+                     + "I'll take it by myself.")
+    }
+
     /// Whether a side has anything on it yet, and so anything to fix.
     func canEdit(_ face: Face) -> Bool { scan.isFaceScanned(face) }
 
@@ -784,9 +850,11 @@ final class ScanCoordinator: ObservableObject {
             if let first = problems.first {
                 problem = inColours(first)
                 result = nil
+                doubtful = Self.doubtfulSquares(in: scan)
             } else {
                 problem = nil
                 result = converted
+                doubtful = []
             }
         } catch {
             problem = error.localizedDescription

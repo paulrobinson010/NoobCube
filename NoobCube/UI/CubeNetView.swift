@@ -29,6 +29,8 @@ struct CubeNetView: View {
     var pulsingFace: Face? = nil
     /// Set to allow tapping a square to correct a misread colour.
     var onTapSticker: ((Int) -> Void)? = nil
+    /// Squares the app thinks are probably wrong, marked so they can be found.
+    var doubtful: Set<Int> = []
 
     /// Where each face sits in the 4 x 3 grid of face-sized cells.
     private static let layout: [(face: Face, column: Int, row: Int)] = [
@@ -95,10 +97,33 @@ struct CubeNetView: View {
                     .strokeBorder(Color.black.opacity(colour == nil ? 0.15 : 0.35), lineWidth: 1)
             )
             .frame(width: size - inset * 2, height: size - inset * 2)
+            .overlay {
+                if doubtful.contains(index) { DoubtMark(size: size - inset * 2) }
+            }
             .contentShape(Rectangle())
             .onTapGesture { if !isMiddle { onTapSticker?(index) } }
             .animation(.easeOut(duration: 0.25), value: colour)
             .accessibilityLabel(colour.map { "\($0.displayName) square" } ?? "Not seen yet")
+    }
+}
+
+/// A flashing ring and a question mark: "check this square".
+struct DoubtMark: View {
+    let size: CGFloat
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: size * 0.2, style: .continuous)
+                .strokeBorder(Theme.attention, lineWidth: max(2, size * 0.1))
+                .phaseAnimator([0.25, 1.0]) { ring, strength in
+                    ring.opacity(strength)
+                } animation: { _ in .easeInOut(duration: 0.5) }
+            Image(systemName: "questionmark")
+                .font(.system(size: size * 0.45, weight: .black))
+                .foregroundStyle(.black.opacity(0.6))
+        }
+        .allowsHitTesting(false)
+        .accessibilityLabel("Check this square")
     }
 }
 

@@ -775,3 +775,36 @@ final class ScanTests: XCTestCase {
         }
     }
 }
+
+/// When a scan does not add up, the squares worth checking.
+@MainActor
+final class DoubtfulSquareTests: XCTestCase {
+
+    private func solvedScan() -> ScannedCube {
+        ScannedCube(colours: CubeState.solved.facelets.map { CubeColour.defaultColour(for: $0) })
+    }
+
+    /// A cube that adds up has nothing to check.
+    func testARealCubeHasNothingDoubtful() {
+        XCTAssertTrue(ScanCoordinator.doubtfulSquares(in: solvedScan()).isEmpty)
+        var generator = SeededGenerator(seed: 5)
+        let scrambled = CubeState.solved.applying(randomScramble(using: &generator))
+        let scan = ScannedCube(colours: scrambled.facelets.map { CubeColour.defaultColour(for: $0) })
+        XCTAssertTrue(ScanCoordinator.doubtfulSquares(in: scan).isEmpty)
+    }
+
+    /// One square read as the wrong colour marks its own piece, and not the
+    /// whole cube.
+    func testOneWrongSquareMarksItsPiece() {
+        var scan = solvedScan()
+        guard let corner = CubeSlots.corners.first else { return XCTFail("no corners") }
+        let index = corner.indices[0]
+        let wrong = CubeColour.allCases.first { colour in
+            !corner.indices.contains { scan[$0] == colour }
+        }!
+        scan[index] = wrong
+        let doubtful = ScanCoordinator.doubtfulSquares(in: scan)
+        XCTAssertTrue(doubtful.contains(index), "the square that is wrong is marked")
+        XCTAssertLessThanOrEqual(doubtful.count, 6, "only a piece or two, not the whole cube")
+    }
+}

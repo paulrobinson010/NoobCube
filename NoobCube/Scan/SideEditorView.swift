@@ -112,6 +112,9 @@ struct SideEditorView: View {
                 .fill(colour?.swiftUIColor ?? Color.white.opacity(0.15))
                 .frame(width: size, height: size)
                 .overlay {
+                    if coordinator.doubtful.contains(index) { DoubtMark(size: size) }
+                }
+                .overlay {
                     // The middle is not a guess: the side was asked for by it.
                     if isMiddle {
                         Image(systemName: "lock.fill")

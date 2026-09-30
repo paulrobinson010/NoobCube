@@ -218,6 +218,14 @@ struct SolveView: View {
                 Text("You solved it! 🎉")
                     .font(.brand(size: 30, weight: .heavy))
                     .foregroundStyle(Theme.done)
+            } else if session.phase == .checkStage {
+                Text("Does your cube look like this?")
+                    .font(.brand(size: 28, weight: .heavy))
+                    .foregroundStyle(.white)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("Look at the picture, then at your cube.")
+                    .font(.brand(size: 18, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.85))
             } else if session.help == .moveByMove, let half = session.halfWayThrough {
                 // Halfway through a half turn: the rest of it, not all of it.
                 Text("Once more")
@@ -256,6 +264,23 @@ struct SolveView: View {
                 }
                 .buttonStyle(BigButtonStyle(tint: Theme.done))
                 .pointedAt(.playAgain, by: narrator)
+            }
+
+        case .checkStage:
+            // The end of a stage done move by move, with nothing to see the
+            // cube: one look at the picture before going on.
+            VStack(spacing: 12) {
+                Button { session.cubeLooksRight() } label: {
+                    Label("Yes, it looks like this", systemImage: "checkmark")
+                }
+                .buttonStyle(BigButtonStyle(tint: Theme.done))
+                .pointedAt(.looksRight, by: narrator)
+
+                Button { onRescan() } label: {
+                    Label("No — look at my cube", systemImage: "camera.fill")
+                }
+                .buttonStyle(BigButtonStyle(isProminent: false))
+                .pointedAt(.lookAtMyCube, by: narrator)
             }
 
         case .offerRescan:
@@ -328,8 +353,7 @@ struct SolveView: View {
                     .pointedAt(.doneThisBit, by: narrator)
 
                     Button {
-                        session.help = .moveByMove
-                        session.startStage(because: "they changed their mind mid-stage")
+                        session.switchToMoveByMove()
                     } label: {
                         Label("Actually, show me each move", systemImage: "hand.point.up.left.fill")
                     }
@@ -467,6 +491,40 @@ struct SolveView: View {
     /// and Next counts the seconds down rather than sitting there inert.
     private var stepControls: some View {
         HStack(spacing: 10) {
+            if session.isPlayingThrough {
+                // While the moves play by themselves: the tortoise, to slow
+                // them down. Going back makes no sense mid-play anyway.
+                Button {
+                    session.isSlow.toggle()
+                } label: {
+                    Image(systemName: "tortoise.fill")
+                        .font(.system(size: 22, weight: .bold))
+                        .frame(width: Theme.minimumTapTarget, height: Theme.minimumTapTarget)
+                }
+                .buttonStyle(BigButtonStyle(tint: session.isSlow ? Theme.done : Theme.muted,
+                                            isProminent: session.isSlow))
+                .frame(width: Theme.minimumTapTarget + 16)
+                .pointedAt(.slower, by: narrator)
+                .accessibilityLabel(session.isSlow ? "Go at the usual speed" : "Go slower")
+            } else {
+                // Back a move: for a Next pressed too soon. Always there, and
+                // dimmed when there is nothing to go back to, so it is in the
+                // same place every time it is needed.
+                Button {
+                    session.goBackOneMove()
+                } label: {
+                    Image(systemName: "arrow.uturn.backward")
+                        .font(.system(size: 22, weight: .bold))
+                        .frame(width: Theme.minimumTapTarget, height: Theme.minimumTapTarget)
+                }
+                .buttonStyle(BigButtonStyle(tint: Theme.muted, isProminent: false))
+                .frame(width: Theme.minimumTapTarget + 16)
+                .disabled(!session.canGoBack)
+                .opacity(session.canGoBack ? 1 : 0.4)
+                .pointedAt(.goBack, by: narrator)
+                .accessibilityLabel("Go back a move")
+            }
+
             Button {
                 session.isPlayingThrough
                     ? session.stopPlayingThrough()

@@ -40,7 +40,8 @@ struct ScanView: View {
                             guard let face = Face(rawValue: index / 9),
                                   coordinator.canEdit(face) else { return }
                             editing = EditedSide(face: face)
-                        })
+                        },
+                        doubtful: coordinator.doubtful)
                 .pointedAt(.scanMap, by: narrator)
 
             if coordinator.scannedFaceCount > 0 {
@@ -94,11 +95,13 @@ struct ScanView: View {
 
     private var header: some View {
         ScreenHeader(title: coordinator.isComplete ? "Does this look right?"
-                                                   : (coordinator.currentStep?.title ?? ""),
+                         : coordinator.isTakingAnyAgain ? "Show me the side again"
+                         : (coordinator.currentStep?.title ?? ""),
                      subtitle: coordinator.isComplete
                          ? "All six sides"
                          : "Side \(coordinator.scannedFaceCount + 1) of 6",
-                     narrator: narrator)
+                     narrator: narrator,
+                     onHome: onCancel)
         .padding(.horizontal, 20)
         .padding(.top, 10)
     }
@@ -125,7 +128,8 @@ struct ScanView: View {
         .overlay(alignment: .top) {
             // How to hold it for this side, on screen the whole time it is
             // being looked for.
-            if !coordinator.isComplete, let step = coordinator.currentStep {
+            if !coordinator.isComplete, !coordinator.isTakingAnyAgain,
+               let step = coordinator.currentStep {
                 HoldGuideView(front: ScanCoordinator.colour(for: step.face), top: step.upColour)
                     .padding(.top, 10)
                     .padding(.horizontal, 10)
@@ -185,14 +189,25 @@ struct ScanView: View {
                 .multilineTextAlignment(.center)
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(.white)
-            Button("Open Settings") {
+            Button {
                 if let url = URL(string: UIApplication.openSettingsURLString) {
                     UIApplication.shared.open(url)
                 }
+            } label: {
+                Label("Let NoobCube use the camera", systemImage: "gearshape.fill")
             }
             .buttonStyle(BigButtonStyle())
+            .pointedAt(.openSettings, by: narrator)
         }
         .padding(24)
+        // Said as well as written: a child who pressed "Don't Allow" cannot
+        // read either the question they answered or this.
+        .onAppear {
+            narrator.explain([
+                .init("I'm not allowed to use the camera, so I can't see your cube."),
+                .init("Ask a grown-up to press this button and let me.", pointingAt: .openSettings),
+            ])
+        }
     }
 
     /// The line of help, written on the picture.
@@ -245,7 +260,10 @@ struct ScanView: View {
                 if coordinator.hasTakenASide {
                     smallButton("Take that one again") { coordinator.takeThatSideAgain() }
                 }
-                smallButton("Start again") { onCancel() }
+                // Starts the scan again — it used to go home, whatever it said.
+                // Home is the house at the top.
+                smallButton("Start again") { coordinator.begin() }
+                    .pointedAt(.restartScan, by: narrator)
             }
         }
         .padding(.horizontal, 20)
@@ -280,7 +298,8 @@ struct ScanView: View {
             .opacity(coordinator.result == nil ? 0.5 : 1)
 
             HStack(spacing: 0) {
-                smallButton("Take that side again") { coordinator.captureCurrentFace() }
+                smallButton("Take a side again") { coordinator.letMeTakeASideAgain() }
+                    .pointedAt(.retakeSide, by: narrator)
                 smallButton("Start over") { coordinator.begin() }
             }
         }

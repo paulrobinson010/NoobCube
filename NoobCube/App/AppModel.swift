@@ -15,7 +15,15 @@ final class AppModel: ObservableObject {
     @Published private(set) var screen: Screen = .welcome
     @Published private(set) var session: SolveSession?
     @Published private(set) var scan: ScannedCube?
-    @Published var errorMessage: String?
+    /// Something went wrong that the child has to be told about. Shown in a
+    /// box with one button — and said, because a box of words is nothing to
+    /// someone who cannot read it.
+    @Published var errorMessage: String? {
+        didSet {
+            guard let errorMessage, errorMessage != oldValue else { return }
+            narrator.say("\(errorMessage) Press the button to carry on.")
+        }
+    }
 
     let narrator = Narrator()
     let scene = CubeSceneController()
@@ -271,6 +279,8 @@ final class AppModel: ObservableObject {
         // cube's business and ``SmartCubeDialect``'s; by the time it reaches
         // here it is a turn in the cube's own frame.
         smartCube.onTurn = { [weak self] move in self?.handleSmartCubeTurn(move) }
+        smartCube.onFellAsleep = { [weak self] in self?.cubeFellAsleep() }
+        smartCube.onWokeUp = { [weak self] in self?.cubeWokeUp() }
         // The cube's word on where it is disagreed with the app's copy; the copy
         // has been put right, so the picture is held to it. Not asked again —
         // that is the answer.
@@ -334,6 +344,37 @@ final class AppModel: ObservableObject {
             session.takeTheTurnAsDone(andThen: move)
         }
         smartCube.logReading(move, asked: asked, outcome: session.lastReaction)
+    }
+
+    /// The cube has gone to sleep part way through.
+    ///
+    /// These cubes nap after a minute or two without a turn — exactly what
+    /// happens while a child is studying the screen. Nothing used to notice:
+    /// the screen went on saying it was watching, with no Next button, and
+    /// waking the cube meant finding the smart cube screen and reading its
+    /// name. Now the Next button comes straight back, the child is told, and
+    /// the cube connects again by itself the moment it is wiggled.
+    private func cubeFellAsleep() {
+        guard let session, session.cubeIsFollowing else { return }
+        session.cubeIsFollowing = false
+        smartCube.logMoment("the cube went to sleep", why: "no turns for a while")
+        guard screen == .solving else { return }
+        narrator.explain([
+            .init("Your cube has gone to sleep. Give it a wiggle to wake it up."),
+            .init("Or do the move yourself, and press the big blue Next button.",
+                  pointingAt: .next),
+        ])
+    }
+
+    /// And woken up again: follow it, and check the picture still matches —
+    /// it may have been turned while it slept, or Next pressed without it.
+    private func cubeWokeUp() {
+        guard let session else { return }
+        session.cubeIsFollowing = smartCube.isFollowing
+        smartCube.logMoment("the cube woke up", why: "it connected again by itself")
+        guard screen == .solving else { return }
+        narrator.say("Your cube's awake again! Carry on.")
+        holdThePictureToTheCube()
     }
 
     /// Work the plan out afresh from the cube's own position.

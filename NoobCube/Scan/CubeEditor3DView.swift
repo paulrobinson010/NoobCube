@@ -63,6 +63,9 @@ struct CubeEditor3DView: View {
             .onAppear {
                 scene.stopIdleSpin()
                 scene.reset(to: coordinator.scan.colours)
+                if !coordinator.doubtful.isEmpty {
+                    scene.highlight(faceletIndices: coordinator.doubtful)
+                }
                 coordinator.narrator.explain([
                     .init("Drag the cube with your finger to turn it round.", pointingAt: .paintHere),
                     .init("Tap a colour down here,", pointingAt: .palette),
@@ -71,6 +74,11 @@ struct CubeEditor3DView: View {
             }
             .onChange(of: coordinator.scan) { _, painted in
                 scene.setColours(painted.colours)
+            }
+            // The squares worth checking glow on the cube itself.
+            .onChange(of: coordinator.doubtful) { _, doubtful in
+                doubtful.isEmpty ? scene.clearHighlight()
+                                 : scene.highlight(faceletIndices: doubtful)
             }
         }
     }

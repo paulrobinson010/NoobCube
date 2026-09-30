@@ -27,6 +27,10 @@ final class SolveSession: ObservableObject {
         case coaching
         /// The child said they finished a stage themselves; offer a re-scan.
         case offerRescan
+        /// The end of a stage done move by move without a cube that can see:
+        /// "does your cube look like this?" — the one moment a slip several
+        /// moves back can still be caught before it spoils the next stage.
+        case checkStage
         /// Every stage is done.
         case finished
     }
@@ -35,7 +39,12 @@ final class SolveSession: ObservableObject {
     @Published private(set) var stageIndex: Int
     @Published private(set) var moveIndex: Int = 0
     @Published private(set) var phase: Phase = .coaching
-    @Published var help: Help = .undecided {
+    /// Shown each move to begin with. The choice of doing a stage yourself is
+    /// only offered once a stage has been finished — the first thing a child
+    /// sees is a move to make, not a decision about how to be taught, and "do
+    /// it myself" before they have seen how a stage goes led straight to a
+    /// card of letters and a question they could not answer.
+    @Published var help: Help = .moveByMove {
         didSet {
             guard help != oldValue else { return }
             logMoment?("how they want helping: \(help.rawValue)",
@@ -453,29 +462,50 @@ final class SolveSession: ObservableObject {
         let words = "\(move.spokenInstruction)\(tail)"
 
         // The first time a move needs a button pressing, say which button.
+        var choices: [Narrator.Part] = []
         switch prompt {
         case .tapWhenDone where !hasExplainedNext:
             hasExplainedNext = true
-            var choices: [Narrator.Part] = [
-                .init("When you've done it, press the big blue Next button.", pointingAt: .next),
-            ]
+            choices.append(.init("When you've done it, press the big blue Next button.",
+                                 pointingAt: .next))
+            choices.append(.init("If you press it too soon, the back arrow goes back a move.",
+                                 pointingAt: .goBack))
             if canPlayThroughStep {
                 choices.append(.init("Or press the green play button, and I'll show "
                                      + "the moves one after another.",
                                      pointingAt: .playThrough))
             }
-            explain(words, choices: choices)
         case .turnTheWholeCube where !hasExplainedTurnedIt:
             hasExplainedTurnedIt = true
-            explain(words, choices: [
-                .init("When you've turned it, press the blue tick button.", pointingAt: .turnedIt),
-            ])
+            choices.append(.init("When you've turned it, press the blue tick button.",
+                                 pointingAt: .turnedIt))
         default:
-            say(words)
+            break
         }
+
+        // And, once a solve, the little buttons along the top — never the
+        // mute, which is the last thing a child who cannot read should learn
+        // to press.
+        if !hasExplainedTheTop {
+            hasExplainedTheTop = true
+            if !cubeIsFollowing {
+                choices.append(.init("If your cube stops looking like the picture, press the "
+                                     + "camera up here, and I'll look at it again.",
+                                     pointingAt: .headerCamera))
+            }
+            choices.append(.init("The house takes you home, and you can carry on later.",
+                                 pointingAt: .headerHome))
+            choices.append(.init("And this one says it all again.", pointingAt: .headerRepeat))
+        }
+
+        if choices.isEmpty { say(words) } else { explain(words, choices: choices) }
     }
 
+    /// Whether the buttons along the top have been explained yet this solve.
+    private var hasExplainedTheTop = false
+
     func announceCurrentStep() {
+        if phase == .checkStage { return askWhetherItLooksRight() }
         if help == .moveByMove, currentMove != nil {
             announceCurrentMove()
         } else {
@@ -489,7 +519,15 @@ final class SolveSession: ObservableObject {
     // MARK: - Playing a step through
 
     /// How long a child gets to copy each move before the next one.
-    static let secondsPerMove = 2
+    /// Three seconds to copy each one, or five with the tortoise on. Two was
+    /// quick for a five year old and too quick for anyone who needs longer.
+    var secondsPerMove: Int { isSlow ? 5 : 3 }
+
+    /// The tortoise: slower play-through, for as long as the app is open.
+    @Published var isSlow = false
+
+    /// Whether the tortoise has been pointed out yet.
+    private var hasExplainedSlow = false
 
     /// Running through the rest of this step by itself, a move at a time.
     ///
@@ -513,13 +551,19 @@ final class SolveSession: ObservableObject {
     func playThroughTheStep() {
         guard !isPlayingThrough, canPlayThroughStep else { return }
         isPlayingThrough = true
+        if !hasExplainedSlow {
+            hasExplainedSlow = true
+            narrator.explain([
+                .init("Too fast? Press the tortoise, and I'll go slower.", pointingAt: .slower),
+            ])
+        }
         let startedOn = stepStartsAt
         playThrough = Task { [weak self] in
             while let self, self.isPlayingThrough, !Task.isCancelled {
                 // Out the moment the step changes, so it never runs on into
                 // the next one, and never past the end of the plan.
                 guard self.currentMove != nil, self.stepStartsAt == startedOn else { break }
-                for left in stride(from: Self.secondsPerMove, through: 1, by: -1) {
+                for left in stride(from: self.secondsPerMove, through: 1, by: -1) {
                     self.secondsUntilNextMove = left
                     try? await Task.sleep(nanoseconds: 1_000_000_000)
                     if Task.isCancelled || !self.isPlayingThrough { break }
@@ -711,6 +755,41 @@ final class SolveSession: ObservableObject {
             return
         }
         if let kind = stage?.kind { celebrateStage(kind) }
+
+        // Nothing can see the cube, so ask. Every move was a Next press on
+        // trust, and a move missed or turned the wrong way stays invisible
+        // until nothing matches — which is where people give up.
+        if !cubeIsFollowing, help == .moveByMove {
+            stageToCheckBeforeGoingOn = next
+            phase = .checkStage
+            logMoment?("checking the cube", "\(finished) finished, and nothing can see the cube")
+            askWhetherItLooksRight()
+            return
+        }
+        goOn(to: next, because: "\(finished) finished, its last move made")
+    }
+
+    private func askWhetherItLooksRight() {
+        explain("Does your cube look like this picture?", choices: [
+            .init("If it does, press the green tick.", pointingAt: .looksRight),
+            .init("If it doesn't, press the camera button, and I'll look at it again.",
+                  pointingAt: .lookAtMyCube),
+        ])
+    }
+
+    /// The stage to go on to once they say their cube looks right.
+    private var stageToCheckBeforeGoingOn: Int?
+
+    /// "Yes, it looks like that."
+    func cubeLooksRight() {
+        guard phase == .checkStage, let next = stageToCheckBeforeGoingOn else { return }
+        stageToCheckBeforeGoingOn = nil
+        phase = .coaching
+        sayFirst.append(nextPraise())
+        goOn(to: next, because: "they said the cube looks like the picture")
+    }
+
+    private func goOn(to next: Int, because reason: String) {
         stageIndex = next
         // A genuinely new stage, so they are asked again how they want helping.
         // Not to be confused with a re-plan, which has no business forgetting
@@ -718,11 +797,57 @@ final class SolveSession: ObservableObject {
         help = .undecided
         // Said in front of the next stage's introduction by ``say(_:)``, so it
         // is heard rather than talked over.
-        startStage(because: "\(finished) finished, its last move made")
+        startStage(because: reason)
+    }
+
+    // MARK: - Going back a move
+
+    /// Whether there is a move in this stage to go back to.
+    var canGoBack: Bool {
+        phase == .coaching && help == .moveByMove && !cubeIsFollowing
+            && moveIndex > 0 && !isBusy
+    }
+
+    /// Undo the last move on screen, for a Next pressed by mistake or a play
+    /// through that ran ahead.
+    ///
+    /// Without a cube to watch, Next is taken on trust, and there was no way
+    /// back from a Next pressed too soon: the picture went one way and the
+    /// cube another, for good. Going back turns the picture back one move and
+    /// asks for that move again.
+    func goBackOneMove() {
+        guard canGoBack, let stage else { return }
+        stopPlayingThrough()
+        halfWayThrough = nil
+        let previous = stage.moves[moveIndex - 1]
+        let undo = previous.inverse
+        isBusy = true
+        scene.hideTurnArrow()
+        scene.hideJourney()
+        scene.animate(undo, duration: 0.42) { [weak self] in
+            guard let self else { return }
+            self.displayCube = self.displayCube.applying(undo)
+            self.moveIndex -= 1
+            self.isBusy = false
+            self.logMoment?("went back a move", "they asked to, to do \(previous.notation) again")
+            self.sayFirst.append("Let's do that one again.")
+            self.presentCurrentMove()
+        }
     }
 
     /// The child says they have done the whole stage themselves.
     func declareStageDoneByHand() {
+        // A connected cube already knows. Asking to look at it with the camera
+        // was a step that could only confuse.
+        if cubeIsFollowing {
+            guard let current = stage?.kind else { return }
+            if hasGotPast(current) { return stageDoneByThemselves(current) }
+            explain("Not quite yet. \(current.explanation)", choices: [
+                .init("Keep going, or press the button with the hand, and I'll show you each move.",
+                      pointingAt: .showMeAfterAll),
+            ])
+            return
+        }
         logMoment?("offering a re-scan", "they said they did the stage themselves")
         phase = .offerRescan
         explain("Great! Let me look at your cube again to see how you got on.", choices: [
@@ -810,6 +935,17 @@ final class SolveSession: ObservableObject {
             return
         }
 
+        // Doing the stage themselves. Every turn used to be held against the
+        // plan's next move, so a child told to do it their own way heard "not
+        // that one" for doing exactly that. Now their turns are simply drawn,
+        // and after each one the app looks at whether the stage is done.
+        if help == .wholeStage, phase == .coaching {
+            lastReaction = "doing it themselves — followed, not judged"
+            noteRightTurn()
+            wrongTurn = nil
+            return playTheirTurn(move) { [weak self] in self?.checkWhetherTheStageIsDone() }
+        }
+
         if let wrong = wrongTurn {
             guard move == wrong.inverse else {
                 lastReaction = "turned again while already off the path, so the plan "
@@ -843,8 +979,11 @@ final class SolveSession: ObservableObject {
         // comment.
         if help == .undecided {
             if !expected.isWholeCubeTurn, move == expected {
+                // Getting on with the moves shown, so carry on showing them.
+                // This used to switch to "doing it themselves", changing every
+                // button on the screen under them without a word.
                 lastReaction = "nothing had been asked yet and it matched, so it counted"
-                help = .wholeStage
+                help = .moveByMove
                 confirmCurrentMove()
                 return
             }
@@ -939,6 +1078,51 @@ final class SolveSession: ObservableObject {
         }
         narrator.say(words)
         onLost?()
+    }
+
+    // MARK: - Doing a stage themselves, with a cube that can see
+
+    /// Whether the cube in their hands has got past this stage.
+    ///
+    /// Worked out the way ``stageThisWouldGoBackTo(after:)`` is: plan a solve
+    /// from the cube as it is, and see where that plan starts. Stages already
+    /// finished come back empty.
+    private func hasGotPast(_ kind: SolveStage.Kind) -> Bool {
+        guard let now = try? displayCube.cubeState(),
+              let ahead = try? BeginnerSolver.solve(now.state, whiteFace: now.whiteFace)
+        else { return false }
+        guard let reached = ahead.stages.first(where: { !$0.steps.isEmpty })?.kind else {
+            return true     // nothing left at all: solved
+        }
+        return reached.howFarThrough > kind.howFarThrough
+    }
+
+    private func checkWhetherTheStageIsDone() {
+        guard help == .wholeStage, let current = stage?.kind, hasGotPast(current) else { return }
+        stageDoneByThemselves(current)
+    }
+
+    /// They did a stage their own way. The fuss, then on to the next one from
+    /// wherever the cube really is — asked afresh how they want helping.
+    private func stageDoneByThemselves(_ kind: SolveStage.Kind) {
+        logMoment?("\(kind.title) done by themselves", "the cube shows it finished")
+        celebrateStage(kind)
+        help = .undecided
+        wrongTurn = nil
+        waitingTurns.removeAll()
+        onLost?()
+    }
+
+    /// "Actually, show me each move." With a connected cube the plan is worked
+    /// out again from the cube first, since they may have turned it any way
+    /// at all while doing it themselves.
+    func switchToMoveByMove() {
+        help = .moveByMove
+        if cubeIsFollowing {
+            onLost?()
+        } else {
+            startStage(because: "they changed their mind mid-stage")
+        }
     }
 
     /// The stage this turn would send them back to, if it undoes finished work.

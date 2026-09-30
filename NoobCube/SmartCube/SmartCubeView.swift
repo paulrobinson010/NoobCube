@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Finding and connecting a smart cube.
 struct SmartCubeView: View {
@@ -11,6 +12,7 @@ struct SmartCubeView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var isChecking = false
     @State private var isReadingTheLog = false
+    @State private var showsGrownUpThings = false
 
     var body: some View {
         NavigationStack {
@@ -37,13 +39,29 @@ struct SmartCubeView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close") { dismiss() }
                 }
+                // Held down for a second and a half, never a tap, so it is not
+                // found by accident.
+                ToolbarItem(placement: .primaryAction) {
+                    Image(systemName: "gearshape")
+                        .foregroundStyle(Theme.muted.opacity(showsGrownUpThings ? 1 : 0.5))
+                        .padding(8)
+                        .contentShape(Rectangle())
+                        .onLongPressGesture(minimumDuration: 1.5) {
+                            withAnimation { showsGrownUpThings.toggle() }
+                        }
+                        .accessibilityLabel("Grown-up settings. Hold down to open.")
+                }
             }
         }
         .onAppear {
             manager.startScanning()
-            explainIfThereIsAPicture()
+            explainWhereWeAre()
         }
-        .onChange(of: manager.hasSaidWhatItLooksLike) { _, _ in explainIfThereIsAPicture() }
+        .onChange(of: manager.status) { _, _ in explainWhereWeAre() }
+        .onChange(of: manager.discovered.count) { _, count in
+            if count == 2 { explainWhereWeAre() }
+        }
+        .onChange(of: manager.hasSaidWhatItLooksLike) { _, _ in explainWhereWeAre() }
         .onDisappear { manager.stopScanning() }
         .sheet(isPresented: $isChecking) { SmartCubeCheckView(manager: manager) }
         .sheet(isPresented: $isReadingTheLog) { TurnLogView(manager: manager) }
@@ -69,7 +87,19 @@ struct SmartCubeView: View {
 
     private var cubeList: some View {
         VStack(spacing: 10) {
-            if manager.discovered.isEmpty {
+            if manager.status == .bluetoothOff || manager.status == .unauthorised {
+                // Only a grown-up can fix this, in Settings.
+                Button {
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(url)
+                    }
+                } label: {
+                    Label(manager.status == .bluetoothOff ? "Turn Bluetooth on" : "Let NoobCube use Bluetooth",
+                          systemImage: "gearshape.fill")
+                }
+                .buttonStyle(BigButtonStyle())
+                .pointedAt(.openSettings, by: narrator)
+            } else if manager.discovered.isEmpty {
                 ProgressView()
                     .tint(Theme.attention)
                     .padding(.top, 20)
@@ -77,21 +107,82 @@ struct SmartCubeView: View {
                     .font(.brand(size: 16, weight: .medium))
                     .foregroundStyle(Theme.muted)
             }
-            ForEach(manager.discovered) { cube in
-                Button {
-                    manager.connect(cube)
-                } label: {
-                    HStack {
-                        Image(systemName: "cube.fill")
-                        Text(cube.name)
-                        Spacer()
-                        Text(cube.generation?.rawValue ?? "tap to connect")
-                            .font(.brand(size: 13, weight: .semibold))
-                            .foregroundStyle(Theme.muted)
+            VStack(spacing: 10) {
+                ForEach(manager.discovered) { cube in
+                    Button {
+                        manager.connect(cube)
+                    } label: {
+                        HStack {
+                            Image(systemName: "cube.fill")
+                            Text(cube.name)
+                            Spacer()
+                            Text(cube.generation?.rawValue ?? "tap to connect")
+                                .font(.brand(size: 13, weight: .semibold))
+                                .foregroundStyle(Theme.muted)
+                        }
                     }
+                    .buttonStyle(BigButtonStyle(isProminent: false))
                 }
-                .buttonStyle(BigButtonStyle(isProminent: false))
             }
+            .pointedAt(.cubeList, by: narrator)
+
+            // Always a way on that needs no cube at all.
+            Button {
+                onUseCamera()
+            } label: {
+                Label("Use the camera instead", systemImage: "camera.fill")
+            }
+            .buttonStyle(BigButtonStyle(tint: Theme.muted, isProminent: false))
+            .pointedAt(.lookAtMyCube, by: narrator)
+            .padding(.top, 10)
+        }
+    }
+
+    /// Say where connecting has got to, and what to do about it.
+    ///
+    /// All of this used to be written only: "wiggle your cube", "Bluetooth is
+    /// off", "tap to connect". A child who cannot read was left looking at a
+    /// spinner.
+    private func explainWhereWeAre() {
+        switch manager.status {
+        case .bluetoothOff:
+            narrator.explain([
+                .init("Bluetooth is turned off, so I can't find your cube."),
+                .init("Ask a grown-up to press this button and turn Bluetooth on.",
+                      pointingAt: .openSettings),
+            ])
+        case .unauthorised:
+            narrator.explain([
+                .init("I'm not allowed to use Bluetooth yet."),
+                .init("Ask a grown-up to press this button and let me.", pointingAt: .openSettings),
+            ])
+        case .idle, .scanning:
+            var parts: [Narrator.Part] = [
+                .init("Give your cube a wiggle to wake it up. I'll find it and connect by myself."),
+            ]
+            if manager.discovered.count > 1 {
+                parts.append(.init("There's more than one cube here. Press yours.",
+                                   pointingAt: .cubeList))
+            }
+            parts.append(.init("Or, to use the camera instead, press the camera button.",
+                               pointingAt: .lookAtMyCube))
+            narrator.explain(parts)
+        case .connecting:
+            narrator.say(manager.isWaitingForItToWake
+                         ? "Give your cube a wiggle to wake it up."
+                         : "Found it! Connecting to your cube.")
+        case .connected:
+            if manager.trackedColours != nil {
+                explainIfThereIsAPicture()
+            } else {
+                narrator.say("Connected! Give your cube a wiggle so it tells me what it looks like.")
+            }
+        case .unsupported, .failed:
+            narrator.explain([
+                .init("I couldn't talk to that cube."),
+                .init("Press the camera button, and show me your cube instead.",
+                      pointingAt: .lookAtMyCube),
+            ])
         }
     }
 
@@ -136,11 +227,6 @@ struct SmartCubeView: View {
                 }
                 .buttonStyle(BigButtonStyle(isProminent: false))
                 .pointedAt(.solvedNow, by: narrator)
-
-                Button("Check my turns") { isChecking = true }
-                    .buttonStyle(BigButtonStyle(tint: Theme.muted, isProminent: false))
-
-                moveLog
             } else {
                 ProgressView()
                     .tint(Theme.attention)
@@ -149,6 +235,28 @@ struct SmartCubeView: View {
                     .foregroundStyle(Theme.muted)
                     .multilineTextAlignment(.center)
             }
+
+            if showsGrownUpThings { grownUpThings }
+
+        }
+    }
+
+    /// The things only a grown-up needs: checking the cube's turns, the move
+    /// log, and disconnecting. They sat among the child's buttons, where one
+    /// wrong press took the cube away or opened a test they could not follow.
+    /// Now they are behind the gear at the top, which has to be held down.
+    private var grownUpThings: some View {
+        VStack(spacing: 12) {
+            Text("For grown-ups")
+                .font(.brand(size: 14, weight: .bold))
+                .foregroundStyle(Theme.muted)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, 8)
+
+            Button("Check my turns") { isChecking = true }
+                .buttonStyle(BigButtonStyle(tint: Theme.muted, isProminent: false))
+
+            moveLog
 
             Button("Disconnect") { manager.disconnect() }
                 .buttonStyle(BigButtonStyle(tint: Theme.muted, isProminent: false))

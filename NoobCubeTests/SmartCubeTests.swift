@@ -1028,3 +1028,23 @@ final class CoachingTests: XCTestCase {
         XCTAssertEqual(holding.inWords, "green at the front and yellow on top")
     }
 }
+
+/// The voice is never silenced for good by one stray tap.
+@MainActor
+final class NarratorTests: XCTestCase {
+
+    func testTheVoiceIsOnEveryTimeTheAppOpens() {
+        UserDefaults.standard.set(true, forKey: "NoobCube.narrator.muted")
+        let narrator = Narrator()
+        XCTAssertFalse(narrator.isMuted)
+        XCTAssertNil(UserDefaults.standard.object(forKey: "NoobCube.narrator.muted"))
+    }
+
+    /// Muted, nothing lights up: the pointing goes with the words.
+    func testMutedExplanationsPointAtNothing() {
+        let narrator = Narrator()
+        narrator.isMuted = true
+        narrator.explain([.init("Press this.", pointingAt: .next)])
+        XCTAssertNil(narrator.pointingAt)
+    }
+}

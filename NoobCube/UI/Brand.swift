@@ -107,6 +107,7 @@ struct ScreenHeader: View {
                         .font(.system(size: 34))
                         .foregroundStyle(Theme.muted)
                 }
+                .pointedAt(.headerCamera, by: narrator, small: true)
                 .accessibilityLabel("Look at my cube again")
             }
 
@@ -116,6 +117,7 @@ struct ScreenHeader: View {
                         .font(.system(size: 34))
                         .foregroundStyle(Theme.muted)
                 }
+                .pointedAt(.headerHome, by: narrator, small: true)
                 .accessibilityLabel("Back to the start")
             }
 

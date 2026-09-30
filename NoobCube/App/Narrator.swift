@@ -25,6 +25,11 @@ final class Narrator: NSObject, ObservableObject {
         case next, playThrough, turnedIt
         case solveThis, looksDifferent, solvedNow
         case palette, paintHere
+        case openSettings, cubeList
+        case goBack, looksRight, lookAtMyCube
+        case retakeSide, restartScan
+        case headerCamera, headerHome, headerRepeat, headerMute
+        case slower
     }
 
     /// One sentence of an explanation, and the button it is about, if any.
@@ -45,9 +50,14 @@ final class Narrator: NSObject, ObservableObject {
     private var buttonFor: [ObjectIdentifier: ButtonName] = [:]
     private var speakingNow: ObjectIdentifier?
 
-    @Published var isMuted: Bool {
+    /// Muted for now — never for next time.
+    ///
+    /// It used to be remembered, so one stray tap on the speaker made every
+    /// launch after it silent. For a child who cannot read, a silent app is a
+    /// screen of words and nothing else, and nothing on it says why. Each time
+    /// the app opens, the voice is back.
+    @Published var isMuted = false {
         didSet {
-            UserDefaults.standard.set(isMuted, forKey: Self.muteKey)
             if isMuted { stop() }
         }
     }
@@ -59,8 +69,10 @@ final class Narrator: NSObject, ObservableObject {
     private let synthesiser = AVSpeechSynthesizer()
 
     override init() {
-        isMuted = UserDefaults.standard.bool(forKey: Self.muteKey)
         super.init()
+        // Anything a previous version stored is forgotten, so an old "muted"
+        // cannot come back either.
+        UserDefaults.standard.removeObject(forKey: Self.muteKey)
         synthesiser.delegate = self
         configureAudioSession()
     }
@@ -190,18 +202,56 @@ extension Narrator: AVSpeechSynthesizerDelegate {
 extension View {
     /// Light this button up, with a hand pointing at it, while the narrator is
     /// talking about it.
-    func pointedAt(_ button: Narrator.ButtonName, by narrator: Narrator) -> some View {
-        modifier(PointedAt(narrator: narrator, button: button))
+    func pointedAt(_ button: Narrator.ButtonName, by narrator: Narrator,
+                   small: Bool = false) -> some View {
+        modifier(PointedAt(narrator: narrator, button: button, small: small))
     }
 }
 
 private struct PointedAt: ViewModifier {
     @ObservedObject var narrator: Narrator
     let button: Narrator.ButtonName
+    /// A little round button, like the ones along the top: the hand goes
+    /// underneath pointing up, rather than on top of it.
+    var small = false
 
     private var isPointed: Bool { narrator.pointingAt == button }
 
+    @ViewBuilder
     func body(content: Content) -> some View {
+        if small { smallBody(content) } else { bigBody(content) }
+    }
+
+    private func smallBody(_ content: Content) -> some View {
+        content
+            .overlay {
+                Circle()
+                    .strokeBorder(Theme.attention, lineWidth: 3)
+                    .padding(-6)
+                    .opacity(isPointed ? 1 : 0)
+                    .allowsHitTesting(false)
+            }
+            .overlay(alignment: .bottom) {
+                if isPointed {
+                    Image(systemName: "hand.point.up.left.fill")
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundStyle(Theme.attention)
+                        .padding(6)
+                        .background(Circle().fill(Theme.ink))
+                        .phaseAnimator([false, true]) { hand, nudged in
+                            hand.offset(y: nudged ? 30 : 40)
+                        } animation: { _ in .easeInOut(duration: 0.45) }
+                        .allowsHitTesting(false)
+                        .transition(.scale.combined(with: .opacity))
+                        .accessibilityHidden(true)
+                }
+            }
+            .scaleEffect(isPointed ? 1.2 : 1)
+            .zIndex(isPointed ? 1 : 0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPointed)
+    }
+
+    private func bigBody(_ content: Content) -> some View {
         content
             .overlay {
                 RoundedRectangle(cornerRadius: Theme.cornerRadius + 6, style: .continuous)
@@ -247,6 +297,7 @@ struct NarratorControls: View {
                     .foregroundStyle(Theme.attention)
             }
             .disabled(narrator.lastPhrase == nil)
+            .pointedAt(.headerRepeat, by: narrator, small: true)
             .accessibilityLabel("Say the instruction again")
 
             Button {
